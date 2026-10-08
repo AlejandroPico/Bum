@@ -1,0 +1,25 @@
+import { computeEffects, fmtDist } from '../src/physics/effects';
+const env = { windFromDeg: 270, windKmh: 24, visibilityKm: 22, humidity: 60, hour: 12 };
+const show = (name: string, sc: any, lat = 40.4168, lon = -3.7038) => {
+  const t0 = performance.now();
+  const e = computeEffects(sc, env, lat, lon);
+  console.log(`\n== ${name}: ${e.energyKt.toExponential(3)} kt  h=${Math.round(e.burstHeightM)} m contact=${e.groundContact.toFixed(2)} (${(performance.now()-t0).toFixed(0)} ms)`);
+  for (const r of e.rings) console.log(`  ${r.label.padEnd(36)} ${fmtDist(r.radiusM).padStart(10)}  ${r.value ?? ''}`);
+  for (const f of e.fallout) console.log(`  fallout ${f.label.padEnd(12)} area ${f.areaKm2.toFixed(0)} km2, downwind ${f.maxDownwindKm.toFixed(0)} km`);
+  console.log(`  cloud top ${(e.cloud.topM/1000).toFixed(1)} km capR ${(e.cloud.capRadiusM/1000).toFixed(1)} km; deaths ${Math.round(e.casualties.deaths).toLocaleString()} inj ${Math.round(e.casualties.injuries).toLocaleString()}`);
+  if (e.asteroid) console.log('  ast', JSON.stringify(e.asteroid), e.crater);
+  if (e.seismic) console.log('  M', e.seismic.magnitude.toFixed(2));
+  e.notes.forEach(n => console.log('  * ' + n));
+};
+show('1 kt optimal', { kind: 'nuclear', name: '', yieldKt: 1, fission: 1, burst: 'optimal', heightM: 0 });
+show('Little Boy 15kt @600m Hiroshima', { kind: 'nuclear', name: '', yieldKt: 15, fission: 1, burst: 'custom', heightM: 600 }, 34.3853, 132.4553);
+show('1 Mt optimal', { kind: 'nuclear', name: '', yieldKt: 1000, fission: 0.5, burst: 'optimal', heightM: 0 });
+show('1 Mt surface', { kind: 'nuclear', name: '', yieldKt: 1000, fission: 0.5, burst: 'surface', heightM: 0 });
+show('20 Mt optimal', { kind: 'nuclear', name: '', yieldKt: 20000, fission: 0.5, burst: 'optimal', heightM: 0 });
+show('Tsar 50 Mt 4km', { kind: 'nuclear', name: '', yieldKt: 50000, fission: 0.03, burst: 'custom', heightM: 4000 });
+show('Starfish 1.4Mt 400km', { kind: 'nuclear', name: '', yieldKt: 1400, fission: 0.5, burst: 'custom', heightM: 400000 });
+show('Chelyabinsk', { kind: 'asteroid', name: '', diameterM: 19, densityKgM3: 3300, velocityKms: 19, angleDeg: 18, target: 'rock', waterDepthM: 0 });
+show('Tunguska', { kind: 'asteroid', name: '', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'rock', waterDepthM: 0 });
+show('Meteor crater iron 50m', { kind: 'asteroid', name: '', diameterM: 50, densityKgM3: 7800, velocityKms: 12.8, angleDeg: 45, target: 'sediment', waterDepthM: 0 });
+show('1 km rock', { kind: 'asteroid', name: '', diameterM: 1000, densityKgM3: 3000, velocityKms: 20, angleDeg: 45, target: 'rock', waterDepthM: 0 });
+show('Chicxulub', { kind: 'asteroid', name: '', diameterM: 10000, densityKgM3: 2700, velocityKms: 20, angleDeg: 60, target: 'water', waterDepthM: 200 });
