@@ -1,3 +1,5 @@
+import { Encyclopedia, BOOK_ICON } from './encyclopedia/Encyclopedia';
+import { slug } from './encyclopedia/slug';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import maplibregl from 'maplibre-gl';
@@ -78,7 +80,12 @@ const sidebar = new Sidebar(document.getElementById('sidebar')!, state, {
   onProjection: (g) => applyProjection(g),
 });
 
+const enc = new Encyclopedia((preset) => {
+  if (sidebar.selectPreset(preset)) { toast(`Simulando: ${preset}`); setTimeout(() => detonate(), 400); }
+});
+
 const results = new ResultsPanel(document.getElementById('results')!, {
+  onBook: (name) => { enc.hasPreset(name).then((ok) => enc.open(ok ? slug(name) : '')); },
   onToggle: () => syncHidden(),
   onHover: (id) => { overlays.highlight = id; overlays.refresh(); if (run) run.domes.highlight = id; map.triggerRepaint(); },
   onShare: () => share(),
@@ -92,7 +99,7 @@ const results = new ResultsPanel(document.getElementById('results')!, {
 const timeline = new Timeline(document.getElementById('timeline')!, {
   onPlayPause: () => { if (run) { run.playing = !run.playing; run.lastReal = performance.now(); fxLayer.animating = true; map.triggerRepaint(); } },
   onRestart: () => { if (run) { restartClock(); } },
-  onSeek: (t) => { if (run) { run.t = t; run.boomDone = t > run.obsArrival; run.flashDone = t > 0.5; run.flashReal = t > 0.5 ? performance.now() - 1e5 : -1; map.triggerRepaint(); } },
+  onSeek: (t) => { if (run) { run.t = t; run.lastOverlay = 0; run.boomDone = t > run.obsArrival; run.flashDone = t > 0.5; run.flashReal = t > 0.5 ? performance.now() - 1e5 : -1; map.triggerRepaint(); } },
   onSpeed: (s) => { if (run) run.speed = s; },
   onCloud: () => { if (run) { run.userCam = false; run.beats = Math.max(run.beats, 2); cloudShot(3500, run.t > run.plan.tau * 0.8, true); } },
 });
@@ -127,6 +134,8 @@ function toggleUI() {
 
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('input, select, textarea')) return;
+  if (enc.isOpen) return;
+  if (e.key === 'e' || e.key === 'E') { enc.toggle(); return; }
   if (e.key === 'h' || e.key === 'H') toggleUI();
   if (e.key === ' ' && run) { e.preventDefault(); run.playing = !run.playing; run.lastReal = performance.now(); fxLayer.animating = true; map.triggerRepaint(); }
   if (e.key === 'd' || e.key === 'D') detonate();
@@ -178,6 +187,24 @@ class GlobeControl {
   onRemove() {}
 }
 map.addControl(new GlobeControl() as any, 'top-right');
+
+class BookControl {
+  onAdd() {
+    const div = document.createElement('div');
+    div.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'book-btn';
+    b.title = 'Enciclopedia (E)';
+    b.setAttribute('aria-label', 'Abrir la enciclopedia');
+    b.innerHTML = BOOK_ICON;
+    b.onclick = () => enc.toggle();
+    div.append(b);
+    return div;
+  }
+  onRemove() {}
+}
+map.addControl(new BookControl() as any, 'top-right');
 
 map.on('load', () => {
   overlays.install();
@@ -376,8 +403,9 @@ async function detonate() {
     const dObs = haversineKm(camLL.lat, camLL.lng, lat, lon) * 1000;
 
     results.hidden.clear();
-    overlays.set(fx, lat, lon, env.windKmh);
+    overlays.set(fx, lat, lon, fx.windKmh);
     overlays.gateT = plan.fbDone;
+    overlays.falloutDelayS = Math.max(plan.fbDone, plan.tau);
     overlays.setReveal(0, 0);
     const place = state.target.label || nearestCity(lat, lon).city.name;
     results.render(fx, `${place}`);
@@ -580,6 +608,7 @@ function writeHash() {
   if (s.view.globe) p.set('g', '1');
   p.set('wf', String(s.env.windFromDeg)); p.set('ws', String(s.env.windKmh)); p.set('hu', String(s.env.humidity)); p.set('vi', String(s.env.visibilityKm)); p.set('hr', String(s.env.hour));
   if (s.env.outdoorPct != null) p.set('op', String(s.env.outdoorPct));
+  if (s.env.windProfile?.length) p.set('wp', s.env.windProfile.map((l) => `${Math.round(l.zM)}:${Math.round(l.fromDeg)}:${Math.round(l.kmh)}`).join(';'));
   history.replaceState(null, '', '#' + p.toString());
 }
 
@@ -598,6 +627,8 @@ function readHash(s: AppState) {
   }
   if (p.get('g') === '1') s.view.globe = true;
   Object.assign(s.env, { windFromDeg: num('wf', 270), windKmh: num('ws', 24), humidity: num('hu', 60), visibilityKm: num('vi', 25), hour: num('hr', 12), outdoorPct: p.has('op') ? num('op', 25) : null });
+  const wp = p.get('wp');
+  s.env.windProfile = wp ? wp.split(';').map((x) => x.split(':').map(Number)).filter((a) => a.length === 3 && a.every(Number.isFinite)).map(([zM, fromDeg, kmh]) => ({ zM, fromDeg, kmh })) : null;
   // un enlace compartido conserva su entorno: no se sustituye por el tiempo real
   s.live = false;
 }
@@ -608,4 +639,4 @@ function share() {
 }
 
 // depuración / pruebas automáticas
-(window as any).__an = { map, state, detonate, cloudShot, fxLayer, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.playing = false; map.triggerRepaint(); } }, fmtTime };
+(window as any).__an = { map, state, detonate, enc, cloudShot, fxLayer, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.lastOverlay = 0; run.playing = false; map.triggerRepaint(); } }, fmtTime };

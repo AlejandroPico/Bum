@@ -4,6 +4,7 @@
 import { blastRange, pressureAt, optimumHeight1kt, shockArrivalTable, PSI, peakWind, decibels } from './blast';
 import { atmosphericEntry, impactCrater, KT_J } from './asteroid';
 import { computeFallout, falloutModel } from './fallout';
+import { effectiveWind } from './wind';
 import { densityField, nearestCity } from '../data/cities';
 import type { Effects, Environment, Ring, Scenario, Casualties } from './types';
 
@@ -320,7 +321,9 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   rings.sort((x, y) => x.radiusM - y.radiusM);
 
   // ---------- lluvia radiactiva ----------
-  const fp = { fissionKt, contact, cloudTopM: cloud.topM, capRadiusM: cloud.capRadiusM, windFromDeg: env.windFromDeg, windKmh: env.windKmh };
+  // viento en la capa por la que viaja la nube (perfil vertical si hay tiempo real)
+  const wEff = effectiveWind(env, cloud.topM, cloud.capBottomM);
+  const fp = { fissionKt, contact, cloudTopM: cloud.topM, capRadiusM: cloud.capRadiusM, windFromDeg: wEff.fromDeg, windKmh: wEff.kmh };
   const fallout = sc.kind === 'nuclear' && !chem ? computeFallout(fp) : [];
   const fModel = fallout.length ? falloutModel(fp) : null;
   const falloutRateAt = (eM: number, nM: number) => (fModel ? fModel.rateAtLocal(eM, nM) : 0);
@@ -332,7 +335,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   // ---------- víctimas ----------
   const casualties = estimateCasualties(lat, lon, rings, { pressurePsiAt, thermalFluenceAt, doseRemAt, Y, isImpact, env, crater, fireballR: contact > 0 ? fireballR : 0 });
 
-  if (fallout.length) notes.push(`Viento de ${Math.round(env.windKmh)} km/h desde ${compass(env.windFromDeg)}: la lluvia radiactiva se extiende hacia ${compass(env.windFromDeg + 180)}.`);
+  if (fallout.length) notes.push(`Viento de ${Math.round(wEff.kmh)} km/h desde ${compass(wEff.fromDeg)}${env.windProfile?.length ? ` (media entre el suelo y ${fmtDist(cloud.topM)}, tiempo real)` : ''}: la lluvia radiactiva se extiende hacia ${compass(wEff.fromDeg + 180)}.`);
   if (sc.kind === 'nuclear' && contact === 0 && h < 30000) notes.push('Explosión aérea: la bola de fuego no toca el suelo, así que no hay lluvia radiactiva local significativa.');
 
   return {
@@ -356,8 +359,8 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     pressurePsiAt,
     doseRemAt,
     falloutRateAt,
-    windKmh: env.windKmh,
-    windFromDeg: env.windFromDeg,
+    windKmh: wEff.kmh,
+    windFromDeg: wEff.fromDeg,
     chemical: chem,
     outdoorPct: env.outdoorPct != null ? Math.max(0, Math.min(100, env.outdoorPct)) : env.hour >= 7 && env.hour <= 20 ? 25 : 8,
     env: { ...env },

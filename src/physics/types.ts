@@ -38,6 +38,16 @@ export interface Environment {
   hour: number;
   /** % de población al aire libre (null = automático según la hora) */
   outdoorPct?: number | null;
+  /** perfil vertical de viento (tiempo real); si falta, el viento es uniforme en altura */
+  windProfile?: WindLevel[] | null;
+}
+
+export interface WindLevel {
+  /** altura aproximada sobre el suelo (m) */
+  zM: number;
+  /** dirección DESDE la que sopla (°) */
+  fromDeg: number;
+  kmh: number;
 }
 
 export type EffectGroup = 'fireball' | 'blast' | 'thermal' | 'radiation' | 'crater' | 'seismic' | 'emp' | 'ejecta' | 'tsunami';

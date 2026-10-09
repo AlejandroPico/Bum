@@ -8,6 +8,8 @@ export interface ResultsEvents {
   onHover(id: string | null): void;
   onShare(): void;
   onFocus(id: string): void;
+  /** abrir la ficha de la enciclopedia del escenario */
+  onBook(name: string): void;
 }
 
 const GROUP_NAMES: Record<string, string> = {
@@ -52,6 +54,7 @@ export class ResultsPanel {
         h('h2', {}, sc.name || fmtEnergy(fx.energyKt)),
         h('div', { class: 'sub' }, `${fmtEnergy(fx.energyKt)} ${burst} · ${place}`),
       ),
+      h('button', { class: 'icon-btn', title: 'Ficha en la enciclopedia', html: ICONS.book, onclick: () => this.ev.onBook(sc.name) }),
       h('button', { class: 'icon-btn', title: 'Compartir enlace', html: ICONS.share, onclick: () => this.ev.onShare() }),
       minBtn,
     );

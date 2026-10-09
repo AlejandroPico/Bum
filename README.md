@@ -65,6 +65,10 @@ Otros comandos:
 - Atajos: `H` oculta la interfaz · `Espacio` pausa · `D` detona.
 - El enlace (botón compartir) guarda el escenario completo en la URL.
 
+## Enciclopedia
+
+Botón del libro (bajo el del globo, o tecla `E`): más de 170 artículos (fundamentos, tipos de armas, historia, efectos, accidentes, impactos cósmicos y una ficha por cada arma, explosión y asteroide del simulador), glosario de 130 términos, 16 esquemas animados y modelos 3D interactivos (Little Boy, Fat Man, el Gadget de Trinity, Ivy Mike y modelos genéricos de bombas, ojivas, misiles, torpedos y proyectiles) que se pueden girar, cortar, ver en rayos X, desmontar y animar paso a paso. Nivel divulgativo, de museo: sin información de fabricación.
+
 ## Modelos físicos
 
 | Efecto | Modelo |

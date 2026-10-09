@@ -1,5 +1,6 @@
 import type { Effects, Environment } from '../physics/types';
 import { interpTable } from '../physics/blast';
+import { windAt } from '../physics/wind';
 
 /**
  * Parámetros de animación derivados de los efectos calculados. Todas las funciones
@@ -54,8 +55,9 @@ export class FxPlan {
     this.isAsteroid = fx.scenario.kind === 'asteroid';
     this.isImpact = this.isAsteroid && fx.burstHeightM === 0;
     this.highAltitude = this.h > 20000;
-    const to = ((env.windFromDeg + 180) * Math.PI) / 180;
-    const ms = env.windKmh / 3.6;
+    // viento efectivo (media en la altura de la nube) calculado con los efectos
+    const to = ((fx.windFromDeg + 180) * Math.PI) / 180;
+    const ms = fx.windKmh / 3.6;
     this.wind = [Math.sin(to) * ms, Math.cos(to) * ms];
     const g = (id: string) => fx.rings.find((r) => r.id === id)?.radiusM ?? 0;
     this.ignitionR = g('ignite');
@@ -74,7 +76,7 @@ export class FxPlan {
     const shockEnd = this.shockTime(Math.max(this.psi1R * 1.6, this.fireballR * 4));
     const ext = fx.fallout.length ? Math.max(...fx.fallout.map((f) => f.maxDownwindKm)) : 0;
     this.falloutExtKm = ext;
-    const falloutEnd = fx.fallout.length ? Math.min(48 * 3600, Math.max(6 * 3600, (ext / Math.max(env.windKmh, 4) + 1) * 3600)) : 0;
+    const falloutEnd = fx.fallout.length ? Math.min(48 * 3600, Math.max(6 * 3600, (ext / Math.max(fx.windKmh, 4) + 1) * 3600)) : 0;
     // la nube se disipa por completo antes de terminar la línea de tiempo
     const y = Math.max(fx.energyKt, 0.001);
     this.fade0 = this.tau * 6;
@@ -139,6 +141,12 @@ export class FxPlan {
     const t0 = this.tau * 1.2;
     if (t < t0) return [0, 0];
     const dt = t - t0;
+    if (this.env.windProfile?.length) {
+      // perfil real: cada altura deriva con su propio viento
+      const W = windAt(this.env, Math.max(10, zFrac * this.capTop));
+      const a = ((W.fromDeg + 180) * Math.PI) / 180, ms = W.kmh / 3.6;
+      return [Math.sin(a) * ms * dt, Math.cos(a) * ms * dt];
+    }
     const shear = 0.5 + 1.2 * zFrac; // el viento es más fuerte en altura
     return [this.wind[0] * dt * shear, this.wind[1] * dt * shear];
   }
@@ -159,6 +167,6 @@ export class FxPlan {
   }
   /** distancia (m) que ha recorrido el frente de lluvia radiactiva */
   falloutFront(t: number): number {
-    return Math.max(4, this.env.windKmh) * (t / 3600) * 1000 + this.capR;
+    return Math.max(4, this.fx.windKmh) * (t / 3600) * 1000 + this.capR;
   }
 }

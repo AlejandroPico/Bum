@@ -174,7 +174,7 @@ export class Overlays {
   /** Muestra los anillos hasta el radio que ya ha alcanzado el frente de choque. */
   setReveal(r: number, falloutHours: number, t = Infinity) {
     const changed = Math.abs(r - this.revealR) > Math.max(5, this.revealR * 0.01) || (r === Infinity) !== (this.revealR === Infinity);
-    const fchanged = Math.abs(falloutHours - this.falloutT) > 0.05 || (falloutHours === Infinity) !== (this.falloutT === Infinity);
+    const fchanged = Math.abs(falloutHours - this.falloutT) > 0.01 || (falloutHours === Infinity) !== (this.falloutT === Infinity);
     this.revealR = r;
     this.falloutT = falloutHours;
     this.simT = t;
@@ -186,6 +186,8 @@ export class Overlays {
   private revealKey = '';
   /** instante (s) en que acaba la fase luminosa de la bola de fuego: antes no se dibuja ningún anillo */
   gateT = 0;
+  /** segundos hasta que empieza a caer la lluvia radiactiva (subida de la nube) */
+  falloutDelayS = 0;
   /** distancia alcanzada por cada tipo de efecto en el instante actual */
   private reached(r: Ring): number {
     const t = this.simT;
@@ -242,9 +244,11 @@ export class Overlays {
     const ff: GeoJSON.Feature[] = [];
     const dep: GeoJSON.Feature[] = [];
     const flab: GeoJSON.Feature[] = [];
-    if ((this.showFallout || this.showMarks) && !this.hidden.has('fallout')) {
+    if ((this.showFallout || this.showMarks) && !this.hidden.has('fallout') && this.falloutT * 3600 > this.falloutDelayS) {
       const windKmh = Math.max(4, this.current.wind);
-      const front = this.falloutT === Infinity ? Infinity : windKmh * this.falloutT * 1000 + fx.cloud.capRadiusM;
+      // las partículas empiezan a caer cuando la nube ya ha subido y se ha extendido
+      const tS = this.falloutT * 3600 - this.falloutDelayS;
+      const front = this.falloutT === Infinity ? Infinity : tS <= 0 ? 0 : windKmh * (tS / 3600) * 1000 + fx.cloud.capRadiusM * Math.min(1, tS / Math.max(1, this.falloutDelayS * 2));
       for (const c of fx.fallout) {
         for (const poly of c.polygons) {
           const coords = poly.map((ring) => {

@@ -158,10 +158,12 @@ void main(){
         prev = L;
       }
       float Tl = exp(-od * uSigma * 0.8);
+      // la columna recibe luz lateral y del cielo aunque el sombrero le haga sombra
+      Tl = mix(Tl, 1.0, 0.25 * (1.0 - hAmb));
       float powder = 1.0 - exp(-D.x * 4.0);
-      vec3 albedo = mix(vec3(0.88, 0.85, 0.82), vec3(0.52, 0.43, 0.35), D.y);
+      vec3 albedo = mix(vec3(0.88, 0.85, 0.82), vec3(0.62, 0.53, 0.44), D.y);
       float hAmb = clamp((p.y - (uCapC.y - uTc)) / (2.0 * uTc), 0.0, 1.0);
-      vec3 amb = uAmb * mix(0.28, 1.05, hAmb * hAmb) * (D.y > 0.5 ? 0.7 : 1.0);
+      vec3 amb = uAmb * mix(0.5, 1.05, hAmb) * (D.y > 0.5 ? 0.85 : 1.0);
       vec3 lum = uSunCol * 1.45 * Tl * phase * mix(1.0, powder * 1.6, 0.35) + amb * 0.85;
       // luz de la bola de fuego y brasas del interior
       lum += uGlow * vec3(1.0, 0.42, 0.12) * (1.0 - hAmb) * 0.6;

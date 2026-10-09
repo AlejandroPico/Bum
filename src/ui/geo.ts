@@ -46,12 +46,14 @@ export function parseCoords(q: string): { lat: number; lon: number } | null {
   return isLon(a) && !isLon(b) ? ok(b.v, a.v) : ok(a.v, b.v);
 }
 
+import type { WindLevel } from '../physics/types';
+
 export interface Weather {
-  /** viento efectivo para la lluvia radiactiva (media vectorial 850–250 hPa) */
-  windKmh: number;
-  windFromDeg: number;
+  /** viento en superficie (10 m) */
   surfaceWindKmh: number;
   surfaceWindFromDeg: number;
+  /** perfil vertical: 10 m, 850, 700, 500, 300, 250 y 200 hPa */
+  profile: WindLevel[];
   humidity: number;
   visibilityKm: number;
   tempC: number;
@@ -61,11 +63,31 @@ export interface Weather {
   localTime: string;
 }
 
+const LEVELS: [string, number][] = [['850hPa', 1460], ['700hPa', 3010], ['500hPa', 5570], ['300hPa', 9160], ['250hPa', 10360], ['200hPa', 11790]];
+const CACHE_MS = 20 * 60 * 1000;
+
+/** caché local de respuestas (respeta los límites de la API gratuita) */
+function cacheGet<T>(key: string, maxAge: number): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { t, v } = JSON.parse(raw);
+    return Date.now() - t < maxAge ? (v as T) : null;
+  } catch { return null; }
+}
+function cacheSet(key: string, v: unknown) {
+  try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v })); } catch { /* sin almacenamiento */ }
+}
+
 export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
+  const key = `bum:wx:${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const hit = cacheGet<Weather>(key, CACHE_MS);
+  if (hit) return hit;
+  const lv = LEVELS.map(([l]) => `wind_speed_${l},wind_direction_${l},geopotential_height_${l}`).join(',');
   const url = 'https://api.open-meteo.com/v1/forecast'
     + `?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
     + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,cloud_cover'
-    + '&hourly=visibility,wind_speed_850hPa,wind_direction_850hPa,wind_speed_500hPa,wind_direction_500hPa,wind_speed_250hPa,wind_direction_250hPa'
+    + `&hourly=visibility,${lv}`
     + '&forecast_hours=1&wind_speed_unit=kmh&timezone=auto';
   const ctl = new AbortController();
   const to = setTimeout(() => ctl.abort(), 8000);
@@ -75,35 +97,33 @@ export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
     const js = await r.json();
     const cur = js.current ?? {};
     const hr = js.hourly ?? {};
+    const elev = +(js.elevation ?? 0);
     const first = (k: string): number | null => (Array.isArray(hr[k]) && hr[k][0] != null ? +hr[k][0] : null);
-    // media vectorial del viento en la capa en la que viaja la nube
-    let u = 0, v = 0, n = 0;
-    for (const lv of ['850hPa', '500hPa', '250hPa']) {
-      const sp = first(`wind_speed_${lv}`), dir = first(`wind_direction_${lv}`);
-      if (sp == null || dir == null) continue;
-      const a = (dir * Math.PI) / 180;
-      u += -sp * Math.sin(a); v += -sp * Math.cos(a); n++;
-    }
     const sSp = +(cur.wind_speed_10m ?? 0), sDir = +(cur.wind_direction_10m ?? 0);
-    let windKmh = sSp, windFromDeg = sDir;
-    if (n) {
-      u /= n; v /= n;
-      windKmh = Math.hypot(u, v);
-      windFromDeg = ((Math.atan2(-u, -v) * 180) / Math.PI + 360) % 360;
+    const profile: WindLevel[] = [{ zM: 10, kmh: sSp, fromDeg: sDir }];
+    for (const [l, zStd] of LEVELS) {
+      const sp = first(`wind_speed_${l}`), dir = first(`wind_direction_${l}`), gh = first(`geopotential_height_${l}`);
+      if (sp == null || dir == null) continue;
+      const z = (gh ?? zStd) - elev;
+      if (z > 20) profile.push({ zM: z, kmh: sp, fromDeg: dir });
     }
     const time: string = cur.time ?? '';
     const tm = time.match(/T(\d{2}):(\d{2})/);
     const hour = tm ? +tm[1] + +tm[2] / 60 : 12;
     const vis = first('visibility');
-    return {
-      windKmh, windFromDeg, surfaceWindKmh: sSp, surfaceWindFromDeg: sDir,
+    const w: Weather = {
+      surfaceWindKmh: sSp, surfaceWindFromDeg: sDir, profile,
       humidity: +(cur.relative_humidity_2m ?? 60),
       visibilityKm: vis != null ? vis / 1000 : 25,
       tempC: +(cur.temperature_2m ?? 15),
       cloudPct: +(cur.cloud_cover ?? 0),
       hour, localTime: tm ? `${tm[1]}:${tm[2]}` : '—',
     };
+    cacheSet(key, w);
+    return w;
   } finally {
     clearTimeout(to);
   }
 }
+
+export { cacheGet, cacheSet };

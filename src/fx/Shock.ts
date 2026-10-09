@@ -17,7 +17,8 @@ void main(){
   float f = 1.0 - abs(dot(normalize(vN), V));
   float rim = pow(f, 4.0);
   float rip = 0.5 + 0.5 * snoise(vN * 18.0 + uTime * 0.5);
-  float a = (rim * 0.9 + 0.05 * rip) * uStrength;
+  // el frente es casi invisible: sólo un borde tenue que refracta la luz
+  float a = (rim * 0.32 + 0.025 * rip) * uStrength;
   gl_FragColor = vec4(uColor * a, a);
 }`;
 
@@ -107,7 +108,7 @@ export class Shock implements FxModule {
     if (!on) return;
     this.shellMat.depthTest = this.wMat.depthTest = this.dMat.depthTest = !ctx.farView;
     const psi = P.fx.pressurePsiAt(Math.sqrt(Math.max(0, R * R - P.h * P.h)));
-    const strength = Math.min(1, 0.15 + psi / 8) * Math.max(0, 1 - R / (P.psi1R * 2.2 + 1));
+    const strength = Math.min(0.8, 0.1 + psi / 10) * Math.pow(Math.max(0, 1 - R / (P.psi1R * 2.2 + 1)), 1.5);
     this.shell.position.set(0, P.h, 0);
     this.shell.scale.setScalar(R);
     this.shell.updateMatrixWorld();

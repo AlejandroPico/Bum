@@ -130,6 +130,28 @@ export class Sidebar {
   /** consulta el tiempo real en el objetivo y lo aplica al entorno */
   loadWeather: (quiet?: boolean) => Promise<void> = async () => {};
 
+  private presetSelEl!: HTMLSelectElement;
+  private aPresetEl!: HTMLSelectElement;
+
+  /** selecciona un preset por su nombre exacto (arma o asteroide); devuelve false si no existe */
+  selectPreset(name: string): boolean {
+    let found = false;
+    NUKE_PRESETS.forEach((g, gi) => g.items.forEach((it, ii) => {
+      if (found || it.name !== name) return;
+      found = true;
+      this.setMode('nuclear');
+      this.presetSelEl.value = `${gi}:${ii}`;
+      this.presetSelEl.dispatchEvent(new Event('change'));
+    }));
+    if (found) return true;
+    const ai = ASTEROID_PRESETS.findIndex((a) => a.name === name);
+    if (ai < 0) return false;
+    this.setMode('asteroid');
+    this.aPresetEl.value = String(ai);
+    this.aPresetEl.dispatchEvent(new Event('change'));
+    return true;
+  }
+
   /** muestra lo detectado en el punto objetivo */
   setDetected(text: string) { if (this.detectNote) this.detectNote.textContent = text; }
 
@@ -150,7 +172,7 @@ export class Sidebar {
     const S = this.state;
     const head = h('div', { class: 'sb-head' },
       h('img', { class: 'logo', src: logoUrl, alt: 'Bum' }),
-      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Ataques nucleares e impactos · v0.5')),
+      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Ataques nucleares e impactos · v0.6')),
       h('button', { class: 'icon-btn', title: 'Ocultar panel (H)', html: ICONS.hide, onclick: () => this.ev.onCollapse() }),
     );
 
@@ -214,6 +236,7 @@ export class Sidebar {
       g.items.forEach((it, ii) => og.append(h('option', { value: `${gi}:${ii}` }, it.name)));
       presetSel.append(og);
     });
+    this.presetSelEl = presetSel;
     const presetNote = h('div', { class: 'note' });
     const yieldVal = h('b');
     const yieldR = logSlider(-3, 5, nk.yieldKt);
@@ -290,6 +313,7 @@ export class Sidebar {
     const aPreset = h('select') as HTMLSelectElement;
     aPreset.append(h('option', { value: '' }, '— Personalizado —'));
     ASTEROID_PRESETS.forEach((p, i) => aPreset.append(h('option', { value: String(i) }, p.name)));
+    this.aPresetEl = aPreset;
     const aNote = h('div', { class: 'note' });
     const dVal = h('b'), dR = logSlider(0, 6, as.diameterM);
     const comp = h('select') as HTMLSelectElement;
@@ -358,7 +382,7 @@ export class Sidebar {
     const E = S.env;
     const wVal = h('b'), wR = linSlider(0, 150, E.windKmh, 1);
     const wdVal = h('b');
-    const wComp = compassInput(E.windFromDeg, (deg) => { E.windFromDeg = deg; updEnv(); });
+    const wComp = compassInput(E.windFromDeg, (deg) => { E.windFromDeg = deg; E.windProfile = null; updEnv(); if (wxNote) wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
     const humVal = h('b'), humR = linSlider(0, 100, E.humidity, 1);
     const visVal = h('b'), visR = linSlider(2, 80, E.visibilityKm, 1);
     const hrVal = h('b'), hrR = linSlider(0, 24, E.hour, 0.25);
@@ -377,7 +401,7 @@ export class Sidebar {
       outVal.textContent = E.outdoorPct == null ? `auto · ${autoOut} %` : `${E.outdoorPct} %`;
       if (!silent) this.ev.onEnv();
     };
-    for (const r of [wR, humR, visR, hrR]) r.addEventListener('input', () => { updEnv(); wxNote.textContent = 'Valores manuales.'; });
+    for (const r of [wR, humR, visR, hrR]) r.addEventListener('input', () => { if (r === wR) E.windProfile = null; updEnv(); wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
     outR.addEventListener('input', () => { E.outdoorPct = +outR.value; updEnv(); });
     outVal.title = 'Doble clic: automático según la hora';
     outVal.addEventListener('dblclick', () => { E.outdoorPct = null; updEnv(); });
@@ -386,13 +410,15 @@ export class Sidebar {
     const wxNote = h('div', { class: 'hint' }, 'Valores manuales.');
     const wxBtn = h('button', { class: 'btn-line', type: 'button', html: `${ICONS.weather}<span>Tiempo real en el objetivo</span>` }) as HTMLButtonElement;
     const applyWx = (w: Weather) => {
-      wR.value = String(Math.min(150, Math.round(w.windKmh)));
-      E.windFromDeg = Math.round(w.windFromDeg) % 360; wComp.set(E.windFromDeg);
+      wR.value = String(Math.min(150, Math.round(w.surfaceWindKmh)));
+      E.windFromDeg = Math.round(w.surfaceWindFromDeg) % 360; wComp.set(E.windFromDeg);
       humR.value = String(Math.round(w.humidity));
       visR.value = String(Math.max(2, Math.min(80, Math.round(w.visibilityKm))));
       hrR.value = String(Math.round(w.hour * 4) / 4);
       updEnv();
-      wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} % · viento en superficie ${Math.round(w.surfaceWindKmh)} km/h; se usa el viento medio 850–250 hPa (la altura de la nube) para la lluvia radiactiva.`;
+      E.windProfile = w.profile;
+      const top = w.profile[w.profile.length - 1];
+      wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} % · viento a ${(top.zM / 1000).toFixed(0)} km: ${Math.round(top.kmh)} km/h desde ${dirName(top.fromDeg)}. La nube y la lluvia radiactiva usan el perfil de viento hasta la altura real de la nube.`;
     };
     this.loadWeather = async (quiet = false) => {
       wxBtn.disabled = true; wxBtn.classList.add('busy');

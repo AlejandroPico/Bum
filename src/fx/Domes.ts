@@ -59,8 +59,10 @@ export class Domes implements FxModule {
       else revealT = plan.tMax * 3;
       // nada tapa la bola de fuego: las cúpulas aparecen cuando termina su fase luminosa;
       // las que ya habría cruzado la onda aparecen sin pulso
-      const gate = plan.fbDone;
-      const pulse = revealT >= gate;
+      // las cúpulas no tapan la explosión: aparecen cuando la onda ya ha pasado
+      // el radio de 1 psi (lo esencial de la animación ha terminado)
+      const gate = Math.max(plan.fbDone, plan.shockTime(Math.hypot(plan.psi1R, plan.h)) * 1.1 + 2);
+      const pulse = false;
       revealT = Math.max(revealT, gate);
       this.items.push({ ring, mesh, mat, revealT, revealReal: -1, pulse });
     }
@@ -69,11 +71,11 @@ export class Domes implements FxModule {
   update(ctx: FrameCtx) {
     for (const it of this.items) {
       const show = this.enabled && !this.hidden.has(it.ring.id);
-      const k = Math.max(0, Math.min(1, (ctx.t - it.revealT) / Math.max(1, it.revealT * 0.3)));
+      const k = Math.max(0, Math.min(1, (ctx.t - it.revealT) / Math.max(2, it.revealT * 0.5)));
       // durante la formación del hongo las cúpulas se atenúan para no tapar el espectáculo
       const P = this.plan;
       const calm = P.highAltitude ? 1 : 0.35 + 0.65 * Math.max(0, Math.min(1, (ctx.t - P.tau * 2.5) / (P.tau * 1.5)));
-      const a = show ? k * calm * (it.ring.group === 'blast' ? 0.45 : it.ring.group === 'fireball' ? 0.6 : 0.25) : 0;
+      const a = show ? k * calm * (it.ring.group === 'blast' ? 0.3 : it.ring.group === 'fireball' ? 0.4 : 0.18) : 0;
       if (k <= 0) it.revealReal = -1;
       else if (it.revealReal < 0) it.revealReal = ctx.t - it.revealT < it.revealT * 0.5 + 2 ? ctx.real : ctx.real - 100;
       const pulse = show && it.pulse && it.revealReal >= 0 ? Math.exp(-(ctx.real - it.revealReal) / 1.4) * (it.ring.group === 'blast' ? 0.5 : 0.25) : 0;
