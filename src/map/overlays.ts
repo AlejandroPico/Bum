@@ -16,11 +16,74 @@ export function destination(lat: number, lon: number, distM: number, bearingDeg:
   return [((l2 * 180) / Math.PI + 540) % 360 - 180, (p2 * 180) / Math.PI];
 }
 
-function circle(lat: number, lon: number, r: number, n = 180): [number, number][] {
+const EARTH_R = 6371e3;
+const POLE_LAT = 89.9;
+
+function haversineM(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const r = Math.PI / 180;
+  const a = Math.sin(((lat2 - lat1) * r) / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(((lon2 - lon1) * r) / 2) ** 2;
+  return 2 * EARTH_R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/** anillo geodésico con longitudes "desenrolladas" (continuas aunque crucen el antimeridiano) */
+function ringUnwrapped(lat: number, lon: number, r: number, n: number): [number, number][] {
   const pts: [number, number][] = [];
-  for (let i = 0; i <= n; i++) pts.push(destination(lat, lon, r, (i / n) * 360));
+  let prev = 0;
+  for (let i = 0; i <= n; i++) {
+    let [x, y] = destination(lat, lon, r, (i / n) * 360);
+    if (i > 0) {
+      while (x - prev > 180) x -= 360;
+      while (x - prev < -180) x += 360;
+    } else {
+      while (x - lon > 180) x -= 360;
+      while (x - lon < -180) x += 360;
+    }
+    prev = x;
+    pts.push([x, y]);
+  }
   return pts;
 }
+
+/**
+ * Polígono GeoJSON de un círculo geodésico de radio `r` (m), correcto para radios enormes:
+ * cruza el antimeridiano, contiene un polo o incluso ambos (entonces es el planeta menos un
+ * casquete alrededor de las antípodas).
+ */
+export function circlePolygon(lat: number, lon: number, r: number, n = 180): [number, number][][] {
+  const half = Math.PI * EARTH_R;
+  const world: [number, number][] = [[-180, -POLE_LAT], [180, -POLE_LAT], [180, POLE_LAT], [-180, POLE_LAT], [-180, -POLE_LAT]];
+  if (r >= half * 0.995) return [world];
+  const nIn = haversineM(lat, lon, 90, 0) < r;
+  const sIn = haversineM(lat, lon, -90, 0) < r;
+  if (nIn && sIn) {
+    // el complemento es un casquete alrededor de las antípodas
+    const alat = -lat, alon = lon > 0 ? lon - 180 : lon + 180;
+    const hole = ringUnwrapped(alat, alon, half - r, n).reverse();
+    return [world, hole];
+  }
+  const ring = ringUnwrapped(lat, lon, r, n);
+  if (nIn || sIn) {
+    const pl = nIn ? POLE_LAT : -POLE_LAT;
+    const first = ring[0], last = ring[ring.length - 1];
+    // cierra el anillo pasando por el polo
+    ring.push([last[0], pl], [first[0], pl], first);
+  }
+  return [ring];
+}
+
+/** contorno (líneas) del círculo, sin los tramos auxiliares de cierre por los polos */
+export function circleLine(lat: number, lon: number, r: number, n = 180): [number, number][][] {
+  const half = Math.PI * EARTH_R;
+  if (r >= half * 0.995) return [];
+  const nIn = haversineM(lat, lon, 90, 0) < r;
+  const sIn = haversineM(lat, lon, -90, 0) < r;
+  if (nIn && sIn) {
+    const alat = -lat, alon = lon > 0 ? lon - 180 : lon + 180;
+    return [ringUnwrapped(alat, alon, half - r, n)];
+  }
+  return [ringUnwrapped(lat, lon, r, n)];
+}
+
 
 /** convierte metros locales (este, norte) a lng/lat */
 export function localToLngLat(lat: number, lon: number, e: number, n: number): [number, number] {
@@ -44,7 +107,7 @@ export class Overlays {
 
   install() {
     const m = this.map;
-    for (const id of ['fx-rings', 'fx-fallout', 'fx-labels', 'fx-scorch']) m.addSource(id, { type: 'geojson', data: empty() });
+    for (const id of ['fx-rings', 'fx-ring-lines', 'fx-fallout', 'fx-labels', 'fx-scorch']) m.addSource(id, { type: 'geojson', data: empty() });
     const before = 'buildings';
     m.addLayer({ id: 'fx-scorch', type: 'fill', source: 'fx-scorch', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'opacity'] } }, before);
     m.addLayer({
@@ -53,8 +116,8 @@ export class Overlays {
     }, before);
     m.addLayer({ id: 'fx-fallout-line', type: 'line', source: 'fx-fallout', paint: { 'line-color': ['get', 'color'], 'line-width': 1.4, 'line-opacity': 0.9 } }, before);
     m.addLayer({ id: 'fx-rings-fill', type: 'fill', source: 'fx-rings', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'fillOpacity'] } }, before);
-    m.addLayer({ id: 'fx-rings-glow', type: 'line', source: 'fx-rings', paint: { 'line-color': ['get', 'color'], 'line-width': 9, 'line-blur': 8, 'line-opacity': ['*', 0.55, ['get', 'lineOpacity']] } }, before);
-    m.addLayer({ id: 'fx-rings-line', type: 'line', source: 'fx-rings', paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['boolean', ['get', 'hl'], false], 3.2, 1.6], 'line-opacity': ['get', 'lineOpacity'] } }, before);
+    m.addLayer({ id: 'fx-rings-glow', type: 'line', source: 'fx-ring-lines', paint: { 'line-color': ['get', 'color'], 'line-width': 9, 'line-blur': 8, 'line-opacity': ['*', 0.55, ['get', 'lineOpacity']] } }, before);
+    m.addLayer({ id: 'fx-rings-line', type: 'line', source: 'fx-ring-lines', paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['boolean', ['get', 'hl'], false], 3.2, 1.6], 'line-opacity': ['get', 'lineOpacity'] } }, before);
     m.addLayer({
       id: 'fx-labels', type: 'symbol', source: 'fx-labels',
       layout: {
@@ -86,35 +149,59 @@ export class Overlays {
   highlight: string | null = null;
 
   /** Muestra los anillos hasta el radio que ya ha alcanzado el frente de choque. */
-  setReveal(r: number, falloutHours: number) {
+  setReveal(r: number, falloutHours: number, t = Infinity) {
     const changed = Math.abs(r - this.revealR) > Math.max(5, this.revealR * 0.01) || (r === Infinity) !== (this.revealR === Infinity);
     const fchanged = Math.abs(falloutHours - this.falloutT) > 0.05 || (falloutHours === Infinity) !== (this.falloutT === Infinity);
     this.revealR = r;
     this.falloutT = falloutHours;
-    if (changed || fchanged) this.refresh();
+    this.simT = t;
+    const key = this.current ? this.current.fx.rings.map((x) => (this.reached(x) >= x.radiusM * 0.98 ? 1 : 0)).join('') : '';
+    if (changed || fchanged || key !== this.revealKey) { this.revealKey = key; this.refresh(); }
+  }
+
+  private simT = Infinity;
+  private revealKey = '';
+  /** distancia alcanzada por cada tipo de efecto en el instante actual */
+  private reached(r: Ring): number {
+    const t = this.simT;
+    if (t === Infinity) return Infinity;
+    if (t <= 0) return 0;
+    const fx = this.current!.fx;
+    switch (r.group) {
+      case 'tsunami': return Math.sqrt(9.81 * Math.max(10, fx.tsunami?.depthM ?? 4000)) * t; // ondas largas: √(g·h)
+      case 'seismic': return 5000 * t; // ondas superficiales ≈ 5 km/s
+      case 'ejecta': return 0.5 * 9.81 * t * t; // vuelo balístico a 45°
+      case 'thermal': case 'radiation': case 'fireball': case 'crater': case 'emp': return Infinity;
+      default: return this.revealR;
+    }
   }
 
   refresh() {
     const m = this.map;
     const src = (id: string) => m.getSource(id) as GeoJSONSource | undefined;
     if (!this.current) {
-      for (const id of ['fx-rings', 'fx-fallout', 'fx-labels', 'fx-scorch']) src(id)?.setData(empty());
+      for (const id of ['fx-rings', 'fx-ring-lines', 'fx-fallout', 'fx-labels', 'fx-scorch']) src(id)?.setData(empty());
       return;
     }
     const { fx, lat, lon } = this.current;
     const rings: GeoJSON.Feature[] = [];
     const labels: GeoJSON.Feature[] = [];
-    const visible = fx.rings.filter((r) => !this.hidden.has(r.id) && this.showRings);
+    const lines: GeoJSON.Feature[] = [];
+    const visible = fx.rings.filter((r) => !this.hidden.has(r.id) && this.showRings && !r.global);
     // de mayor a menor para que los pequeños queden encima
     const sorted = [...visible].sort((a, b) => b.radiusM - a.radiusM);
     sorted.forEach((r: Ring, i) => {
-      const reveal = Math.min(1, Math.max(0, (this.revealR - r.radiusM * 0.98) / Math.max(r.radiusM * 0.05, 1)));
-      if (reveal <= 0 && r.group !== 'thermal' && r.group !== 'radiation' && r.group !== 'fireball') return;
+      if (this.reached(r) < r.radiusM * 0.98) return;
       const hl = this.highlight === r.id;
       rings.push({
         type: 'Feature',
         properties: { color: r.color, fillOpacity: (hl ? 0.22 : 0.07) * (r.group === 'fireball' ? 2 : 1), lineOpacity: hl ? 1 : 0.85, hl },
-        geometry: { type: 'Polygon', coordinates: [circle(lat, lon, r.radiusM)] },
+        geometry: { type: 'Polygon', coordinates: circlePolygon(lat, lon, r.radiusM) },
+      });
+      lines.push({
+        type: 'Feature',
+        properties: { color: r.color, lineOpacity: hl ? 1 : 0.85, hl },
+        geometry: { type: 'MultiLineString', coordinates: circleLine(lat, lon, r.radiusM) },
       });
       labels.push({
         type: 'Feature',
@@ -123,6 +210,7 @@ export class Overlays {
       });
     });
     src('fx-rings')?.setData({ type: 'FeatureCollection', features: rings });
+    src('fx-ring-lines')?.setData({ type: 'FeatureCollection', features: lines });
     src('fx-labels')?.setData({ type: 'FeatureCollection', features: labels });
 
     // lluvia radiactiva (se revela a medida que avanza el viento)
@@ -156,7 +244,7 @@ export class Overlays {
         { r: Math.min(scorchR, fx.rings.find((r) => r.id === 'psi5')?.radiusM ?? 0), color: '#120a06', opacity: 0.35 },
         { r: Math.min(scorchR, fx.rings.find((r) => r.id === 'fireball')?.radiusM ?? 0) * 1.2, color: '#050302', opacity: 0.6 },
       ];
-      for (const s of steps) if (s.r > 1) sc.push({ type: 'Feature', properties: { color: s.color, opacity: s.opacity }, geometry: { type: 'Polygon', coordinates: [circle(lat, lon, s.r, 120)] } });
+      for (const s of steps) if (s.r > 1) sc.push({ type: 'Feature', properties: { color: s.color, opacity: s.opacity }, geometry: { type: 'Polygon', coordinates: circlePolygon(lat, lon, s.r, 120) } });
     }
     src('fx-scorch')?.setData({ type: 'FeatureCollection', features: sc });
   }

@@ -4,8 +4,12 @@ import type { FrameCtx, FxModule } from './types';
 import type { Ring } from '../physics/types';
 
 const VERT = /* glsl */ `
+uniform float uCurv;
 varying vec3 vW; varying vec3 vN; varying float vH;
-void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(position); vH = position.y; gl_Position = projectionMatrix * w; }`;
+void main(){ vec4 w = modelMatrix * vec4(position, 1.0);
+  // sobre el globo, la base de la cúpula sigue la curvatura terrestre
+  w.y -= uCurv * (w.x * w.x + w.z * w.z) / (2.0 * 6371000.0);
+  vW = w.xyz; vN = normalize(position); vH = position.y; gl_Position = projectionMatrix * w; }`;
 
 const FRAG = /* glsl */ `
 uniform vec3 uCam; uniform vec3 uColor; uniform float uAlpha; uniform float uTime; uniform float uHl; uniform float uPulse;
@@ -39,7 +43,7 @@ export class Domes implements FxModule {
       if (!ring.dome || ring.radiusM < 5) continue;
       const mat = new THREE.ShaderMaterial({
         vertexShader: VERT, fragmentShader: FRAG,
-        uniforms: { uCam: { value: new THREE.Vector3() }, uColor: { value: new THREE.Color(ring.color) }, uAlpha: { value: 0 }, uTime: { value: 0 }, uHl: { value: 0 }, uPulse: { value: 0 } },
+        uniforms: { uCam: { value: new THREE.Vector3() }, uColor: { value: new THREE.Color(ring.color) }, uAlpha: { value: 0 }, uTime: { value: 0 }, uHl: { value: 0 }, uPulse: { value: 0 }, uCurv: { value: 0 } },
         transparent: true, depthWrite: false, side: THREE.DoubleSide,
         blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
       });
@@ -72,6 +76,7 @@ export class Domes implements FxModule {
       it.mat.depthTest = !ctx.farView;
       const u = it.mat.uniforms;
       u.uPulse.value = pulse;
+      u.uCurv.value = ctx.globe ? 1 : 0;
       u.uAlpha.value = a;
       u.uCam.value.copy(ctx.camPos);
       u.uTime.value = ctx.real + it.ring.radiusM * 0.0001;

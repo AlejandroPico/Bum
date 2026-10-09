@@ -50,6 +50,8 @@ export interface Ring {
   value?: string;
   /** dibujar como cúpula 3D */
   dome?: boolean;
+  /** el efecto alcanza (o supera) todo el planeta */
+  global?: boolean;
 }
 
 export interface FalloutContour {
@@ -93,7 +95,7 @@ export interface Effects {
   crater?: { diameterM: number; depthM: number; transientM: number; type: 'simple' | 'complex' | 'water' };
   fallout: FalloutContour[];
   seismic: { magnitude: number; rings: Ring[] } | null;
-  tsunami?: { rimWaveM: number; at100kmM: number };
+  tsunami?: { rimWaveM: number; at1000kmM: number; transientM: number; depthM: number };
   shock: { r: number[]; t: number[] };
   casualties: Casualties;
   asteroid?: AsteroidInfo;

@@ -42,6 +42,8 @@ Otros comandos:
   y tipo de detonación (superficie, aérea óptima o altura personalizada — hasta explosiones espaciales con EMP).
 - **Impacto cósmico**: diámetro, composición/densidad, velocidad, ángulo, dirección de llegada y terreno
   (sedimento, roca o agua con profundidad).
+- **Mapa**: plano 2D (por defecto) o **globo 3D** (botón del globo, arriba a la derecha, o en Visualización).
+- **Terreno automático**: en impactos se detecta si el punto es tierra u océano y la profundidad del agua (batimetría de los datos de relieve).
 - **Entorno**: viento (dirección y velocidad), humedad, visibilidad y hora del día (incluye noche con luces
   de ciudad).
 - **Resultados**: panel flotante (se arrastra y se minimiza) con víctimas estimadas, cada efecto con su radio
@@ -62,7 +64,9 @@ Otros comandos:
 | Radiación inicial | Curvas de dosis ancladas a Glasstone (500 rem / 100 rem) con atenuación exponencial en aire |
 | Bola de fuego, nube | Escalados empíricos de Glasstone (radio ∝ Y^0,4; altura de la nube por tramos) |
 | Lluvia radiactiva | Modelo analítico simplificado (tipo WSEG-10): actividad 1 kt fisión ≈ 3000 R/h·mi² a H+1, penacho log-normal a sotavento con dispersión lateral; isolíneas 1–1000 rad/h |
-| Asteroides | Collins, Melosh & Marcus (2005): fragmentación, modelo "pancake", explosión aérea, velocidad de impacto, cráter simple/complejo, eyecta, sismicidad, tsunami (aprox.) |
+| Asteroides | Collins, Melosh & Marcus (2005): fragmentación, modelo "pancake", explosión aérea, velocidad de impacto, cráter simple/complejo, eyecta, sismicidad (ec. 40–41), radiación térmica con fracción visible sobre el horizonte |
+| Tsunami | Wünnemann et al. (2010): A(D) = min(0,14·Dtc, h)·Dtc/(2D), alcance máximo ~13 000 km; se propaga a √(g·h) |
+| Escala planetaria | Ningún efecto supera las antípodas (20 015 km); los círculos son geodésicos (cruzan el antimeridiano y los polos); entradas limitadas a rangos físicos |
 | Víctimas | Densidad urbana de Clark (exponencial) a partir de la población metropolitana de ~100 ciudades + probabilidades de muerte/heridas tipo OTA (1979) combinadas con quemaduras y radiación |
 
 ## Tecnología
@@ -96,6 +100,10 @@ Otros comandos:
 - [ ] Post-procesado (bloom, distorsión por calor).
 - [ ] Refugios y tiempo de permanencia recomendado frente a la lluvia radiactiva.
 - [ ] Versión en inglés.
+
+## Icono
+
+`favicon.svg` (en la raíz) es el icono del proyecto: se usa como favicon, como logotipo de la interfaz y se publica también en la raíz del sitio.
 
 ## Licencia
 

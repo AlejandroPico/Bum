@@ -79,7 +79,10 @@ export class FxPlan {
     const y = Math.max(fx.energyKt, 0.001);
     this.fade0 = this.tau * 6;
     this.fade1 = this.fade0 + 2400 * Math.pow(y / 1000, 0.18) + 1800;
-    this.tEnd = Math.max(20 * 60, shockEnd * 1.2, falloutEnd, this.fade1 * 1.05);
+    // el tsunami viaja a √(g·h): en mar profundo tarda horas en cruzar el océano
+    const tsuR = Math.max(0, ...fx.rings.filter((r) => r.group === 'tsunami').map((r) => r.radiusM));
+    const tsuEnd = fx.tsunami && tsuR ? (tsuR / Math.sqrt(9.81 * Math.max(10, fx.tsunami.depthM))) * 1.05 : 0;
+    this.tEnd = Math.min(72 * 3600, Math.max(20 * 60, shockEnd * 1.2, falloutEnd, this.fade1 * 1.05, tsuEnd));
   }
 
   /** radio del frente de choque (m, desde el punto de explosión) */

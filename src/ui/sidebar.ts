@@ -1,17 +1,19 @@
 import { h, setRangeFill, ICONS, toast } from './dom';
+import logoUrl from '../../favicon.svg';
 import { NUKE_PRESETS, ASTEROID_PRESETS, COMPOSITIONS, QUICK_TARGETS } from '../data/presets';
 import { fmtEnergy } from '../physics/effects';
 import type { NuclearInput, AsteroidInput, Environment, BurstMode, TargetType } from '../physics/types';
 
 export interface ViewOptions {
   domes: boolean; rings: boolean; fallout: boolean; damage: boolean; fires: boolean; sound: boolean; cinematic: boolean; labels: boolean;
+  globe: boolean;
   quality: number;
 }
 
 export interface AppState {
   mode: 'nuclear' | 'asteroid';
   nuke: NuclearInput;
-  ast: AsteroidInput & { azimuth: number };
+  ast: AsteroidInput & { azimuth: number; surface: 'auto' | TargetType };
   env: Environment;
   target: { lat: number; lon: number; label: string };
   view: ViewOptions;
@@ -21,10 +23,10 @@ export function defaultState(): AppState {
   return {
     mode: 'nuclear',
     nuke: { kind: 'nuclear', name: 'B83 (1,2 Mt)', yieldKt: 1200, fission: 0.5, burst: 'optimal', heightM: 0 },
-    ast: { kind: 'asteroid', name: 'Tunguska (1908)', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'sediment', waterDepthM: 0, azimuth: 250 },
+    ast: { kind: 'asteroid', name: 'Tunguska (1908)', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'sediment', waterDepthM: 0, azimuth: 250, surface: 'auto' },
     env: { windFromDeg: 270, windKmh: 24, visibilityKm: 25, humidity: 65, hour: 12 },
     target: { lat: 40.4168, lon: -3.7038, label: 'Madrid' },
-    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, quality: 1 },
+    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, quality: 1 },
   };
 }
 
@@ -35,6 +37,7 @@ export interface SidebarEvents {
   onEnv(): void;
   onView(): void;
   onCollapse(): void;
+  onProjection(globe: boolean): void;
 }
 
 const logSlider = (min: number, max: number, val: number, step = 0.01) => {
@@ -117,6 +120,11 @@ export class Sidebar {
   private astPanel!: HTMLElement;
   private tabs!: HTMLElement;
   refresh: () => void = () => {};
+  projSeg!: { el: HTMLElement; set: (v: string) => void };
+  detectNote!: HTMLElement;
+
+  /** muestra lo detectado en el punto objetivo */
+  setDetected(text: string) { if (this.detectNote) this.detectNote.textContent = text; }
 
   constructor(el: HTMLElement, state: AppState, ev: SidebarEvents) {
     this.el = el;
@@ -134,8 +142,8 @@ export class Sidebar {
   private build() {
     const S = this.state;
     const head = h('div', { class: 'sb-head' },
-      h('div', { class: 'logo' }),
-      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Simulador 3D de ataques nucleares · v0.3')),
+      h('img', { class: 'logo', src: logoUrl, alt: 'Bum' }),
+      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Simulador 3D de ataques nucleares · v0.4')),
       h('button', { class: 'icon-btn', title: 'Ocultar panel (H)', html: ICONS.hide, onclick: () => this.ev.onCollapse() }),
     );
 
@@ -194,7 +202,11 @@ export class Sidebar {
 
     const updNuke = (from?: 'slider' | 'num') => {
       if (from === 'slider') nk.yieldKt = Math.pow(10, +yieldR.value);
-      if (from === 'num') nk.yieldKt = Math.max(1e-6, (+yieldNum.value || 0) * +yieldUnit.value);
+      if (from === 'num') {
+        const v = (+yieldNum.value || 0) * +yieldUnit.value;
+        if (v > 1e6) toast('Potencia máxima: 1 Gt (1000 Mt)');
+        nk.yieldKt = Math.min(1e6, Math.max(1e-6, v));
+      }
       if (from !== 'slider') yieldR.value = String(Math.log10(Math.max(1e-3, nk.yieldKt)));
       setRangeFill(yieldR);
       yieldVal.textContent = fmtEnergy(nk.yieldKt);
@@ -207,7 +219,7 @@ export class Sidebar {
       setRangeFill(fisR);
       fisVal.textContent = `${Math.round(nk.fission * 100)} %`;
       hField.style.display = nk.burst === 'custom' ? '' : 'none';
-      nk.heightM = +hIn.value || 0;
+      nk.heightM = Math.min(2e6, Math.max(0, +hIn.value || 0));
       hVal.textContent = nk.heightM >= 1000 ? `${(nk.heightM / 1000).toLocaleString('es-ES')} km` : `${nk.heightM} m`;
     };
     presetSel.addEventListener('change', () => {
@@ -250,13 +262,14 @@ export class Sidebar {
     aPreset.append(h('option', { value: '' }, '— Personalizado —'));
     ASTEROID_PRESETS.forEach((p, i) => aPreset.append(h('option', { value: String(i) }, p.name)));
     const aNote = h('div', { class: 'note' });
-    const dVal = h('b'), dR = logSlider(0, 4.3, as.diameterM);
+    const dVal = h('b'), dR = logSlider(0, 6, as.diameterM);
     const comp = h('select') as HTMLSelectElement;
     COMPOSITIONS.forEach((c) => comp.append(h('option', { value: String(c.density) }, `${c.name} · ${c.density} kg/m³`)));
-    const densIn = h('input', { type: 'number', min: 100, max: 20000, step: 50, value: as.densityKgM3 }) as HTMLInputElement;
+    const densIn = h('input', { type: 'number', min: 300, max: 23000, step: 50, value: as.densityKgM3 }) as HTMLInputElement;
     const vVal = h('b'), vR = linSlider(11, 72, as.velocityKms, 0.1);
     const angVal = h('b'), angR = linSlider(5, 90, as.angleDeg, 1);
-    const tgt = seg<TargetType>([['sediment', 'Sedimento'], ['rock', 'Roca'], ['water', 'Agua']], as.target, (v) => { as.target = v; updAst(); markA(); });
+    const tgt = seg<'auto' | TargetType>([['auto', 'Auto'], ['sediment', 'Sedim.'], ['rock', 'Roca'], ['water', 'Agua']], as.surface, (v) => { as.surface = v; if (v !== 'auto') as.target = v; updAst(); markA(); });
+    this.detectNote = h('div', { class: 'note', style: { marginTop: '6px' } }, 'Se detectará automáticamente si el punto es tierra u océano (y su profundidad).');
     const depthIn = h('input', { type: 'number', min: 1, max: 11000, step: 10, value: as.waterDepthM || 3000 }) as HTMLInputElement;
     const depthField = field('Profundidad del agua (m)', null, depthIn);
     const azComp = compassInput(as.azimuth, (deg) => { as.azimuth = deg; azVal.textContent = `${deg}° (${dirName(deg)})`; });
@@ -264,18 +277,19 @@ export class Sidebar {
     const updAst = () => {
       as.diameterM = Math.pow(10, +dR.value); setRangeFill(dR);
       dVal.textContent = as.diameterM >= 1000 ? `${(as.diameterM / 1000).toLocaleString('es-ES', { maximumFractionDigits: 2 })} km` : `${Math.round(as.diameterM)} m`;
-      as.densityKgM3 = +densIn.value || 3000;
+      as.densityKgM3 = Math.min(23000, Math.max(300, +densIn.value || 3000));
       as.velocityKms = +vR.value; setRangeFill(vR); vVal.textContent = `${as.velocityKms.toFixed(1).replace('.', ',')} km/s`;
       as.angleDeg = +angR.value; setRangeFill(angR); angVal.textContent = `${as.angleDeg}°`;
-      as.waterDepthM = as.target === 'water' ? +depthIn.value || 1000 : 0;
-      depthField.style.display = as.target === 'water' ? '' : 'none';
+      if (as.surface !== 'auto') as.waterDepthM = as.target === 'water' ? Math.min(11000, Math.max(1, +depthIn.value || 1000)) : 0;
+      depthField.style.display = as.surface === 'water' ? '' : 'none';
+      this.detectNote.style.display = as.surface === 'auto' ? '' : 'none';
     };
     const markA = () => { aPreset.value = ''; aNote.style.display = 'none'; as.name = 'Objeto personalizado'; };
     aPreset.addEventListener('change', () => {
       if (!aPreset.value) { markA(); return; }
       const p = ASTEROID_PRESETS[+aPreset.value];
-      Object.assign(as, { name: p.name, diameterM: p.diameterM, densityKgM3: p.densityKgM3, velocityKms: p.velocityKms, angleDeg: p.angleDeg, target: p.target, waterDepthM: p.waterDepthM });
-      dR.value = String(Math.log10(p.diameterM)); densIn.value = String(p.densityKgM3); vR.value = String(p.velocityKms); angR.value = String(p.angleDeg); tgt.set(p.target);
+      Object.assign(as, { name: p.name, diameterM: p.diameterM, densityKgM3: p.densityKgM3, velocityKms: p.velocityKms, angleDeg: p.angleDeg, target: p.target, waterDepthM: p.waterDepthM, surface: 'auto' });
+      dR.value = String(Math.log10(p.diameterM)); densIn.value = String(p.densityKgM3); vR.value = String(p.velocityKms); angR.value = String(p.angleDeg); tgt.set('auto');
       if (p.target === 'water') depthIn.value = String(p.waterDepthM);
       comp.value = String(COMPOSITIONS.reduce((b, c) => (Math.abs(c.density - p.densityKgM3) < Math.abs(b.density - p.densityKgM3) ? c : b)).density);
       aNote.textContent = p.note; aNote.style.display = '';
@@ -284,6 +298,13 @@ export class Sidebar {
     comp.addEventListener('change', () => { densIn.value = comp.value; updAst(); markA(); });
     for (const el of [dR, vR, angR]) el.addEventListener('input', () => { updAst(); markA(); });
     for (const el of [densIn, depthIn]) el.addEventListener('input', () => { updAst(); markA(); });
+    // fuera de rango: se corrige al salir del campo
+    const clampField = (el: HTMLInputElement, a: number, b: number, what: string) => el.addEventListener('change', () => {
+      const v = +el.value;
+      if (!Number.isFinite(v) || v < a || v > b) { el.value = String(Math.min(b, Math.max(a, Number.isFinite(v) ? v : a))); toast(`${what}: valor ajustado al rango ${a.toLocaleString('es-ES')}–${b.toLocaleString('es-ES')}`); updAst(); }
+    });
+    clampField(densIn, 300, 23000, 'Densidad (kg/m³)');
+    clampField(depthIn, 1, 11000, 'Profundidad (m)');
     ASTEROID_PRESETS.forEach((p, i) => { if (p.name === as.name) { aPreset.value = String(i); aNote.textContent = p.note; } });
     comp.value = '3000';
 
@@ -297,6 +318,7 @@ export class Sidebar {
         field('Velocidad de entrada', vVal, vR),
         field('Ángulo de entrada (sobre el horizonte)', angVal, angR),
         field('Terreno del impacto', null, tgt.el),
+        this.detectNote,
         depthField,
         h('div', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Dirección de llegada'), azVal), h('div', { class: 'compass-wrap' }, azComp.el, h('div', { class: 'grow note', style: { margin: 0 } }, 'Arrastra la flecha: indica hacia dónde viaja el objeto.'))),
       )),
@@ -333,7 +355,9 @@ export class Sidebar {
     // ---------- visualización ----------
     const V = S.view;
     const qual = seg<string>([['0.5', 'Baja'], ['1', 'Alta'], ['1.6', 'Ultra']], String(V.quality), (v) => { V.quality = +v; this.ev.onView(); });
+    this.projSeg = seg<string>([['flat', 'Plano 2D'], ['globe', 'Globo 3D']], V.globe ? 'globe' : 'flat', (v) => { V.globe = v === 'globe'; this.ev.onProjection(V.globe); });
     const viewSec = section('Visualización', h('div', {},
+      h('div', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Mapa')), this.projSeg.el),
       h('div', { class: 'toggles' },
         toggle('Cúpulas 3D', V.domes, (v) => { V.domes = v; this.ev.onView(); }),
         toggle('Anillos', V.rings, (v) => { V.rings = v; this.ev.onView(); }),

@@ -23,3 +23,6 @@ show('Tunguska', { kind: 'asteroid', name: '', diameterM: 60, densityKgM3: 3000,
 show('Meteor crater iron 50m', { kind: 'asteroid', name: '', diameterM: 50, densityKgM3: 7800, velocityKms: 12.8, angleDeg: 45, target: 'sediment', waterDepthM: 0 });
 show('1 km rock', { kind: 'asteroid', name: '', diameterM: 1000, densityKgM3: 3000, velocityKms: 20, angleDeg: 45, target: 'rock', waterDepthM: 0 });
 show('Chicxulub', { kind: 'asteroid', name: '', diameterM: 10000, densityKgM3: 2700, velocityKms: 20, angleDeg: 60, target: 'water', waterDepthM: 200 });
+show('Chicxulub océano 5000 m', { kind: 'asteroid', name: '', diameterM: 10000, densityKgM3: 2700, velocityKms: 20, angleDeg: 60, target: 'water', waterDepthM: 5000 }, 0, -150);
+show('Absurdo: hierro 1e22', { kind: 'asteroid', name: '', diameterM: 10000, densityKgM3: 1e22, velocityKms: 72, angleDeg: 90, target: 'rock', waterDepthM: 0 }, 41.88, -87.63);
+show('100 m roca océano 4000', { kind: 'asteroid', name: '', diameterM: 100, densityKgM3: 3000, velocityKms: 17, angleDeg: 45, target: 'water', waterDepthM: 4000 }, 0, -30);

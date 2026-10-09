@@ -35,7 +35,7 @@ export class ResultsPanel {
     const sc = fx.scenario;
     const hiro = fx.energyKt / 15;
     const kicker = sc.kind === 'nuclear' ? 'Detonación nuclear' : fx.asteroid?.fate === 'airburst' ? 'Explosión aérea de asteroide' : 'Impacto de asteroide';
-    const burst = fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : 'en superficie';
+    const burst = fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : sc.kind === 'asteroid' && sc.target === 'water' ? `en el océano (${fmtDist(sc.waterDepthM)} de profundidad)` : 'en superficie';
     const minBtn = h('button', { class: 'icon-btn', title: 'Minimizar', html: ICONS.min, onclick: () => { el.classList.toggle('min'); minBtn.innerHTML = el.classList.contains('min') ? ICONS.max : ICONS.min; } });
     const head = h('div', { class: 'res-head' },
       h('div', { class: 'ttl' },
@@ -62,8 +62,8 @@ export class ResultsPanel {
       const row = h('div', { class: 'eff' + (this.hidden.has(r.id) ? ' off' : ''), title: 'Clic: mostrar/ocultar · Doble clic: centrar' },
         h('span', { class: 'dot', style: { color: r.color } }),
         h('span', { class: 'name' }, r.label),
-        h('span', { class: 'r' }, fmtDist(r.radiusM)),
-        h('div', { class: 'meta' }, `${r.desc} `, h('i', {}, `${GROUP_NAMES[r.group] ?? ''} · ${r.value ?? ''} · ${fmtArea(r.radiusM)}`)),
+        h('span', { class: 'r' }, r.global ? 'Global' : fmtDist(r.radiusM)),
+        h('div', { class: 'meta' }, `${r.desc} `, h('i', {}, `${GROUP_NAMES[r.group] ?? ''} · ${r.value ?? ''} · ${r.global ? 'todo el planeta' : fmtArea(r.radiusM)}`)),
       );
       row.addEventListener('mouseenter', () => this.ev.onHover(r.id));
       row.addEventListener('mouseleave', () => this.ev.onHover(null));
@@ -99,7 +99,11 @@ export class ResultsPanel {
     kv.push(['Ancho del sombrero', fmtDist(fx.cloud.capRadiusM * 2)]);
     if (fx.crater) kv.push(['Cráter', `${fmtDist(fx.crater.diameterM)} × ${fmtDist(fx.crater.depthM)}`]);
     if (fx.seismic) kv.push(['Magnitud sísmica', fx.seismic.magnitude.toFixed(1).replace('.', ',')]);
-    if (fx.tsunami) kv.push(['Ola en el borde del cráter', fmtDist(fx.tsunami.rimWaveM)]);
+    if (fx.tsunami) {
+      kv.push(['Profundidad del agua', fmtDist(fx.tsunami.depthM)]);
+      kv.push(['Ola inicial (borde de la cavidad)', fmtDist(fx.tsunami.rimWaveM)]);
+      kv.push(['Ola a 1000 km (mar abierto)', fmtDist(fx.tsunami.at1000kmM)]);
+    }
     const a = fx.asteroid;
     if (a) {
       kv.push(['Masa', `${a.massKg.toExponential(2).replace('.', ',')} kg`]);
@@ -122,7 +126,7 @@ export class ResultsPanel {
     if (fx.notes.length) body.append(h('ul', { class: 'notes' }, ...fx.notes.map((n) => h('li', {}, n))));
     body.append(h('div', { class: 'disclaimer' },
       'Estimaciones orientativas con fines educativos. Modelos: Glasstone & Dolan, ',
-      h('i', {}, 'The Effects of Nuclear Weapons'), ' (1977); Collins, Melosh & Marcus (2005) para impactos; lluvia radiactiva con un modelo analítico simplificado; víctimas con un modelo de densidad urbana aproximado (no censal) y probabilidades tipo OTA (1979).',
+      h('i', {}, 'The Effects of Nuclear Weapons'), ' (1977); Collins, Melosh & Marcus (2005) para impactos; lluvia radiactiva con un modelo analítico simplificado; víctimas inmediatas con un modelo de densidad urbana aproximado (no censal) y probabilidades tipo OTA (1979); no incluyen tsunami, incendios posteriores ni efectos climáticos. Tsunami: Wünnemann et al. (2010).',
     ));
     el.append(head, body);
   }

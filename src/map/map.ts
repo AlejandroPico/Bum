@@ -11,6 +11,14 @@ export const SOURCES = {
 
 export const BUILDING_COLOR = '#d9d4cc';
 
+/** mezclas de cielo/niebla: sin neblina sobre el terreno al ver el planeta entero (globo) */
+export const SKY_BLENDS = {
+  'fog-ground-blend': ['interpolate', ['linear'], ['zoom'], 0, 0, 7, 0, 10, 0.7],
+  'horizon-fog-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.1, 7, 0.1, 10, 0.6],
+  'sky-horizon-blend': 0.6,
+  'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 6, 0.9, 9, 0.3, 12, 0],
+} as any;
+
 function style(): StyleSpecification {
   return {
     version: 8,
@@ -115,15 +123,13 @@ function style(): StyleSpecification {
         paint: { 'text-color': 'rgba(235,240,250,0.85)', 'text-halo-color': 'rgba(0,0,0,0.75)', 'text-halo-width': 1.4 },
       },
     ],
+    projection: { type: 'mercator' },
     terrain: { source: 'terrain', exaggeration: 1 },
     sky: {
       'sky-color': '#4f8fd6',
       'horizon-color': '#cfe2f3',
       'fog-color': '#c8d8e6',
-      'fog-ground-blend': 0.7,
-      'horizon-fog-blend': 0.6,
-      'sky-horizon-blend': 0.6,
-      'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 1, 12, 0],
+      ...SKY_BLENDS,
     },
     light: { anchor: 'map', position: [1.4, 210, 40], color: '#ffffff', intensity: 0.35 },
   };
@@ -168,10 +174,7 @@ export function applyTimeOfDay(map: MLMap, hour: number) {
     'sky-color': sky,
     'horizon-color': horizon,
     'fog-color': fog,
-    'fog-ground-blend': 0.7,
-    'horizon-fog-blend': 0.6,
-    'sky-horizon-blend': 0.6,
-    'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 1, 12, 0],
+    ...SKY_BLENDS,
   });
   map.setPaintProperty('sat', 'raster-brightness-max', 0.92 - night * 0.8);
   map.setPaintProperty('sat', 'raster-saturation', -0.18 - night * 0.5);
@@ -181,4 +184,9 @@ export function applyTimeOfDay(map: MLMap, hour: number) {
   const az = 90 + ((hour - 6) / 12) * 180;
   map.setLight({ anchor: 'map', position: [1.4, az, Math.max(10, 90 - Math.max(0, sunAlt) * 70)], color: mix('#ffffff', '#6a7fb0', night), intensity: 0.35 - night * 0.15 });
   return { night, sunAlt, sunAz: az };
+}
+
+/** Cambia entre mapa plano (Mercator) y globo 3D. */
+export function setGlobe(map: MLMap, on: boolean) {
+  map.setProjection({ type: on ? 'globe' : 'mercator' });
 }

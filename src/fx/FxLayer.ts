@@ -24,13 +24,14 @@ export class FxLayer implements CustomLayerInterface {
     t: 0, real: 0,
     camPos: new THREE.Vector3(), right: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 1, 0), mvp: this.mvp,
     sunDir: new THREE.Vector3(0.3, 0.8, 0.2).normalize(), sunColor: new THREE.Color(1, 0.96, 0.9), ambient: new THREE.Color(0.35, 0.38, 0.45),
-    fogColor: new THREE.Color(0.75, 0.8, 0.86), night: 0, mpp: 10, farView: false, glare: 1,
+    fogColor: new THREE.Color(0.75, 0.8, 0.86), night: 0, mpp: 10, farView: false, glare: 1, globe: false,
   };
   /** llamado en cada fotograma antes de dibujar (avanza el reloj) */
   onFrame: ((ctx: FrameCtx) => void) | null = null;
   animating = false;
   /** tamaño (m) de los efectos en escena, para ampliar el plano lejano si hace falta */
   extentM = 0;
+  globe = false;
 
   onAdd(map: MLMap, gl: WebGLRenderingContext | WebGL2RenderingContext) {
     this.map = map;
@@ -46,10 +47,11 @@ export class FxLayer implements CustomLayerInterface {
    * vista; una nube de decenas de km (o un impacto continental) puede quedar más allá y verse
    * cortada. Ampliamos el plano lejano lo justo para abarcar los efectos.
    */
-  private patchFarPlane() {
-    const tr = (this.map as any).transform;
+  patchFarPlane() {
+    const root = (this.map as any).transform;
+    const tr = root?._calculateNearFarZIfNeeded ? root : root?._mercatorTransform;
     const orig = tr?._calculateNearFarZIfNeeded;
-    if (typeof orig !== 'function') return;
+    if (typeof orig !== 'function' || orig.__bum) return;
     const self = this;
     tr._calculateNearFarZIfNeeded = function (this: any, camToSea: number, pitchRad: number, offset: unknown) {
       orig.call(this, camToSea, pitchRad, offset);
@@ -62,6 +64,7 @@ export class FxLayer implements CustomLayerInterface {
       const need = (camToSea + (Math.hypot(dE, dN) + self.extentM) * ppm) * 1.05;
       if (need > helper._farZ) helper._farZ = need;
     };
+    tr._calculateNearFarZIfNeeded.__bum = true;
   }
 
   setOrigin(lng: number, lat: number, alt: number) {
@@ -94,6 +97,11 @@ export class FxLayer implements CustomLayerInterface {
   render(_gl: WebGLRenderingContext | WebGL2RenderingContext, args: CustomRenderMethodInput) {
     if (!this.modules.length) return;
     const main = new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix as unknown as number[]);
+    // matriz del modelo de MapLibre: válida tanto en plano (mercator) como en globo
+    const tr = (this.map as any).transform;
+    if (typeof tr?.getMatrixForModel === 'function') {
+      this.model.fromArray(tr.getMatrixForModel([this.origin.lng, this.origin.lat], this.origin.alt) as number[]);
+    }
     this.mvp.copy(main).multiply(this.model);
     this.inv.copy(this.mvp).invert();
     this.camera.projectionMatrix.copy(this.mvp);
@@ -105,20 +113,15 @@ export class FxLayer implements CustomLayerInterface {
     c.right.copy(b).sub(a).normalize();
     this.unproject(0, -1, 0.5, a); this.unproject(0, 1, 0.5, b);
     c.up.copy(b).sub(a).normalize();
-    // posición real de la cámara
-    const tr = (this.map as any).transform;
-    try {
-      const cl = tr.getCameraLngLat();
-      const calt = tr.getCameraAltitude();
-      const cos = Math.cos((this.origin.lat * Math.PI) / 180);
-      const e = (cl.lng - this.origin.lng) * 111320 * cos;
-      const n = (cl.lat - this.origin.lat) * 110540;
-      c.camPos.set(e, calt - this.origin.alt, -n);
-    } catch {
-      this.unproject(0, 0, -1, c.camPos);
-    }
+    // posición de la cámara en el espacio del modelo: el punto que la proyección lleva a w = 0
+    const eye = new THREE.Vector4(0, 0, 1, 0).applyMatrix4(this.inv);
+    if (Math.abs(eye.w) > 1e-12) c.camPos.set(eye.x / eye.w, eye.y / eye.w, eye.z / eye.w);
+    else this.unproject(0, 0, -1, c.camPos);
     c.mvp = this.mvp;
-    c.farView = c.camPos.length() > 45000 || this.map.getZoom() < 10.5;
+    this.globe = (this.map.getProjection?.()?.type ?? 'mercator') === 'globe';
+    // en el globo se mantiene la prueba de profundidad para que el planeta oculte lo que queda detrás
+    c.farView = !this.globe && (c.camPos.length() > 45000 || this.map.getZoom() < 10.5);
+    c.globe = this.globe;
 
     this.onFrame?.(c);
     for (const m of this.modules) m.update(c);

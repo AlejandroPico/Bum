@@ -23,6 +23,8 @@ export interface FrameCtx {
   farView: boolean;
   /** 0..1: intensidad del deslumbramiento (decae en tiempo real tras el destello) */
   glare: number;
+  /** proyección de globo activa (las cúpulas siguen la curvatura) */
+  globe: boolean;
 }
 
 export interface FxModule {

@@ -115,7 +115,8 @@ export const CITIES: City[] = [
   { name: 'Melbourne', lat: -37.8136, lon: 144.9631, popM: 5.2, country: 'Australia' },
 ];
 
-const BACKGROUND = 25; // hab/km² fuera de áreas metropolitanas
+// hab/km² fuera de áreas metropolitanas (promedio tierra+mar: integra ≈ 6000 millones en todo el planeta)
+const BACKGROUND = 12;
 
 interface Kernel { lat: number; lon: number; rho0: number; r0: number; name: string }
 
@@ -134,12 +135,15 @@ export function densityField(lat: number, lon: number, radiusKm: number) {
     kernels,
     /** densidad (hab/km²) en un desplazamiento (km este, km norte) desde el punto */
     at(eKm: number, nKm: number) {
-      const plat = lat + nKm / 111.32;
-      const plon = lon + eKm / (111.32 * cosLat);
+      return this.atLatLon(lat + nKm / 111.32, lon + eKm / (111.32 * cosLat));
+    },
+    atLatLon(plat: number, plon: number) {
       let rho = BACKGROUND;
       for (const k of kernels) {
         const dn = (plat - k.lat) * 111.32;
-        const de = (plon - k.lon) * 111.32 * Math.cos((k.lat * Math.PI) / 180);
+        let dl = plon - k.lon;
+        if (dl > 180) dl -= 360; else if (dl < -180) dl += 360;
+        const de = dl * 111.32 * Math.cos((k.lat * Math.PI) / 180);
         const d = Math.sqrt(dn * dn + de * de);
         rho += k.rho0 * Math.exp(-d / k.r0);
       }

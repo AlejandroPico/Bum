@@ -2,7 +2,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import maplibregl from 'maplibre-gl';
 import * as THREE from 'three';
-import { createMap, applyTimeOfDay } from './map/map';
+import { createMap, applyTimeOfDay, setGlobe, SKY_BLENDS } from './map/map';
+import { sampleElevation } from './map/elevation';
 import { Overlays, localToLngLat, destination } from './map/overlays';
 import { FxLayer } from './fx/FxLayer';
 import { FxPlan } from './fx/plan';
@@ -74,6 +75,7 @@ const sidebar = new Sidebar(document.getElementById('sidebar')!, state, {
   onEnv: () => { atmosphere = applyTimeOfDay(map, state.env.hour); },
   onView: () => applyView(),
   onCollapse: () => toggleUI(),
+  onProjection: (g) => applyProjection(g),
 });
 
 const results = new ResultsPanel(document.getElementById('results')!, {
@@ -105,6 +107,17 @@ function updatePadding() {
   map.setPadding({ left, right, top: 0, bottom: 0 });
 }
 
+let globeBtn: HTMLButtonElement | null = null;
+function applyProjection(globe: boolean) {
+  state.view.globe = globe;
+  setGlobe(map, globe);
+  // el objeto de transformación cambia con la proyección: reinstala el ajuste del plano lejano
+  setTimeout(() => fxLayer.patchFarPlane(), 0);
+  sidebar.projSeg?.set(globe ? 'globe' : 'flat');
+  if (globeBtn) globeBtn.classList.toggle('on', globe);
+  map.triggerRepaint();
+}
+
 function toggleUI() {
   const c = !document.body.classList.contains('ui-collapsed');
   document.body.classList.toggle('ui-collapsed', c);
@@ -123,9 +136,23 @@ window.addEventListener('keydown', (e) => {
 const markerEl = h('div', { class: 'target-marker', html: `<svg viewBox="-23 -23 46 46"><circle class="pulse" r="18" fill="none" stroke="#ff5a1f" stroke-width="1.5"/><circle r="9" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M0 -20V-12M0 12V20M-20 0H-12M12 0H20" stroke="#fff" stroke-width="1.5"/><circle r="2" fill="#ff5a1f"/></svg>` });
 const marker = new maplibregl.Marker({ element: markerEl, pitchAlignment: 'map', rotationAlignment: 'map' }).setLngLat([state.target.lon, state.target.lat]).addTo(map);
 
+/** superficie detectada en el objetivo (tierra / océano y profundidad) */
+let surfaceInfo: { lat: number; lon: number; elev: number | null } | null = null;
+async function detectSurface(lat: number, lon: number) {
+  sidebar.setDetected('Detectando el terreno…');
+  const elev = await sampleElevation(lat, lon);
+  if (state.target.lat !== lat || state.target.lon !== lon) return surfaceInfo;
+  surfaceInfo = { lat, lon, elev };
+  if (elev === null) sidebar.setDetected('No se pudo leer el relieve: se asume tierra (sedimento).');
+  else if (elev < -2) sidebar.setDetected(`Detectado: océano / mar · ${Math.round(-elev).toLocaleString('es-ES')} m de profundidad.`);
+  else sidebar.setDetected(`Detectado: tierra firme · ${Math.round(elev).toLocaleString('es-ES')} m de altitud.`);
+  return surfaceInfo;
+}
+
 function setTarget(lat: number, lon: number, label: string, fly: boolean) {
   state.target = { lat, lon, label };
   sidebar.setTarget(lat, lon, label);
+  detectSurface(lat, lon);
   marker.setLngLat([lon, lat]);
   markerEl.style.display = '';
   if (fly) map.flyTo({ center: [lon, lat], zoom: 12.8, pitch: 62, duration: 2800, essential: true });
@@ -134,11 +161,30 @@ function setTarget(lat: number, lon: number, label: string, fly: boolean) {
 // ---------------------------------------------------------------------------
 // mapa
 // ---------------------------------------------------------------------------
+class GlobeControl {
+  onAdd() {
+    const div = document.createElement('div');
+    div.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    globeBtn = document.createElement('button');
+    globeBtn.type = 'button';
+    globeBtn.className = 'globe-btn';
+    globeBtn.title = 'Cambiar entre mapa plano y globo 3D';
+    globeBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7h14M5 17h14"/></svg>';
+    globeBtn.onclick = () => applyProjection(!state.view.globe);
+    div.append(globeBtn);
+    return div;
+  }
+  onRemove() {}
+}
+map.addControl(new GlobeControl() as any, 'top-right');
+
 map.on('load', () => {
   overlays.install();
   map.addLayer(fxLayer, 'fx-labels');
   atmosphere = applyTimeOfDay(map, state.env.hour);
   puffTex = createPuffAtlas(1024);
+  if (state.view.globe) applyProjection(true);
+  detectSurface(state.target.lat, state.target.lon);
   document.getElementById('loading')!.classList.add('done');
   if (location.hash.length > 3) setTimeout(() => detonate(), 1200);
 });
@@ -271,6 +317,12 @@ async function detonate() {
     audio.unlock();
     const { lat, lon } = state.target;
     const sc = state.mode === 'nuclear' ? { ...state.nuke } : { ...state.ast };
+    if (sc.kind === 'asteroid' && state.ast.surface === 'auto') {
+      const info = surfaceInfo && surfaceInfo.lat === lat && surfaceInfo.lon === lon ? surfaceInfo : await detectSurface(lat, lon);
+      const elev = info?.elev ?? 0;
+      if (elev < -2) { sc.target = 'water'; sc.waterDepthM = Math.min(11000, -elev); }
+      else { sc.target = elev > 1500 ? 'rock' : 'sediment'; sc.waterDepthM = 0; }
+    }
     const env = { ...state.env };
     const fx = computeEffects(sc, env, lat, lon);
     clearRun();
@@ -449,7 +501,7 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
     if (heat > 0.03 && t > 0) {
       const k = Math.min(1, heat) * 0.85 * (R.flashReal < 0 ? 1 : 0.2 + 0.8 * Math.exp(-(now - R.flashReal) / 5000));
       const mix = (a: string, b: string, x: number) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), x).getHexString();
-      map.setSky({ 'sky-color': mix(n > 0.5 ? '#03060f' : '#4f8fd6', '#ffe1b0', k), 'horizon-color': mix(n > 0.5 ? '#0b1428' : '#cfe2f3', '#ffb46b', k), 'fog-color': mix(n > 0.5 ? '#070b16' : '#c8d8e6', '#ff9a50', k * 0.9) });
+      map.setSky({ ...SKY_BLENDS, 'sky-color': mix(n > 0.5 ? '#03060f' : '#4f8fd6', '#ffe1b0', k), 'horizon-color': mix(n > 0.5 ? '#0b1428' : '#cfe2f3', '#ffb46b', k), 'fog-color': mix(n > 0.5 ? '#070b16' : '#c8d8e6', '#ff9a50', k * 0.9) });
       map.setLight({ anchor: 'map', position: [1.4, atmosphere.sunAz, 40], color: mix('#ffffff', '#ffb070', k), intensity: 0.35 + 0.55 * k });
       R.skyFlash = true;
     } else if (R.skyFlash) {
@@ -457,7 +509,7 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
       atmosphere = applyTimeOfDay(map, state.env.hour);
     }
     const g = P.shockGroundR(t);
-    overlays.setReveal(t <= 0 ? 0 : t > P.shockTime(P.psi1R * 3 + P.h) ? Infinity : Math.max(g, t > P.tMax * 3 ? Math.max(P.burnR, P.fireballR) : 0), t / 3600);
+    overlays.setReveal(t <= 0 ? 0 : t > P.shockTime(P.psi1R * 3 + P.h) ? Infinity : Math.max(g, t > P.tMax * 3 ? Math.max(P.burnR, P.fireballR) : 0), t / 3600, t);
     overlays.updateBuildings(t <= 0 ? 0 : g);
     timeline.update(t, R.playing, R.playing ? R.rate : 0);
   }
@@ -520,8 +572,9 @@ function writeHash() {
     p.set('m', 'n'); p.set('y', String(s.nuke.yieldKt)); p.set('f', String(s.nuke.fission)); p.set('b', s.nuke.burst); p.set('hb', String(s.nuke.heightM)); p.set('nm', s.nuke.name);
   } else {
     const a = s.ast;
-    p.set('m', 'a'); p.set('d', String(a.diameterM)); p.set('rho', String(a.densityKgM3)); p.set('v', String(a.velocityKms)); p.set('ang', String(a.angleDeg)); p.set('tg', a.target); p.set('wd', String(a.waterDepthM)); p.set('az', String(a.azimuth)); p.set('nm', a.name);
+    p.set('m', 'a'); p.set('d', String(a.diameterM)); p.set('rho', String(a.densityKgM3)); p.set('v', String(a.velocityKms)); p.set('ang', String(a.angleDeg)); p.set('tg', a.surface); p.set('wd', String(a.waterDepthM)); p.set('az', String(a.azimuth)); p.set('nm', a.name);
   }
+  if (s.view.globe) p.set('g', '1');
   p.set('wf', String(s.env.windFromDeg)); p.set('ws', String(s.env.windKmh)); p.set('hu', String(s.env.humidity)); p.set('vi', String(s.env.visibilityKm)); p.set('hr', String(s.env.hour));
   history.replaceState(null, '', '#' + p.toString());
 }
@@ -534,11 +587,12 @@ function readHash(s: AppState) {
   s.target.label = nearestCity(s.target.lat, s.target.lon).km < 25 ? nearestCity(s.target.lat, s.target.lon).city.name : '';
   if (p.get('m') === 'a') {
     s.mode = 'asteroid';
-    Object.assign(s.ast, { diameterM: num('d', 60), densityKgM3: num('rho', 3000), velocityKms: num('v', 17), angleDeg: num('ang', 45), target: (p.get('tg') as any) || 'rock', waterDepthM: num('wd', 0), azimuth: num('az', 250), name: p.get('nm') || 'Objeto' });
+    Object.assign(s.ast, { diameterM: num('d', 60), densityKgM3: num('rho', 3000), velocityKms: num('v', 17), angleDeg: num('ang', 45), target: (p.get('tg') && p.get('tg') !== 'auto' ? p.get('tg') : 'sediment') as any, surface: (p.get('tg') as any) || 'auto', waterDepthM: num('wd', 0), azimuth: num('az', 250), name: p.get('nm') || 'Objeto' });
   } else {
     s.mode = 'nuclear';
     Object.assign(s.nuke, { yieldKt: num('y', 1000), fission: num('f', 0.5), burst: (p.get('b') as any) || 'optimal', heightM: num('hb', 0), name: p.get('nm') || 'Arma' });
   }
+  if (p.get('g') === '1') s.view.globe = true;
   Object.assign(s.env, { windFromDeg: num('wf', 270), windKmh: num('ws', 24), humidity: num('hu', 60), visibilityKm: num('vi', 25), hour: num('hr', 12) });
 }
 

@@ -188,3 +188,6 @@ body.ui-collapsed #ui-show { display: grid; }
   #timeline { left: 12px !important; right: 12px; bottom: 12px; }
   .tl-speed { display: none; }
 }
+
+.globe-btn { display: grid !important; place-items: center; color: #d8dde8; }
+.globe-btn.on { background: rgba(255, 106, 26, 0.28) !important; color: #fff; }

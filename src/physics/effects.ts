@@ -51,7 +51,26 @@ export function fmtEnergy(kt: number): string {
   return `${(kt * 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} t`;
 }
 
-export function computeEffects(sc: Scenario, env: Environment, lat: number, lon: number): Effects {
+/** Limita las entradas a rangos físicamente razonables (evita números absurdos). */
+export function sanitizeScenario(sc: Scenario): Scenario {
+  const cl = (x: number, a: number, b: number, d: number) => (Number.isFinite(x) ? Math.min(b, Math.max(a, x)) : d);
+  if (sc.kind === 'nuclear') {
+    return { ...sc, yieldKt: cl(sc.yieldKt, 1e-6, 1e6, 1), fission: cl(sc.fission, 0, 1, 0.5), heightM: cl(sc.heightM, 0, 2e6, 0) };
+  }
+  return {
+    ...sc,
+    diameterM: cl(sc.diameterM, 0.5, 1e6, 50),
+    densityKgM3: cl(sc.densityKgM3, 300, 23000, 3000),
+    velocityKms: cl(sc.velocityKms, 11, 72, 20),
+    angleDeg: cl(sc.angleDeg, 5, 90, 45),
+    waterDepthM: cl(sc.waterDepthM, 0, 11000, 0),
+  };
+}
+
+export const HALF_EARTH_M = Math.PI * EARTH_R; // distancia a las antípodas
+
+export function computeEffects(scIn: Scenario, env: Environment, lat: number, lon: number): Effects {
+  const sc = sanitizeScenario(scIn);
   const notes: string[] = [];
   let Y: number; // kt
   let h: number; // altura de liberación de energía (m)
@@ -74,7 +93,8 @@ export function computeEffects(sc: Scenario, env: Environment, lat: number, lon:
     fireballR = rfAir * (1 + 0.32 * contact0);
     thermalFrac = 0.35 - 0.17 * contact0;
     fissionKt = Y * sc.fission;
-    seismicEnergyJ = 1e-4 * contact0 * Y * KT_J;
+    // acoplamiento sísmico de una explosión en superficie (mucho menor que el de un impacto)
+    seismicEnergyJ = 0.02 * contact0 * Y * KT_J;
     if (h > 30000) notes.push('Explosión a gran altitud: efectos en superficie mínimos, pero pulso electromagnético (EMP) de alcance continental.');
   } else {
     const ent = atmosphericEntry(sc);
@@ -90,23 +110,31 @@ export function computeEffects(sc: Scenario, env: Environment, lat: number, lon:
       h = 0;
       Y = ent.impactEnergyKt;
       const Ej = Y * KT_J;
-      fireballR = 0.002 * Math.cbrt(Ej);
+      fireballR = Math.min(0.002 * Math.cbrt(Ej), 0.3 * EARTH_R);
       thermalFrac = 0;
       impactThermal = ent.impactVelocityKms > 15;
-      seismicEnergyJ = 1e-4 * Ej;
+      // Collins et al. (2005) ec. 40: la eficiencia sísmica (1e-4) ya está incluida en la constante
+      seismicEnergyJ = Ej;
       const cr = impactCrater(sc, ent.impactVelocityKms);
       crater = { diameterM: cr.diameterM, depthM: cr.depthM, transientM: cr.transientM, type: cr.type };
       if (ent.fate === 'fragmented-impact') notes.push(`Se fragmenta a ${(ent.breakupAltM! / 1000).toFixed(1)} km pero los fragmentos alcanzan el suelo a ${ent.impactVelocityKms.toFixed(1)} km/s.`);
       if (sc.target === 'water' && cr.waterTransientM) {
-        const rimR = cr.waterTransientM / 2;
-        const A = Math.min(0.07 * cr.waterTransientM, sc.waterDepthM);
-        tsunami = { rimWaveM: A, at100kmM: (A * rimR) / 100000 };
+        // Wünnemann et al. (2010): A(D) = min(0,14·Dtc, h)·Dtc/(2D)
+        const Dtc = cr.waterTransientM;
+        const A0 = Math.min(0.14 * Dtc, sc.waterDepthM);
+        tsunami = { rimWaveM: A0, at1000kmM: (A0 * Dtc) / (2 * 1e6), transientM: Dtc, depthM: sc.waterDepthM };
         if (cr.type === 'water') crater = undefined;
       }
     }
   }
 
   const E_J = Y * KT_J;
+  if (sc.kind === 'asteroid') {
+    if (E_J > 5e27) notes.push('Energía suficiente para evaporar los océanos y esterilizar la superficie del planeta.');
+    else if (E_J > 1e23) notes.push('Catástrofe global: la eyecta que reentra en la atmósfera incendia el planeta entero, seguida de un invierno de impacto y una extinción masiva (como la del límite K-Pg).');
+    else if (E_J > 1e21) notes.push('Efectos climáticos globales: polvo y aerosoles en la estratosfera, años sin verano y colapso de cosechas.');
+    if (sc.diameterM > 100000) notes.push('Objeto mayor que cualquier asteroide cercano conocido: impacto de escala planetaria (los modelos dejan de ser fiables).');
+  }
   const contact = h < fireballR ? 1 - h / fireballR : 0;
   // tiempo hasta el máximo térmico: Glasstone para armas (limitado en megaexplosiones);
   // en impactos, la pluma de vapor se expande a ~6 km/s
@@ -132,15 +160,24 @@ export function computeEffects(sc: Scenario, env: Environment, lat: number, lon:
     const Rkm = slantM / 1000;
     if (isImpact) {
       if (!impactThermal) return 0;
-      const horizon = Math.sqrt(2 * EARTH_R * fireballR);
-      return ((3e-3 * E_J) / (2 * Math.PI * slantM * slantM) / CAL_J_M2) * Math.exp(-((slantM / horizon) ** 2));
+      // fracción de la bola de fuego visible sobre el horizonte (Collins et al. 2005, ec. 36-37)
+      const dlt = Math.min(Math.PI, slantM / EARTH_R);
+      const hd = (1 - Math.cos(dlt)) * EARTH_R;
+      if (hd >= fireballR) return 0;
+      const g = Math.acos(hd / fireballR);
+      const f = (2 / Math.PI) * (g - (hd / fireballR) * Math.sin(g));
+      return (f * (3e-3 * E_J)) / (2 * Math.PI * slantM * slantM) / CAL_J_M2;
     }
     const tau = 1 / (1 + Rkm / a);
     const Rcm = slantM * 100;
     return (thermalFrac * Y * 1e12 * tau) / (4 * Math.PI * Rcm * Rcm);
   };
   const thermalFluenceAt = (groundM: number) => thermalFluenceSlant(Math.hypot(groundM, h));
-  const pressurePsiAt = (groundM: number) => pressureAt(Y, groundM, h);
+  // Collins et al.: para energías muy grandes el modelo sobrestima la onda (×2–5); la atmósfera
+  // finita limita el escalado cúbico, así que reducimos el alcance progresivamente
+  const blastK = Y > 1e7 ? Math.max(0.5, 1 / (1 + 0.25 * Math.log10(Y / 1e7))) : 1;
+  if (blastK < 1) notes.push('Onda expansiva de escala continental: las distancias son muy inciertas (los modelos se extrapolan fuera de su rango).');
+  const pressurePsiAt = (groundM: number) => pressureAt(Y, groundM / blastK, h);
   const doseRemAt = (groundM: number) => (sc.kind === 'nuclear' ? promptDose(Y, Math.hypot(groundM, h) / 1000) : 0);
 
   const rings: Ring[] = [];
@@ -185,7 +222,7 @@ export function computeEffects(sc: Scenario, env: Environment, lat: number, lon:
     { psi: 0.2, label: 'Rotura de cristales (0,2 psi)', color: '#5d6b82', desc: 'Ventanas rotas; el estruendo se oye a cientos de kilómetros.' },
   ];
   for (const L of blastLevels) {
-    const r = blastRange(Y, L.psi, h);
+    const r = blastRange(Y, L.psi, h) * blastK;
     if (L.psi === 200 && r < fireballR) continue;
     const pa = L.psi * PSI;
     push({ id: `psi${L.psi}`, group: 'blast', label: L.label, radiusM: r, color: L.color, value: `${L.psi} psi · viento ${Math.round(peakWind(pa) * 3.6)} km/h · ${Math.round(decibels(pa))} dB`, desc: L.desc, dome: L.psi === 5 || L.psi === 1 || L.psi === 20 });
@@ -222,11 +259,20 @@ export function computeEffects(sc: Scenario, env: Environment, lat: number, lon:
   }
 
   // tsunami
-  if (tsunami && tsunami.rimWaveM > 1) {
-    const rimR = (crater?.transientM ?? 1000) / 2;
-    for (const A of [10, 3]) {
-      const r = (tsunami.rimWaveM * rimR) / A;
-      if (r > rimR) push({ id: `tsu${A}`, group: 'tsunami', label: `Tsunami: olas de ${A} m`, radiusM: r, color: '#38bdf8', value: `${A} m`, desc: 'Amplitud de la ola en mar abierto; en la costa puede multiplicarse.' });
+  if (tsunami && tsunami.rimWaveM > 0.5) {
+    const Dtc = tsunami.transientM;
+    const REACH = 13000e3; // alcance máximo razonable de la ola en una cuenca oceánica
+    for (const A of [100, 10, 3]) {
+      const r = (tsunami.rimWaveM * Dtc) / (2 * A);
+      if (r <= Dtc / 2) continue;
+      const basin = r >= REACH;
+      push({
+        id: `tsu${A}`, group: 'tsunami', label: `Tsunami: olas de ${A} m`, radiusM: Math.min(r, REACH), color: A >= 100 ? '#0ea5e9' : '#38bdf8',
+        value: `${A} m`,
+        desc: basin
+          ? `Olas de más de ${A} m en mar abierto en toda la cuenca oceánica; al llegar a la costa se multiplican (varias veces su altura tierra adentro).`
+          : 'Amplitud de la ola en mar abierto; al romper en la costa la altura y la inundación pueden multiplicarse.',
+      });
     }
   }
 
@@ -237,24 +283,32 @@ export function computeEffects(sc: Scenario, env: Environment, lat: number, lon:
     const meff = (rKm: number) => {
       if (rKm < 60) return M - 0.0238 * rKm;
       if (rKm < 700) return M - 0.0048 * rKm - 1.1644;
-      const deg = rKm / 111.2;
-      return M - 1.66 * Math.log10(deg) - 6.399;
+      const rad = Math.min(Math.PI, rKm / 6371); // distancia epicentral en radianes
+      return M - 1.66 * Math.log10(rad) - 6.399;
     };
     const sr: Ring[] = [];
+    // intensidad de Mercalli a partir de la magnitud efectiva: I ≈ 1,42·M_ef − 1,38 (Rumpf et al. 2017)
+    const mFor = (I: number) => (I + 1.3787) / 1.4199;
     for (const L of [
-      { m: 6, label: 'Seísmo: Mercalli IX–X', desc: 'Daños graves en estructuras, grietas en el terreno.' },
-      { m: 5, label: 'Seísmo: Mercalli VII–VIII', desc: 'Daños moderados; caída de chimeneas y muros débiles.' },
-      { m: 4, label: 'Seísmo: Mercalli V–VI', desc: 'Lo siente todo el mundo; caída de objetos, daños leves.' },
+      { m: mFor(9), label: 'Seísmo: intensidad IX', desc: 'Destructivo: daños graves incluso en edificios bien construidos; grietas en el terreno.' },
+      { m: mFor(7), label: 'Seísmo: intensidad VII', desc: 'Daños moderados; caída de chimeneas, cornisas y muros débiles.' },
+      { m: mFor(5), label: 'Seísmo: intensidad V', desc: 'Lo siente todo el mundo; caída de objetos y daños leves.' },
     ]) {
       if (meff(0) < L.m) continue;
-      let lo = 0, hi = 20000;
+      let lo = 0, hi = 20015;
       for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (meff(mid) >= L.m) lo = mid; else hi = mid; }
-      sr.push({ id: `seis${L.m}`, group: 'seismic', label: L.label, radiusM: lo * 1000, color: '#c084fc', value: `M ef. ≥ ${L.m}`, desc: L.desc });
+      sr.push({ id: `seis${Math.round(L.m * 10)}`, group: 'seismic', label: L.label, radiusM: lo * 1000, color: '#c084fc', value: `M ef. ≥ ${L.m.toFixed(1).replace('.', ',')}`, desc: L.desc });
     }
     seismic = { magnitude: M, rings: sr };
     rings.push(...sr);
   }
 
+  // nada puede llegar más lejos que las antípodas
+  for (const r of rings) {
+    if (r.radiusM >= HALF_EARTH_M * 0.98) { r.radiusM = HALF_EARTH_M; r.global = true; r.dome = false; }
+    else if (r.radiusM > 3000e3) r.dome = false; // una cúpula plana de miles de km no tiene sentido sobre una esfera
+  }
+  if (rings.some((r) => r.global)) notes.push('Algunos efectos alcanzan todo el planeta: se indican como «global».');
   rings.sort((x, y) => x.radiusM - y.radiusM);
 
   // ---------- lluvia radiactiva ----------
@@ -311,9 +365,12 @@ const ll = (x: number, x50: number, k: number) => (x <= 0 ? 0 : 1 / (1 + Math.po
 
 function estimateCasualties(lat: number, lon: number, rings: Ring[], c: CasualtyCtx): Casualties {
   const maxR = Math.max(...rings.filter((r) => r.group !== 'seismic' && r.group !== 'emp' && r.group !== 'tsunami').map((r) => r.radiusM), 500);
-  const R = Math.min(maxR * 1.05, 1.2e6);
+  const R = Math.min(maxR * 1.05, HALF_EARTH_M);
   const field = densityField(lat, lon, R / 1000);
-  const nr = 90, na = 72;
+  const nr = R > 2e6 ? 140 : 90, na = 72;
+  // superficie de un casquete esférico de radio (arco) r
+  const cap = (r: number) => 2 * Math.PI * EARTH_R * EARTH_R * (1 - Math.cos(r / EARTH_R));
+  const la1 = (lat * Math.PI) / 180, lo1 = (lon * Math.PI) / 180;
   const day = c.env.hour >= 7 && c.env.hour <= 20;
   const outdoors = day ? 0.25 : 0.08;
   const scale = c.isImpact ? Math.pow(c.Y / 1000, 1 / 6) : Math.pow(c.Y / 1000, 0.065);
@@ -330,10 +387,14 @@ function estimateCasualties(lat: number, lon: number, rings: Ring[], c: Casualty
     let pd = 1 - (1 - ll(psi, 6, 4.25)) * (1 - outdoors * ll(q, 13, 4)) * (1 - ll(dose, 450, 6));
     if (rm < c.fireballR || (c.crater && rm < c.crater.diameterM / 2)) pd = 1;
     const pinj = Math.max(0, Math.min(1 - pd, ll(psi, 1.3, 3) * 0.6 + outdoors * ll(q, 4.5, 4) + ll(dose, 150, 4) * 0.5));
-    const dA = (Math.PI * (r1 * r1 - r0 * r0)) / 1e6 / na; // km²
+    const dA = (cap(r1) - cap(r0)) / 1e6 / na; // km²
+    const dd = rm / EARTH_R;
     for (let j = 0; j < na; j++) {
       const th = ((j + 0.5) / na) * 2 * Math.PI;
-      const pop = field.at((rm / 1000) * Math.sin(th), (rm / 1000) * Math.cos(th)) * dA;
+      // punto a distancia rm y rumbo th (geodésico)
+      const la2 = Math.asin(Math.sin(la1) * Math.cos(dd) + Math.cos(la1) * Math.sin(dd) * Math.cos(th));
+      const lo2 = lo1 + Math.atan2(Math.sin(th) * Math.sin(dd) * Math.cos(la1), Math.cos(dd) - Math.sin(la1) * Math.sin(la2));
+      const pop = field.atLatLon((la2 * 180) / Math.PI, (((lo2 * 180) / Math.PI + 540) % 360) - 180) * dA;
       exposed += pop;
       deaths += pop * pd;
       inj += pop * pinj;
