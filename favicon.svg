@@ -22,7 +22,7 @@
       <stop offset="1" stop-color="#ff6a1f" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <rect width="64" height="64" fill="url(#bg)"/>
   <!-- resplandor en el suelo -->
   <ellipse cx="32" cy="51.5" rx="22" ry="6" fill="url(#glow)"/>
   <!-- columna -->

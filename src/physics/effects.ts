@@ -3,7 +3,7 @@
  */
 import { blastRange, pressureAt, optimumHeight1kt, shockArrivalTable, PSI, peakWind, decibels } from './blast';
 import { atmosphericEntry, impactCrater, KT_J } from './asteroid';
-import { computeFallout } from './fallout';
+import { computeFallout, falloutModel } from './fallout';
 import { densityField, nearestCity } from '../data/cities';
 import type { Effects, Environment, Ring, Scenario, Casualties } from './types';
 
@@ -45,7 +45,7 @@ function solveDecreasing(f: (r: number) => number, target: number, lo = 0.1, hi 
 const toGround = (slant: number, h: number) => (slant > h ? Math.sqrt(slant * slant - h * h) : 0);
 
 export function fmtEnergy(kt: number): string {
-  if (kt >= 1e6) return `${(kt / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 2 })} Gt`;
+  if (kt >= 1e6) return `${(kt / 1e6).toLocaleString('es-ES', { maximumFractionDigits: kt >= 1e8 ? 0 : 2 })} Gt`;
   if (kt >= 1000) return `${(kt / 1000).toLocaleString('es-ES', { maximumFractionDigits: 2 })} Mt`;
   if (kt >= 1) return `${kt.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kt`;
   return `${(kt * 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} t`;
@@ -55,7 +55,7 @@ export function fmtEnergy(kt: number): string {
 export function sanitizeScenario(sc: Scenario): Scenario {
   const cl = (x: number, a: number, b: number, d: number) => (Number.isFinite(x) ? Math.min(b, Math.max(a, x)) : d);
   if (sc.kind === 'nuclear') {
-    return { ...sc, yieldKt: cl(sc.yieldKt, 1e-6, 1e6, 1), fission: cl(sc.fission, 0, 1, 0.5), heightM: cl(sc.heightM, 0, 2e6, 0) };
+    return { ...sc, yieldKt: cl(sc.yieldKt, 1e-6, 1e6, 1), fission: sc.chemical ? 0 : cl(sc.fission, 0, 1, 0.5), heightM: cl(sc.heightM, 0, 2e6, 0) };
   }
   return {
     ...sc,
@@ -83,15 +83,20 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   let tsunami: Effects['tsunami'];
   let seismicEnergyJ = 0;
   let fissionKt = 0;
+  const chem = sc.kind === 'nuclear' && !!sc.chemical;
+  // energía equivalente para la onda: 1 kt nuclear ≈ 0,5 kt de TNT en onda (el resto es calor y radiación)
+  let Yb = 0;
 
   if (sc.kind === 'nuclear') {
     Y = Math.max(sc.yieldKt, 1e-6);
-    const s = Math.cbrt(Y);
+    Yb = chem ? 2 * Y : Y;
+    const s = Math.cbrt(Yb);
     h = sc.burst === 'surface' ? 0 : sc.burst === 'optimal' ? optimumHeight1kt(5) * s : Math.max(0, sc.heightM);
-    const rfAir = 70 * Math.pow(Y, 0.4);
+    // bola de fuego: nuclear (Glasstone, ∝Y^0,4) o química (∝W^0,32, mucho más fría y pequeña)
+    const rfAir = chem ? 1.16 * Math.pow(Y * 1e6, 0.32) : 70 * Math.pow(Y, 0.4);
     const contact0 = h < rfAir ? 1 - h / rfAir : 0;
     fireballR = rfAir * (1 + 0.32 * contact0);
-    thermalFrac = 0.35 - 0.17 * contact0;
+    thermalFrac = chem ? 0.01 : 0.35 - 0.17 * contact0;
     fissionKt = Y * sc.fission;
     // acoplamiento sísmico de una explosión en superficie (mucho menor que el de un impacto)
     seismicEnergyJ = 0.02 * contact0 * Y * KT_J;
@@ -128,6 +133,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     }
   }
 
+  if (!Yb) Yb = Y;
   const E_J = Y * KT_J;
   if (sc.kind === 'asteroid') {
     if (E_J > 5e27) notes.push('Energía suficiente para evaporar los océanos y esterilizar la superficie del planeta.');
@@ -140,16 +146,18 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   // en impactos, la pluma de vapor se expande a ~6 km/s
   const tMax = isImpact
     ? Math.min(25, Math.max(0.05, fireballR / 6000))
-    : Math.min(sc.kind === 'asteroid' ? 4 : 10, 0.032 * Math.sqrt(Y));
+    : chem ? 0.06 * Math.cbrt(Y) : Math.min(sc.kind === 'asteroid' ? 4 : 10, 0.032 * Math.sqrt(Y));
 
   // ---------- nube en forma de hongo ----------
   const top = Y < 1000 ? 7540 * Math.pow(Y, 0.155) : 22000 * Math.pow(Y / 1000, 0.22);
-  const cloudTop = h > 20000 ? h : Math.min(top, 80000) + (sc.kind === 'nuclear' ? h * 0.3 : 0);
+  // una explosión química no tiene una bola de fuego tan caliente: la nube sube mucho menos
+  const cloudTop = h > 20000 ? h : (Math.min(top, 80000) + (sc.kind === 'nuclear' ? h * 0.3 : 0)) * (chem ? 0.35 : 1);
+  const capR0 = Math.min(1800 * Math.pow(Y, 0.25), cloudTop * 5) * (chem ? 0.45 : 1);
   const cloud = {
     topM: cloudTop,
     capBottomM: cloudTop * 0.5,
-    capRadiusM: Math.min(1800 * Math.pow(Y, 0.25), cloudTop * 5),
-    stemRadiusM: Math.min(1800 * Math.pow(Y, 0.25), cloudTop * 5) * 0.24,
+    capRadiusM: capR0,
+    stemRadiusM: capR0 * 0.24,
     riseTimeS: Math.min(480, 60 + 25 * Math.log10(Math.max(Y, 1))),
   };
 
@@ -177,8 +185,8 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   // finita limita el escalado cúbico, así que reducimos el alcance progresivamente
   const blastK = Y > 1e7 ? Math.max(0.5, 1 / (1 + 0.25 * Math.log10(Y / 1e7))) : 1;
   if (blastK < 1) notes.push('Onda expansiva de escala continental: las distancias son muy inciertas (los modelos se extrapolan fuera de su rango).');
-  const pressurePsiAt = (groundM: number) => pressureAt(Y, groundM / blastK, h);
-  const doseRemAt = (groundM: number) => (sc.kind === 'nuclear' ? promptDose(Y, Math.hypot(groundM, h) / 1000) : 0);
+  const pressurePsiAt = (groundM: number) => pressureAt(Yb, groundM / blastK, h);
+  const doseRemAt = (groundM: number) => (sc.kind === 'nuclear' && !chem ? promptDose(Y, Math.hypot(groundM, h) / 1000) : 0);
 
   const rings: Ring[] = [];
   const push = (r: Ring) => { if (r.radiusM > 0.5) rings.push(r); };
@@ -193,13 +201,13 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   if (crater) {
     push({ id: 'crater', group: 'crater', label: 'Cráter', radiusM: crater.diameterM / 2, color: '#a0714f', value: `${fmtDist(crater.diameterM)} Ø · ${fmtDist(crater.depthM)} prof.`, desc: `Cráter ${crater.type === 'complex' ? 'complejo (con pico central)' : 'simple'} excavado por el impacto.` });
   } else if (sc.kind === 'nuclear' && contact > 0.5) {
-    const r = 20 * Math.pow(Y, 0.3) * contact;
+    const r = 20 * Math.pow(Y, 0.3) * contact * (chem ? 1.5 : 1);
     crater = { diameterM: 2 * r, depthM: 0.5 * r, transientM: 2 * r, type: 'simple' };
     push({ id: 'crater', group: 'crater', label: 'Cráter', radiusM: r, color: '#a0714f', value: `${fmtDist(2 * r)} Ø`, desc: 'Cráter aparente en suelo seco.' });
   }
 
   // radiación ionizante
-  if (sc.kind === 'nuclear') {
+  if (sc.kind === 'nuclear' && !chem) {
     const radLevels = [
       { rem: 5000, label: 'Radiación 5000 rem', color: '#00ff88', desc: 'Incapacitación en minutos, muerte en horas o pocos días.' },
       { rem: 1000, label: 'Radiación 1000 rem', color: '#2bff6a', desc: 'Dosis letal en prácticamente todos los casos sin tratamiento.' },
@@ -222,7 +230,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     { psi: 0.2, label: 'Rotura de cristales (0,2 psi)', color: '#5d6b82', desc: 'Ventanas rotas; el estruendo se oye a cientos de kilómetros.' },
   ];
   for (const L of blastLevels) {
-    const r = blastRange(Y, L.psi, h) * blastK;
+    const r = blastRange(Yb, L.psi, h) * blastK;
     if (L.psi === 200 && r < fireballR) continue;
     const pa = L.psi * PSI;
     push({ id: `psi${L.psi}`, group: 'blast', label: L.label, radiusM: r, color: L.color, value: `${L.psi} psi · viento ${Math.round(peakWind(pa) * 3.6)} km/h · ${Math.round(decibels(pa))} dB`, desc: L.desc, dome: L.psi === 5 || L.psi === 1 || L.psi === 20 });
@@ -312,13 +320,14 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   rings.sort((x, y) => x.radiusM - y.radiusM);
 
   // ---------- lluvia radiactiva ----------
-  const fallout = sc.kind === 'nuclear'
-    ? computeFallout({ fissionKt, contact, cloudTopM: cloud.topM, capRadiusM: cloud.capRadiusM, windFromDeg: env.windFromDeg, windKmh: env.windKmh })
-    : [];
+  const fp = { fissionKt, contact, cloudTopM: cloud.topM, capRadiusM: cloud.capRadiusM, windFromDeg: env.windFromDeg, windKmh: env.windKmh };
+  const fallout = sc.kind === 'nuclear' && !chem ? computeFallout(fp) : [];
+  const fModel = fallout.length ? falloutModel(fp) : null;
+  const falloutRateAt = (eM: number, nM: number) => (fModel ? fModel.rateAtLocal(eM, nM) : 0);
 
   // ---------- frente de choque ----------
   const maxR = Math.max(...rings.map((r) => r.radiusM), 1000) * 1.3;
-  const shock = shockArrivalTable(Y, Math.min(maxR, 3e6));
+  const shock = shockArrivalTable(Yb, Math.min(maxR, 3e6));
 
   // ---------- víctimas ----------
   const casualties = estimateCasualties(lat, lon, rings, { pressurePsiAt, thermalFluenceAt, doseRemAt, Y, isImpact, env, crater, fireballR: contact > 0 ? fireballR : 0 });
@@ -346,6 +355,12 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     thermalFluenceAt,
     pressurePsiAt,
     doseRemAt,
+    falloutRateAt,
+    windKmh: env.windKmh,
+    windFromDeg: env.windFromDeg,
+    chemical: chem,
+    outdoorPct: env.outdoorPct != null ? Math.max(0, Math.min(100, env.outdoorPct)) : env.hour >= 7 && env.hour <= 20 ? 25 : 8,
+    env: { ...env },
   };
 }
 
@@ -372,7 +387,9 @@ function estimateCasualties(lat: number, lon: number, rings: Ring[], c: Casualty
   const cap = (r: number) => 2 * Math.PI * EARTH_R * EARTH_R * (1 - Math.cos(r / EARTH_R));
   const la1 = (lat * Math.PI) / 180, lo1 = (lon * Math.PI) / 180;
   const day = c.env.hour >= 7 && c.env.hour <= 20;
-  const outdoors = day ? 0.25 : 0.08;
+  const outdoors = c.env.outdoorPct != null ? Math.max(0, Math.min(100, c.env.outdoorPct)) / 100 : day ? 0.25 : 0.08;
+  const prof = { r: [0] as number[], pop: [0] as number[], deaths: [0] as number[], inj: [0] as number[], burns: [0] as number[] };
+  let burns = 0;
   const scale = c.isImpact ? Math.pow(c.Y / 1000, 1 / 6) : Math.pow(c.Y / 1000, 0.065);
   let deaths = 0, inj = 0, exposed = 0;
   // radios en escala cuadrática para más resolución cerca del centro
@@ -398,10 +415,12 @@ function estimateCasualties(lat: number, lon: number, rings: Ring[], c: Casualty
       exposed += pop;
       deaths += pop * pd;
       inj += pop * pinj;
+      burns += pop * outdoors * ll(q, 4.5, 4) * (1 - pd);
     }
+    prof.r.push(r1); prof.pop.push(exposed); prof.deaths.push(deaths); prof.inj.push(inj); prof.burns.push(burns);
   }
   const nc = nearestCity(lat, lon);
-  return { deaths, injuries: inj, exposed, cityName: nc.km < 60 ? nc.city.name : undefined };
+  return { deaths, injuries: inj, exposed, cityName: nc.km < 60 ? nc.city.name : undefined, profile: prof };
 }
 
 export function fmtDist(m: number): string {

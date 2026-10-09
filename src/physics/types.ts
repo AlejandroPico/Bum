@@ -9,6 +9,8 @@ export interface NuclearInput {
   fission: number;
   burst: BurstMode;
   heightM: number;
+  /** explosivo químico (convencional o accidental): sin radiación ni lluvia radiactiva */
+  chemical?: boolean;
 }
 
 export interface AsteroidInput {
@@ -34,6 +36,8 @@ export interface Environment {
   humidity: number;
   /** hora local 0..24 */
   hour: number;
+  /** % de población al aire libre (null = automático según la hora) */
+  outdoorPct?: number | null;
 }
 
 export type EffectGroup = 'fireball' | 'blast' | 'thermal' | 'radiation' | 'crater' | 'seismic' | 'emp' | 'ejecta' | 'tsunami';
@@ -69,6 +73,8 @@ export interface Casualties {
   injuries: number;
   exposed: number;
   cityName?: string;
+  /** perfil acumulado desde la zona cero: radio (m) → población, muertos y heridos dentro */
+  profile: { r: number[]; pop: number[]; deaths: number[]; inj: number[]; burns: number[] };
 }
 
 export interface AsteroidInfo {
@@ -103,4 +109,14 @@ export interface Effects {
   thermalFluenceAt: (groundM: number) => number;
   pressurePsiAt: (groundM: number) => number;
   doseRemAt: (groundM: number) => number;
+  /** tasa de dosis de la lluvia radiactiva a H+1 (R/h) en un punto (m este, m norte) */
+  falloutRateAt: (eM: number, nM: number) => number;
+  /** viento usado para la lluvia radiactiva */
+  windKmh: number;
+  windFromDeg: number;
+  chemical: boolean;
+  /** % de población al aire libre usado en las víctimas */
+  outdoorPct: number;
+  /** entorno usado en el cálculo */
+  env: Environment;
 }

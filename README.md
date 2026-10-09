@@ -4,7 +4,7 @@
 
 Simulador web de los efectos de **armas nucleares** e **impactos de asteroides y cometas** sobre cualquier
 lugar del mundo, con mapa satelital en 3D (relieve + edificios), bola de fuego, onda expansiva, nube en
-forma de hongo, cúpulas tridimensionales de cada efecto, incendios, lluvia radiactiva arrastrada por el
+forma de hongo, cúpulas tridimensionales de cada efecto (aparecen al terminar la bola de fuego), incendios, lluvia radiactiva arrastrada por el
 viento, sonido y cámara cinemática.
 
 > Proyecto educativo inspirado en NUKEMAP (Alex Wellerstein) y en *Impact: Earth!* (Collins et al.).
@@ -37,18 +37,28 @@ Otros comandos:
 
 ## Uso
 
-- **Objetivo**: busca un lugar, pulsa una ciudad rápida o haz clic en el mapa.
-- **Arma nuclear**: modelos históricos y actuales, o potencia libre (de 1 t a 100 Mt), fracción de fisión
-  y tipo de detonación (superficie, aérea óptima o altura personalizada — hasta explosiones espaciales con EMP).
-- **Impacto cósmico**: diámetro, composición/densidad, velocidad, ángulo, dirección de llegada y terreno
-  (sedimento, roca o agua con profundidad).
+- **Objetivo**: busca un lugar por su nombre, escribe coordenadas (`40.4168, -3.7038`, `40°25'08"N 3°42'14"O`,
+  `40.41 N 3.70 W` o un enlace de mapas con `@lat,lon`), usa tu ubicación o haz clic en el mapa.
+- **Arma**: más de 70 modelos ordenados de mayor a menor potencia en cinco grupos — pruebas y bombas históricas,
+  armas de la Guerra Fría, arsenales actuales, explosiones no nucleares (Minor Scale, Halifax, Beirut, Tianjin…)
+  y bombas convencionales (FOAB, MOAB, GBU-57…) — o potencia libre (1 kg a 1 Gt), fracción de fisión, explosivo
+  químico (sin radiación ni lluvia radiactiva) y tipo de detonación (superficie, aérea óptima o altura
+  personalizada — hasta explosiones espaciales con EMP).
+- **Impacto cósmico**: 22 escenarios (de 2008 TC3 a Hale-Bopp) o diámetro, composición/densidad, velocidad,
+  ángulo, dirección de llegada y terreno (sedimento, roca o agua con profundidad).
 - **Mapa**: plano 2D (por defecto) o **globo 3D** (botón del globo, arriba a la derecha, o en Visualización).
 - **Terreno automático**: en impactos se detecta si el punto es tierra u océano y la profundidad del agua (batimetría de los datos de relieve).
-- **Entorno**: viento (dirección y velocidad), humedad, visibilidad y hora del día (incluye noche con luces
-  de ciudad).
-- **Resultados**: panel flotante (se arrastra y se minimiza) con víctimas estimadas, cada efecto con su radio
-  y superficie (clic = ocultar/mostrar, doble clic = encuadrar), lluvia radiactiva, datos físicos y tiempos
-  de llegada de la onda.
+- **Entorno**: botón de **tiempo real** (Open-Meteo, gratuito y sin clave) que trae viento, humedad, visibilidad,
+  temperatura, nubosidad y hora local del objetivo; para la lluvia radiactiva se usa el viento medio entre 850 y
+  250 hPa (la capa por la que viaja la nube). Opción de actualizarlo al cambiar de objetivo. También se puede
+  ajustar todo a mano, incluido el % de población al aire libre (doble clic en el valor = automático).
+- **Resultados**: panel flotante (se arrastra y se minimiza) con contadores de fallecidos y heridos y seis
+  pestañas — *Resumen*, *Efectos* (de dentro hacia fuera; clic = ocultar/mostrar, doble clic = encuadrar),
+  *Población* (por zona, viviendas, sanidad), *Física* (bola de fuego, onda por distancia, sonido, térmica,
+  sismicidad, cráter, objeto, tsunami), *Radiación* (radiación inicial, isótopos, lluvia radiactiva por distancia
+  con dosis acumuladas, superficie contaminada, protección civil) y *Comparar* (energía, clima, economía).
+- **Marcas en el terreno**: suelo quemado, cráter, manto de eyecta, suelo activado por neutrones y zona
+  contaminada (rayado) que permanecen tras la explosión.
 - **Línea de tiempo**: reproducir/pausar, rebobinar, velocidad ×0,25–×16. La escala es logarítmica: los
   primeros segundos se ven a cámara lenta.
 - Botón de cámara (línea de tiempo): plano cinematográfico del hongo completo con órbita lenta.
@@ -67,6 +77,8 @@ Otros comandos:
 | Asteroides | Collins, Melosh & Marcus (2005): fragmentación, modelo "pancake", explosión aérea, velocidad de impacto, cráter simple/complejo, eyecta, sismicidad (ec. 40–41), radiación térmica con fracción visible sobre el horizonte |
 | Tsunami | Wünnemann et al. (2010): A(D) = min(0,14·Dtc, h)·Dtc/(2D), alcance máximo ~13 000 km; se propaga a √(g·h) |
 | Escala planetaria | Ningún efecto supera las antípodas (20 015 km); los círculos son geodésicos (cruzan el antimeridiano y los polos); entradas limitadas a rangos físicos |
+| Explosivos químicos | Equivalencia de la onda ≈ 2× la de una nuclear de igual energía (no se pierde energía en radiación); bola de fuego `1,16·W^0,32` m (W en kg); sin radiación ni lluvia radiactiva |
+| Isótopos | 1 kt de fisión ≈ 1,45·10²³ fisiones; rendimientos acumulados de I-131 (2,9 %), Cs-137 (6,2 %) y Sr-90 (5,8 %) |
 | Víctimas | Densidad urbana de Clark (exponencial) a partir de la población metropolitana de ~100 ciudades + probabilidades de muerte/heridas tipo OTA (1979) combinadas con quemaduras y radiación |
 
 ## Tecnología
@@ -88,6 +100,7 @@ Otros comandos:
 - Relieve: Mapzen Terrain Tiles en AWS Open Data.
 - Edificios, carreteras y topónimos: [OpenFreeMap](https://openfreemap.org) © colaboradores de OpenStreetMap.
 - Búsqueda de lugares: Nominatim (OpenStreetMap).
+- Tiempo real: [Open-Meteo](https://open-meteo.com) (CC BY 4.0).
 
 ## Hoja de ruta
 
@@ -98,6 +111,8 @@ Otros comandos:
 - [x] Hongo volumétrico con *ray-marching*.
 - [x] Disipación de la nube (el tronco se deshace, el sombrero se extiende, se erosiona y deriva con el viento).
 - [ ] Post-procesado (bloom, distorsión por calor).
+- [x] Estadísticas ampliadas (población, sanidad, isótopos, dosis acumuladas, clima, economía).
+- [x] Tiempo real (viento en altura) con Open-Meteo.
 - [ ] Refugios y tiempo de permanencia recomendado frente a la lluvia radiactiva.
 - [ ] Versión en inglés.
 

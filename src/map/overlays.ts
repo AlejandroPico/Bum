@@ -91,6 +91,21 @@ export function localToLngLat(lat: number, lon: number, e: number, n: number): [
   return [lon + e / (111320 * cos), lat + n / 110540];
 }
 
+const SOURCES = ['fx-rings', 'fx-ring-lines', 'fx-fallout', 'fx-labels', 'fx-scorch', 'fx-deposit', 'fx-fallout-labels'];
+
+/** trama rayada para marcar el suelo contaminado */
+function hatchImage() {
+  const n = 16;
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const d = (x + y) % 8;
+    const on = d < 2;
+    const i = (y * n + x) * 4;
+    data[i] = 214; data[i + 1] = 255; data[i + 2] = 31; data[i + 3] = on ? 150 : 0;
+  }
+  return { width: n, height: n, data };
+}
+
 export class Overlays {
   private map: MLMap;
   private hidden = new Set<string>();
@@ -100,6 +115,7 @@ export class Overlays {
   showRings = true;
   showFallout = true;
   showDamage = true;
+  showMarks = true;
 
   constructor(map: MLMap) {
     this.map = map;
@@ -107,9 +123,16 @@ export class Overlays {
 
   install() {
     const m = this.map;
-    for (const id of ['fx-rings', 'fx-ring-lines', 'fx-fallout', 'fx-labels', 'fx-scorch']) m.addSource(id, { type: 'geojson', data: empty() });
+    for (const id of SOURCES) m.addSource(id, { type: 'geojson', data: empty() });
     const before = 'buildings';
+    if (!m.hasImage('fx-hatch')) m.addImage('fx-hatch', hatchImage(), { pixelRatio: 2 });
     m.addLayer({ id: 'fx-scorch', type: 'fill', source: 'fx-scorch', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'opacity'] } }, before);
+    // marcas persistentes: suelo contaminado (rayado) y zona de radiación inducida
+    m.addLayer({ id: 'fx-deposit', type: 'fill', source: 'fx-deposit', paint: { 'fill-pattern': 'fx-hatch', 'fill-opacity': ['get', 'opacity'] } }, before);
+    m.addLayer({ id: 'fx-deposit-line', type: 'line', source: 'fx-deposit', paint: { 'line-color': '#d6ff1f', 'line-width': 1, 'line-dasharray': [3, 3], 'line-opacity': ['*', 0.9, ['get', 'opacity']] } }, before);
+    m.addLayer({ id: 'fx-fallout-labels', type: 'symbol', source: 'fx-fallout-labels',
+      layout: { 'text-field': ['get', 'text'], 'text-font': ['Noto Sans Bold'], 'text-size': 11, 'text-allow-overlap': false, 'text-padding': 6, 'text-offset': [0, -0.8] },
+      paint: { 'text-color': ['get', 'color'], 'text-halo-color': 'rgba(0,0,0,0.85)', 'text-halo-width': 1.6 } });
     m.addLayer({
       id: 'fx-fallout', type: 'fill', source: 'fx-fallout',
       paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.2, 'fill-antialias': true },
@@ -161,11 +184,13 @@ export class Overlays {
 
   private simT = Infinity;
   private revealKey = '';
+  /** instante (s) en que acaba la fase luminosa de la bola de fuego: antes no se dibuja ningún anillo */
+  gateT = 0;
   /** distancia alcanzada por cada tipo de efecto en el instante actual */
   private reached(r: Ring): number {
     const t = this.simT;
     if (t === Infinity) return Infinity;
-    if (t <= 0) return 0;
+    if (t <= 0 || t < this.gateT) return 0;
     const fx = this.current!.fx;
     switch (r.group) {
       case 'tsunami': return Math.sqrt(9.81 * Math.max(10, fx.tsunami?.depthM ?? 4000)) * t; // ondas largas: √(g·h)
@@ -180,7 +205,7 @@ export class Overlays {
     const m = this.map;
     const src = (id: string) => m.getSource(id) as GeoJSONSource | undefined;
     if (!this.current) {
-      for (const id of ['fx-rings', 'fx-ring-lines', 'fx-fallout', 'fx-labels', 'fx-scorch']) src(id)?.setData(empty());
+      for (const id of SOURCES) src(id)?.setData(empty());
       return;
     }
     const { fx, lat, lon } = this.current;
@@ -215,7 +240,9 @@ export class Overlays {
 
     // lluvia radiactiva (se revela a medida que avanza el viento)
     const ff: GeoJSON.Feature[] = [];
-    if (this.showFallout && !this.hidden.has('fallout')) {
+    const dep: GeoJSON.Feature[] = [];
+    const flab: GeoJSON.Feature[] = [];
+    if ((this.showFallout || this.showMarks) && !this.hidden.has('fallout')) {
       const windKmh = Math.max(4, this.current.wind);
       const front = this.falloutT === Infinity ? Infinity : windKmh * this.falloutT * 1000 + fx.cloud.capRadiusM;
       for (const c of fx.fallout) {
@@ -230,20 +257,39 @@ export class Overlays {
             return pts;
           });
           ff.push({ type: 'Feature', properties: { color: c.color, level: c.level }, geometry: { type: 'Polygon', coordinates: coords } });
+          if (c.level >= 10) dep.push({ type: 'Feature', properties: { opacity: c.level >= 100 ? 0.75 : 0.45 }, geometry: { type: 'Polygon', coordinates: coords } });
+        }
+        // etiqueta en el extremo a sotavento de cada isolínea
+        const reach = Math.min(c.maxDownwindKm * 1000, front);
+        if (reach > 500 && this.showFallout) {
+          const to = (fx.windFromDeg + 180) % 360;
+          flab.push({ type: 'Feature', properties: { text: `${c.label} · ${fmtDist(reach)}`, color: c.color }, geometry: { type: 'Point', coordinates: destination(lat, lon, reach, to) } });
         }
       }
     }
-    src('fx-fallout')?.setData({ type: 'FeatureCollection', features: ff });
+    src('fx-fallout')?.setData({ type: 'FeatureCollection', features: this.showFallout ? ff : [] });
+    src('fx-deposit')?.setData({ type: 'FeatureCollection', features: this.showMarks ? dep : [] });
+    src('fx-fallout-labels')?.setData({ type: 'FeatureCollection', features: flab });
 
     // terreno chamuscado
     const sc: GeoJSON.Feature[] = [];
     const scorchR = Math.min(this.revealR, fx.rings.find((r) => r.id === 'burn3')?.radiusM ?? 0);
-    if (scorchR > 0 && this.showDamage) {
+    if (scorchR > 0 && this.showMarks && this.simT >= this.gateT) {
       const steps = [
         { r: scorchR, color: '#1a0f08', opacity: 0.35 },
         { r: Math.min(scorchR, fx.rings.find((r) => r.id === 'psi5')?.radiusM ?? 0), color: '#120a06', opacity: 0.35 },
         { r: Math.min(scorchR, fx.rings.find((r) => r.id === 'fireball')?.radiusM ?? 0) * 1.2, color: '#050302', opacity: 0.6 },
       ];
+      // suelo activado por los neutrones (radiación inducida) en explosiones bajas
+      const rad = fx.rings.find((r) => r.id === 'rad500')?.radiusM ?? 0;
+      if (rad > 0 && fx.groundContact > 0 && !fx.chemical) steps.push({ r: Math.min(rad, scorchR * 3), color: '#7dff3a', opacity: 0.06 });
+      // manto de eyecta y cráter en impactos
+      const ej = fx.rings.filter((r) => r.group === 'ejecta').sort((a, b) => a.radiusM - b.radiusM);
+      if (ej.length) {
+        const ejR = Math.min(ej[ej.length - 1].radiusM, this.reached(ej[ej.length - 1]));
+        if (ejR > 1) steps.unshift({ r: ejR, color: '#4a3826', opacity: 0.3 });
+      }
+      if (fx.crater) steps.push({ r: fx.crater.diameterM / 2, color: '#0a0806', opacity: 0.7 });
       for (const s of steps) if (s.r > 1) sc.push({ type: 'Feature', properties: { color: s.color, opacity: s.opacity }, geometry: { type: 'Polygon', coordinates: circlePolygon(lat, lon, s.r, 120) } });
     }
     src('fx-scorch')?.setData({ type: 'FeatureCollection', features: sc });

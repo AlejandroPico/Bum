@@ -102,8 +102,8 @@ document.getElementById('app')!.append(showBtn);
 
 /** deja libre el espacio de los paneles para que la zona cero quede centrada en la parte visible */
 function updatePadding() {
-  const left = document.body.classList.contains('ui-collapsed') || window.innerWidth < 760 ? 0 : 370;
-  const right = run && !document.getElementById('results')!.classList.contains('hidden') && window.innerWidth >= 760 ? 400 : 0;
+  const left = document.body.classList.contains('ui-collapsed') || window.innerWidth < 760 ? 0 : 340;
+  const right = run && !document.getElementById('results')!.classList.contains('hidden') && window.innerWidth >= 760 ? 392 : 0;
   map.setPadding({ left, right, top: 0, bottom: 0 });
 }
 
@@ -155,6 +155,7 @@ function setTarget(lat: number, lon: number, label: string, fly: boolean) {
   detectSurface(lat, lon);
   marker.setLngLat([lon, lat]);
   markerEl.style.display = '';
+  if (state.live) sidebar.loadWeather(true);
   if (fly) map.flyTo({ center: [lon, lat], zoom: 12.8, pitch: 62, duration: 2800, essential: true });
 }
 
@@ -185,6 +186,7 @@ map.on('load', () => {
   puffTex = createPuffAtlas(1024);
   if (state.view.globe) applyProjection(true);
   detectSurface(state.target.lat, state.target.lon);
+  if (state.live) sidebar.loadWeather(true);
   document.getElementById('loading')!.classList.add('done');
   if (location.hash.length > 3) setTimeout(() => detonate(), 1200);
 });
@@ -204,9 +206,10 @@ function applyView() {
   overlays.showRings = V.rings;
   overlays.showFallout = V.fallout;
   overlays.showDamage = V.damage;
+  overlays.showMarks = V.marks;
   overlays.refresh();
   overlays.updateBuildings(run ? run.plan.shockGroundR(run.t) : Infinity);
-  if (map.getLayer('fx-labels')) map.setLayoutProperty('fx-labels', 'visibility', V.labels ? 'visible' : 'none');
+  for (const id of ['fx-labels', 'fx-fallout-labels']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', V.labels ? 'visible' : 'none');
   audio.enabled = V.sound;
   if (run) {
     run.domes.enabled = V.domes;
@@ -263,10 +266,8 @@ function cloudCamera(bearingDeg: number, final = true) {
   const Hm = H * 0.47;
   const A = Hm + D * Math.tan(down); // altura de la cámara sobre el suelo
   const ahead = A / Math.tan(down) - D; // de la zona cero al punto central del mapa
-  // sigue a la nube cuando el viento la arrastra
-  const [dx, dn] = P.drift(t, 1);
-  const [tlon, tlat] = localToLngLat(run.lat, run.lon, dx * 0.85, dn * 0.85);
-  const center = destination(tlat, tlon, ahead, bearingDeg);
+  // la cámara queda anclada a la zona cero: la nube deriva con el viento y sale del encuadre
+  const center = destination(run.lat, run.lon, ahead, bearingDeg);
   const dist = A / Math.sin(down);
   const ctcPx = (0.5 * hgt) / Math.tan(fovV / 2);
   const mpp = dist / ctcPx;
@@ -376,6 +377,7 @@ async function detonate() {
 
     results.hidden.clear();
     overlays.set(fx, lat, lon, env.windKmh);
+    overlays.gateT = plan.fbDone;
     overlays.setReveal(0, 0);
     const place = state.target.label || nearestCity(lat, lon).city.name;
     results.render(fx, `${place}`);
@@ -570,12 +572,14 @@ function writeHash() {
   p.set('lon', s.target.lon.toFixed(5));
   if (s.mode === 'nuclear') {
     p.set('m', 'n'); p.set('y', String(s.nuke.yieldKt)); p.set('f', String(s.nuke.fission)); p.set('b', s.nuke.burst); p.set('hb', String(s.nuke.heightM)); p.set('nm', s.nuke.name);
+    if (s.nuke.chemical) p.set('ch', '1');
   } else {
     const a = s.ast;
     p.set('m', 'a'); p.set('d', String(a.diameterM)); p.set('rho', String(a.densityKgM3)); p.set('v', String(a.velocityKms)); p.set('ang', String(a.angleDeg)); p.set('tg', a.surface); p.set('wd', String(a.waterDepthM)); p.set('az', String(a.azimuth)); p.set('nm', a.name);
   }
   if (s.view.globe) p.set('g', '1');
   p.set('wf', String(s.env.windFromDeg)); p.set('ws', String(s.env.windKmh)); p.set('hu', String(s.env.humidity)); p.set('vi', String(s.env.visibilityKm)); p.set('hr', String(s.env.hour));
+  if (s.env.outdoorPct != null) p.set('op', String(s.env.outdoorPct));
   history.replaceState(null, '', '#' + p.toString());
 }
 
@@ -590,10 +594,12 @@ function readHash(s: AppState) {
     Object.assign(s.ast, { diameterM: num('d', 60), densityKgM3: num('rho', 3000), velocityKms: num('v', 17), angleDeg: num('ang', 45), target: (p.get('tg') && p.get('tg') !== 'auto' ? p.get('tg') : 'sediment') as any, surface: (p.get('tg') as any) || 'auto', waterDepthM: num('wd', 0), azimuth: num('az', 250), name: p.get('nm') || 'Objeto' });
   } else {
     s.mode = 'nuclear';
-    Object.assign(s.nuke, { yieldKt: num('y', 1000), fission: num('f', 0.5), burst: (p.get('b') as any) || 'optimal', heightM: num('hb', 0), name: p.get('nm') || 'Arma' });
+    Object.assign(s.nuke, { yieldKt: num('y', 1000), fission: num('f', 0.5), burst: (p.get('b') as any) || 'optimal', heightM: num('hb', 0), name: p.get('nm') || 'Arma', chemical: p.get('ch') === '1' });
   }
   if (p.get('g') === '1') s.view.globe = true;
-  Object.assign(s.env, { windFromDeg: num('wf', 270), windKmh: num('ws', 24), humidity: num('hu', 60), visibilityKm: num('vi', 25), hour: num('hr', 12) });
+  Object.assign(s.env, { windFromDeg: num('wf', 270), windKmh: num('ws', 24), humidity: num('hu', 60), visibilityKm: num('vi', 25), hour: num('hr', 12), outdoorPct: p.has('op') ? num('op', 25) : null });
+  // un enlace compartido conserva su entorno: no se sustituye por el tiempo real
+  s.live = false;
 }
 
 function share() {

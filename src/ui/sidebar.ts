@@ -1,12 +1,14 @@
 import { h, setRangeFill, ICONS, toast } from './dom';
 import logoUrl from '../../favicon.svg';
-import { NUKE_PRESETS, ASTEROID_PRESETS, COMPOSITIONS, QUICK_TARGETS } from '../data/presets';
+import { NUKE_PRESETS, ASTEROID_PRESETS, COMPOSITIONS } from '../data/presets';
+import { parseCoords, fetchWeather, type Weather } from './geo';
 import { fmtEnergy } from '../physics/effects';
 import type { NuclearInput, AsteroidInput, Environment, BurstMode, TargetType } from '../physics/types';
 
 export interface ViewOptions {
   domes: boolean; rings: boolean; fallout: boolean; damage: boolean; fires: boolean; sound: boolean; cinematic: boolean; labels: boolean;
   globe: boolean;
+  marks: boolean;
   quality: number;
 }
 
@@ -17,16 +19,19 @@ export interface AppState {
   env: Environment;
   target: { lat: number; lon: number; label: string };
   view: ViewOptions;
+  /** tiempo real (Open-Meteo) al cambiar de objetivo */
+  live: boolean;
 }
 
 export function defaultState(): AppState {
   return {
     mode: 'nuclear',
-    nuke: { kind: 'nuclear', name: 'B83 (1,2 Mt)', yieldKt: 1200, fission: 0.5, burst: 'optimal', heightM: 0 },
-    ast: { kind: 'asteroid', name: 'Tunguska (1908)', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'sediment', waterDepthM: 0, azimuth: 250, surface: 'auto' },
-    env: { windFromDeg: 270, windKmh: 24, visibilityKm: 25, humidity: 65, hour: 12 },
+    nuke: { kind: 'nuclear', name: 'B83-1 (EE. UU.)', yieldKt: 1200, fission: 0.5, burst: 'optimal', heightM: 0 },
+    ast: { kind: 'asteroid', name: 'Tunguska (Siberia, 1908)', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'sediment', waterDepthM: 0, azimuth: 250, surface: 'auto' },
+    env: { windFromDeg: 270, windKmh: 24, visibilityKm: 25, humidity: 65, hour: 12, outdoorPct: null },
     target: { lat: 40.4168, lon: -3.7038, label: 'Madrid' },
-    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, quality: 1 },
+    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1 },
+    live: true,
   };
 }
 
@@ -122,6 +127,8 @@ export class Sidebar {
   refresh: () => void = () => {};
   projSeg!: { el: HTMLElement; set: (v: string) => void };
   detectNote!: HTMLElement;
+  /** consulta el tiempo real en el objetivo y lo aplica al entorno */
+  loadWeather: (quiet?: boolean) => Promise<void> = async () => {};
 
   /** muestra lo detectado en el punto objetivo */
   setDetected(text: string) { if (this.detectNote) this.detectNote.textContent = text; }
@@ -143,7 +150,7 @@ export class Sidebar {
     const S = this.state;
     const head = h('div', { class: 'sb-head' },
       h('img', { class: 'logo', src: logoUrl, alt: 'Bum' }),
-      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Simulador 3D de ataques nucleares · v0.4')),
+      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Ataques nucleares e impactos · v0.5')),
       h('button', { class: 'icon-btn', title: 'Ocultar panel (H)', html: ICONS.hide, onclick: () => this.ev.onCollapse() }),
     );
 
@@ -154,29 +161,48 @@ export class Sidebar {
     );
 
     // ---------- objetivo ----------
-    const searchIn = h('input', { type: 'text', placeholder: 'Buscar ciudad, dirección o lugar…' }) as HTMLInputElement;
+    const searchIn = h('input', { type: 'text', placeholder: 'Lugar o coordenadas (40.42, -3.70)', spellcheck: 'false' }) as HTMLInputElement;
     const results = h('div', { class: 'search-results' });
     let timer = 0;
-    const doSearch = async () => {
+    const go = (lat: number, lon: number, label: string) => {
+      results.classList.remove('open');
+      this.setTarget(lat, lon, label);
+      this.ev.onTarget(lat, lon, label, true);
+    };
+    const doSearch = async (enter = false) => {
       const q = searchIn.value.trim();
       if (q.length < 2) { results.classList.remove('open'); return; }
+      const co = parseCoords(q);
+      if (co) {
+        const label = `${co.lat.toFixed(4)}, ${co.lon.toFixed(4)}`;
+        if (enter) { go(co.lat, co.lon, ''); return; }
+        results.innerHTML = '';
+        results.append(h('div', { class: 'coord-hit', onclick: () => go(co.lat, co.lon, '') }, `Ir a las coordenadas ${label}`));
+        results.classList.add('open');
+        return;
+      }
       try {
         const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=es&q=${encodeURIComponent(q)}`);
         const js = await r.json();
         results.innerHTML = '';
         for (const it of js) {
           const name = it.display_name as string;
-          results.append(h('div', { onclick: () => { results.classList.remove('open'); searchIn.value = name.split(',')[0]; this.setTarget(+it.lat, +it.lon, name.split(',')[0]); this.ev.onTarget(+it.lat, +it.lon, name.split(',')[0], true); } }, name));
+          results.append(h('div', { onclick: () => { searchIn.value = name.split(',')[0]; go(+it.lat, +it.lon, name.split(',')[0]); } }, name));
         }
-        results.classList.toggle('open', js.length > 0);
+        if (!js.length) results.append(h('div', { class: 'empty' }, 'Sin resultados'));
+        results.classList.add('open');
+        if (enter && js.length === 1) { searchIn.value = js[0].display_name.split(',')[0]; go(+js[0].lat, +js[0].lon, searchIn.value); }
       } catch { toast('No se pudo buscar el lugar (sin conexión)'); }
     };
-    searchIn.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(doSearch, 450); });
-    searchIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(timer); doSearch(); } });
+    searchIn.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(() => doSearch(), 450); });
+    searchIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(timer); doSearch(true); } if (e.key === 'Escape') results.classList.remove('open'); });
     document.addEventListener('click', (e) => { if (!results.contains(e.target as Node) && e.target !== searchIn) results.classList.remove('open'); });
+    const locBtn = h('button', { class: 'in-btn', type: 'button', title: 'Mi ubicación', html: ICONS.locate, onclick: () => {
+      if (!navigator.geolocation) { toast('Geolocalización no disponible'); return; }
+      navigator.geolocation.getCurrentPosition((p) => go(p.coords.latitude, p.coords.longitude, 'Mi ubicación'), () => toast('No se pudo obtener tu ubicación'), { timeout: 10000 });
+    } });
     this.coordsEl = h('div', { class: 'coords' });
-    const chips = h('div', { class: 'chips' }, ...QUICK_TARGETS.map((q) => h('button', { class: 'chip', type: 'button', onclick: () => { this.setTarget(q.lat, q.lon, q.name); this.ev.onTarget(q.lat, q.lon, q.name, true); } }, q.name)));
-    const targetSec = section('Objetivo', h('div', {}, h('div', { class: 'search', html: ICONS.search }, searchIn, results), chips, this.coordsEl));
+    const targetSec = section('Objetivo', h('div', {}, h('div', { class: 'search', html: ICONS.search }, searchIn, locBtn, results), this.coordsEl, h('div', { class: 'hint' }, 'También puedes hacer clic en el mapa.')));
     this.setTarget(S.target.lat, S.target.lon, S.target.label);
 
     // ---------- arma nuclear ----------
@@ -198,6 +224,7 @@ export class Sidebar {
     const hVal = h('b');
     const hIn = h('input', { type: 'number', min: 0, step: 10, value: nk.heightM }) as HTMLInputElement;
     const hField = field('Altura de detonación (m)', hVal, hIn);
+    const chemTg = toggle('Explosivo químico (sin radiación ni lluvia)', !!nk.chemical, (v) => { nk.chemical = v; });
     const burst = seg<BurstMode>([['surface', 'Superficie'], ['optimal', 'Aérea óptima'], ['custom', 'Altura…']], nk.burst, (v) => { nk.burst = v; updNuke(); });
 
     const updNuke = (from?: 'slider' | 'num') => {
@@ -226,7 +253,8 @@ export class Sidebar {
       if (!presetSel.value) { presetNote.style.display = 'none'; nk.name = 'Arma personalizada'; return; }
       const [gi, ii] = presetSel.value.split(':').map(Number);
       const p = NUKE_PRESETS[gi].items[ii];
-      Object.assign(nk, { name: p.name, yieldKt: p.yieldKt, fission: p.fission, burst: p.burst, heightM: p.heightM });
+      Object.assign(nk, { name: p.name, yieldKt: p.yieldKt, fission: p.fission, burst: p.burst, heightM: p.heightM, chemical: !!p.chemical });
+      (chemTg.querySelector('input') as HTMLInputElement).checked = !!p.chemical;
       fisR.value = String(p.fission * 100);
       hIn.value = String(p.heightM);
       burst.set(p.burst);
@@ -252,6 +280,7 @@ export class Sidebar {
         field('Fracción de fisión (lluvia radiactiva)', fisVal, fisR),
         field('Tipo de detonación', null, burst.el),
         hField,
+        h('div', { class: 'toggles one' }, chemTg),
       )),
     );
     updNuke();
@@ -333,6 +362,7 @@ export class Sidebar {
     const humVal = h('b'), humR = linSlider(0, 100, E.humidity, 1);
     const visVal = h('b'), visR = linSlider(2, 80, E.visibilityKm, 1);
     const hrVal = h('b'), hrR = linSlider(0, 24, E.hour, 0.25);
+    const outVal = h('b'), outR = linSlider(0, 100, E.outdoorPct ?? 25, 1);
     const updEnv = (silent = false) => {
       E.windKmh = +wR.value; setRangeFill(wR); wVal.textContent = `${E.windKmh} km/h`;
       wdVal.textContent = `desde ${dirName(E.windFromDeg)} (${E.windFromDeg}°)`;
@@ -341,14 +371,45 @@ export class Sidebar {
       E.hour = +hrR.value; setRangeFill(hrR);
       const hh = Math.floor(E.hour) % 24, mm = Math.round((E.hour % 1) * 60);
       hrVal.textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      setRangeFill(outR);
+      const autoOut = E.hour >= 7 && E.hour <= 20 ? 25 : 8;
+      if (E.outdoorPct == null) outR.value = String(autoOut), setRangeFill(outR);
+      outVal.textContent = E.outdoorPct == null ? `auto · ${autoOut} %` : `${E.outdoorPct} %`;
       if (!silent) this.ev.onEnv();
     };
-    for (const r of [wR, humR, visR, hrR]) r.addEventListener('input', () => updEnv());
+    for (const r of [wR, humR, visR, hrR]) r.addEventListener('input', () => { updEnv(); wxNote.textContent = 'Valores manuales.'; });
+    outR.addEventListener('input', () => { E.outdoorPct = +outR.value; updEnv(); });
+    outVal.title = 'Doble clic: automático según la hora';
+    outVal.addEventListener('dblclick', () => { E.outdoorPct = null; updEnv(); });
+
+    // tiempo real (Open-Meteo, sin clave)
+    const wxNote = h('div', { class: 'hint' }, 'Valores manuales.');
+    const wxBtn = h('button', { class: 'btn-line', type: 'button', html: `${ICONS.weather}<span>Tiempo real en el objetivo</span>` }) as HTMLButtonElement;
+    const applyWx = (w: Weather) => {
+      wR.value = String(Math.min(150, Math.round(w.windKmh)));
+      E.windFromDeg = Math.round(w.windFromDeg) % 360; wComp.set(E.windFromDeg);
+      humR.value = String(Math.round(w.humidity));
+      visR.value = String(Math.max(2, Math.min(80, Math.round(w.visibilityKm))));
+      hrR.value = String(Math.round(w.hour * 4) / 4);
+      updEnv();
+      wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} % · viento en superficie ${Math.round(w.surfaceWindKmh)} km/h; se usa el viento medio 850–250 hPa (la altura de la nube) para la lluvia radiactiva.`;
+    };
+    this.loadWeather = async (quiet = false) => {
+      wxBtn.disabled = true; wxBtn.classList.add('busy');
+      try { applyWx(await fetchWeather(S.target.lat, S.target.lon)); }
+      catch { if (!quiet) toast('No se pudo obtener el tiempo real (Open-Meteo)'); wxNote.textContent = 'Tiempo real no disponible: valores manuales.'; }
+      finally { wxBtn.disabled = false; wxBtn.classList.remove('busy'); }
+    };
+    wxBtn.addEventListener('click', () => this.loadWeather());
+    const liveTg = toggle('Actualizar al cambiar de objetivo', S.live, (v) => { S.live = v; if (v) this.loadWeather(); });
+
     const envSec = section('Entorno', h('div', {},
+      wxBtn, h('div', { class: 'toggles one' }, liveTg), wxNote,
       h('div', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Viento'), wdVal), h('div', { class: 'compass-wrap' }, wComp.el, h('div', { class: 'grow' }, field('Velocidad', wVal, wR)))),
       field('Humedad relativa', humVal, humR),
       field('Visibilidad atmosférica', visVal, visR),
       field('Hora local', hrVal, hrR),
+      field('Población al aire libre', outVal, outR),
     ));
     updEnv(true);
 
@@ -362,6 +423,7 @@ export class Sidebar {
         toggle('Cúpulas 3D', V.domes, (v) => { V.domes = v; this.ev.onView(); }),
         toggle('Anillos', V.rings, (v) => { V.rings = v; this.ev.onView(); }),
         toggle('Lluvia radiactiva', V.fallout, (v) => { V.fallout = v; this.ev.onView(); }),
+        toggle('Marcas en el terreno', V.marks, (v) => { V.marks = v; this.ev.onView(); }),
         toggle('Daño a edificios', V.damage, (v) => { V.damage = v; this.ev.onView(); }),
         toggle('Incendios', V.fires, (v) => { V.fires = v; this.ev.onView(); }),
         toggle('Etiquetas', V.labels, (v) => { V.labels = v; this.ev.onView(); }),

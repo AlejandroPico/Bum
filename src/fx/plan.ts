@@ -99,6 +99,12 @@ export class FxPlan {
     return R > this.h ? Math.sqrt(R * R - this.h * this.h) : 0;
   }
 
+  /** fin de la fase luminosa de la bola de fuego (brillo < 0,25): hasta entonces no se dibujan cúpulas ni anillos */
+  get fbDone(): number {
+    const tm = this.tMax;
+    return tm + Math.log(1.05 / 0.25) * (tm * 6 + 1.5);
+  }
+
   /** brillo/temperatura de la bola de fuego 0..1.2 */
   heat(t: number): number {
     if (t <= 0) return 0;

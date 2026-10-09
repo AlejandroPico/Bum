@@ -26,8 +26,8 @@ export interface FalloutParams {
   windKmh: number;
 }
 
-export function computeFallout(p: FalloutParams): FalloutContour[] {
-  if (p.contact <= 0.01 || p.fissionKt <= 0) return [];
+/** Modelo de la lluvia radiactiva: tasa de dosis a H+1 (R/h) en coordenadas a lo largo del viento (km). */
+export function falloutModel(p: FalloutParams) {
   const total = 7770 * p.fissionKt * 0.6 * p.contact; // R/h·km²
   const u = Math.max(p.windKmh, 4); // km/h
   const capR = p.capRadiusM / 1000; // km
@@ -35,9 +35,39 @@ export function computeFallout(p: FalloutParams): FalloutContour[] {
   const T50 = 1.2 + 2.2 * Math.min(Htop / 20, 2.2); // h, mediana del tiempo de caída
   const xm = u * T50; // km
   const sLn = 0.95;
-
   const fCore = 0.3;
   const sigCore = Math.max(0.3, capR * 0.35);
+  const sigY = (x: number) => capR * 0.45 + 0.07 * Math.max(x, 0) + 0.5;
+  /** x: km a sotavento, y: km perpendicular */
+  const rate = (x: number, y: number) => {
+    if (total <= 0) return 0;
+    let v = (fCore * total) / (2 * Math.PI * sigCore * sigCore) * Math.exp(-(x * x + y * y) / (2 * sigCore * sigCore));
+    const xe = x + capR * 0.6; // el borde a barlovento del sombrero también deposita
+    if (xe > 0.05) {
+      const lx = Math.log(xe / xm);
+      const gx = Math.exp(-(lx * lx) / (2 * sLn * sLn)) / (xe * sLn * Math.sqrt(2 * Math.PI));
+      const sy = sigY(xe);
+      const gy = Math.exp(-(y * y) / (2 * sy * sy)) / (sy * Math.sqrt(2 * Math.PI));
+      v += (1 - fCore) * total * gx * gy;
+    }
+    return v;
+  };
+  const downwind = ((p.windFromDeg + 180) * Math.PI) / 180;
+  const ex = Math.sin(downwind), nyv = Math.cos(downwind);
+  /** tasa en un punto (m al este, m al norte) */
+  const rateAtLocal = (eM: number, nM: number) => {
+    const e = eM / 1000, n = nM / 1000;
+    const x = e * ex + n * nyv;
+    const y = -e * nyv + n * ex;
+    return rate(x, y);
+  };
+  return { rate, rateAtLocal, total, u, capR, xm };
+}
+
+export function computeFallout(p: FalloutParams): FalloutContour[] {
+  if (p.contact <= 0.01 || p.fissionKt <= 0) return [];
+  const M = falloutModel(p);
+  const { capR, xm } = M;
 
   // dominio
   const xMax = xm * 9 + capR * 2;
@@ -48,27 +78,9 @@ export function computeFallout(p: FalloutParams): FalloutContour[] {
   const dy = (2 * yMax) / (ny - 1);
   const grid = new Float64Array(nx * ny);
 
-  const sigY = (x: number) => capR * 0.45 + 0.07 * Math.max(x, 0) + 0.5;
-  // normalización del penacho (integral de la log-normal en x = 1)
   for (let j = 0; j < ny; j++) {
     const y = -yMax + j * dy;
-    for (let i = 0; i < nx; i++) {
-      const x = xMin + i * dx;
-      let v = 0;
-      // núcleo
-      const r2 = x * x + y * y;
-      v += (fCore * total) / (2 * Math.PI * sigCore * sigCore) * Math.exp(-r2 / (2 * sigCore * sigCore));
-      // penacho: densidad lineal log-normal en x · gaussiana en y
-      const xe = x + capR * 0.6; // el borde a barlovento del sombrero también deposita
-      if (xe > 0.05) {
-        const lx = Math.log(xe / xm);
-        const gx = Math.exp(-(lx * lx) / (2 * sLn * sLn)) / (xe * sLn * Math.sqrt(2 * Math.PI));
-        const sy = sigY(xe);
-        const gy = Math.exp(-(y * y) / (2 * sy * sy)) / (sy * Math.sqrt(2 * Math.PI));
-        v += (1 - fCore) * total * gx * gy;
-      }
-      grid[j * nx + i] = v;
-    }
+    for (let i = 0; i < nx; i++) grid[j * nx + i] = M.rate(xMin + i * dx, y);
   }
 
   const downwind = ((p.windFromDeg + 180) * Math.PI) / 180; // rumbo hacia el que va
