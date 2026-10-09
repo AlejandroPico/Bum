@@ -35,7 +35,7 @@ uniform vec2 uCollar; uniform vec3 uSkirt; // radio, altura, densidad
 uniform float uHeat; uniform float uDens; uniform float uSigma; uniform float uDirty;
 uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uAmb; uniform vec3 uFogCol; uniform float uFogDist;
 uniform vec3 uBoxMin; uniform vec3 uBoxMax;
-uniform float uGlow;
+uniform float uGlow; uniform float uErode;
 varying vec3 vW;
 ${HEAT}
 
@@ -105,7 +105,7 @@ vec3 density(vec3 p){
   if (d <= 0.0) return vec3(0.0);
   // erosión de detalle (bordes de coliflor)
   float det = texture(uNoise, np / (uRc * 0.42) + vec3(uTime * 0.006, uTime * 0.01, 0.0)).g;
-  float er = (1.0 - det) * 0.32;
+  float er = (1.0 - det) * (0.32 + 0.5 * uErode);
   d = clamp((d - er) / (1.0 - er), 0.0, 1.0);
   float dust = max(ds > dc ? (1.0 - hy * 0.85) * uDirty : 0.0, dsk > dc ? 0.9 : 0.0);
   float core = smoothstep(0.35, -0.6, dTor / (uRc * 0.4)) * step(ds, dc);
@@ -206,7 +206,7 @@ export class VolumeCloud implements FxModule {
         uSun: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() },
         uFogCol: { value: new THREE.Color() }, uFogDist: { value: 300000 },
         uBoxMin: { value: new THREE.Vector3() }, uBoxMax: { value: new THREE.Vector3() },
-        uGlow: { value: 0 },
+        uGlow: { value: 0 }, uErode: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
@@ -230,11 +230,13 @@ export class VolumeCloud implements FxModule {
     const appear = smooth(P.tMax * 1.2, P.tMax * 8 + 1.5, t);
     if (t <= 0 || P.highAltitude || appear <= 0 || P.cloudFade(t) <= 0) { this.mesh.visible = false; return; }
     this.mesh.visible = true;
+    this.mat.depthTest = !ctx.farView;
     const u = this.mat.uniforms;
 
     const zc = P.capZ(t);
     const Rc = P.capRadius(t);
-    const Tc = Rc * 0.55;
+    const diss = P.dissipation(t);
+    const Tc = Rc * 0.55 * (1 - 0.35 * diss);
     const [dx, dn] = P.drift(t, 1);
     const [bx, bn] = P.drift(t, 0.05);
     const capC = new THREE.Vector3(dx, zc, -dn);
@@ -260,7 +262,7 @@ export class VolumeCloud implements FxModule {
     const collar = smooth(P.tau * 0.35, P.tau * 0.9, t) * (1 - smooth(P.tau * 2.2, P.tau * 3.6, t)) * hum * 0.8;
     const skirtR = stemR * (P.contact > 0 ? 3.2 : 2.4) * (0.6 + 0.4 * kStem);
     const skirtH = stemR * 1.1;
-    const skirtD = (P.contact > 0 ? 0.75 : 0.5) * smooth(0, 20, dustTop) * (1 - smooth(1800, 5400, t));
+    const skirtD = (P.contact > 0 ? 0.75 : 0.5) * smooth(0, 20, dustTop) * P.stemFade(t);
 
     // caja envolvente
     const R = Math.max(Rc * 1.15, skirtR * 1.05);
@@ -289,13 +291,14 @@ export class VolumeCloud implements FxModule {
     u.uStemBase.value.copy(base);
     u.uWakeBot.value = wakeBot;
     u.uDustTop.value = dustTop;
-    u.uStemVis.value = stemVis;
+    u.uStemVis.value = stemVis * P.stemFade(t);
+    u.uErode.value = diss;
     u.uCollar.value.set(collar, zc - Tc * 1.25);
     u.uSkirt.value.set(skirtR, skirtH, skirtD);
     const heat = P.heat(t);
     u.uHeat.value = Math.pow(Math.max(0, 1 - t / (P.tMax * 20 + 45)), 1.5) * 0.9 + heat * 0.4;
     u.uGlow.value = Math.min(2, heat * heat * 1.5);
-    u.uDens.value = appear * P.cloudFade(t);
+    u.uDens.value = appear * P.cloudFade(t) * (1 - 0.3 * diss);
     u.uSigma.value = 11 / Rc;
     u.uDirty.value = P.contact > 0 ? 1 : 0.7;
     u.uSun.value.copy(ctx.sunDir);

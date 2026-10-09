@@ -34,6 +34,9 @@ export class FxPlan {
   entryDuration = 0;
   highAltitude: boolean;
   falloutExtKm = 0;
+  /** inicio y fin de la disipación de la nube (s) */
+  fade0 = 0;
+  fade1 = 1;
   tEnd: number;
 
   constructor(fx: Effects, env: Environment) {
@@ -59,7 +62,7 @@ export class FxPlan {
     this.burnR = g('burn3');
     this.psi5R = g('psi5');
     this.psi1R = g('psi1');
-    this.dustR = Math.max(this.psi5R * 0.9, this.fireballR * 2);
+    this.dustR = Math.max(Math.min(this.psi5R * 0.9, fx.cloud.topM * 1.5), this.fireballR * 2);
     this.craterR = g('crater');
     if (fx.scenario.kind === 'asteroid') {
       this.entryAngle = fx.scenario.angleDeg;
@@ -72,7 +75,11 @@ export class FxPlan {
     const ext = fx.fallout.length ? Math.max(...fx.fallout.map((f) => f.maxDownwindKm)) : 0;
     this.falloutExtKm = ext;
     const falloutEnd = fx.fallout.length ? Math.min(48 * 3600, Math.max(6 * 3600, (ext / Math.max(env.windKmh, 4) + 1) * 3600)) : 0;
-    this.tEnd = Math.max(20 * 60, shockEnd * 1.2, falloutEnd);
+    // la nube se disipa por completo antes de terminar la línea de tiempo
+    const y = Math.max(fx.energyKt, 0.001);
+    this.fade0 = this.tau * 6;
+    this.fade1 = this.fade0 + 2400 * Math.pow(y / 1000, 0.18) + 1800;
+    this.tEnd = Math.max(20 * 60, shockEnd * 1.2, falloutEnd, this.fade1 * 1.05);
   }
 
   /** radio del frente de choque (m, desde el punto de explosión) */
@@ -114,7 +121,9 @@ export class FxPlan {
   }
   capRadius(t: number): number {
     const k = 1 - Math.exp(-Math.max(0, t) / (this.tau * 1.4));
-    return Math.max(this.fireballR * 1.1, this.capR * (0.12 + 0.88 * k));
+    // tras estabilizarse, el sombrero se sigue extendiendo lateralmente mientras se diluye
+    const spread = 1 + 0.9 * this.dissipation(t);
+    return Math.max(this.fireballR * 1.1, this.capR * (0.12 + 0.88 * k) * spread);
   }
   /** desplazamiento por el viento de la nube a altura z */
   drift(t: number, zFrac: number): [number, number] {
@@ -126,7 +135,18 @@ export class FxPlan {
   }
   /** opacidad global de la nube (se disipa con las horas) */
   cloudFade(t: number): number {
-    return Math.max(0, Math.min(1, 1 - (t - 2400) / 7200));
+    const k = Math.max(0, Math.min(1, (t - this.fade0) / (this.fade1 - this.fade0)));
+    return 1 - k * k * (3 - 2 * k);
+  }
+  /** 0..1: lo avanzada que está la disipación (más erosión, más dispersión) */
+  dissipation(t: number): number {
+    return Math.max(0, Math.min(1, (t - this.tau * 3) / (this.fade1 - this.tau * 3)));
+  }
+  /** el tronco se deshace antes que el sombrero */
+  stemFade(t: number): number {
+    const a = this.tau * 4, b = this.tau * 4 + (this.fade0 + this.fade1) * 0.3;
+    const k = Math.max(0, Math.min(1, (t - a) / (b - a)));
+    return 1 - k * k * (3 - 2 * k);
   }
   /** distancia (m) que ha recorrido el frente de lluvia radiactiva */
   falloutFront(t: number): number {

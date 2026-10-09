@@ -69,6 +69,7 @@ export class Domes implements FxModule {
       else if (it.revealReal < 0) it.revealReal = ctx.t - it.revealT < it.revealT * 0.5 + 2 ? ctx.real : ctx.real - 100;
       const pulse = show && it.revealReal >= 0 ? Math.exp(-(ctx.real - it.revealReal) / 1.4) * (it.ring.group === 'blast' ? 0.5 : 0.25) : 0;
       it.mesh.visible = a > 0.002 || pulse > 0.01;
+      it.mat.depthTest = !ctx.farView;
       const u = it.mat.uniforms;
       u.uPulse.value = pulse;
       u.uAlpha.value = a;

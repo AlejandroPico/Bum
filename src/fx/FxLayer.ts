@@ -24,11 +24,13 @@ export class FxLayer implements CustomLayerInterface {
     t: 0, real: 0,
     camPos: new THREE.Vector3(), right: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 1, 0), mvp: this.mvp,
     sunDir: new THREE.Vector3(0.3, 0.8, 0.2).normalize(), sunColor: new THREE.Color(1, 0.96, 0.9), ambient: new THREE.Color(0.35, 0.38, 0.45),
-    fogColor: new THREE.Color(0.75, 0.8, 0.86), night: 0, mpp: 10,
+    fogColor: new THREE.Color(0.75, 0.8, 0.86), night: 0, mpp: 10, farView: false, glare: 1,
   };
   /** llamado en cada fotograma antes de dibujar (avanza el reloj) */
   onFrame: ((ctx: FrameCtx) => void) | null = null;
   animating = false;
+  /** tamaño (m) de los efectos en escena, para ampliar el plano lejano si hace falta */
+  extentM = 0;
 
   onAdd(map: MLMap, gl: WebGLRenderingContext | WebGL2RenderingContext) {
     this.map = map;
@@ -36,6 +38,30 @@ export class FxLayer implements CustomLayerInterface {
     this.renderer.autoClear = false;
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.camera.matrixAutoUpdate = false;
+    this.patchFarPlane();
+  }
+
+  /**
+   * MapLibre calcula el plano lejano para que llegue justo al suelo del borde superior de la
+   * vista; una nube de decenas de km (o un impacto continental) puede quedar más allá y verse
+   * cortada. Ampliamos el plano lejano lo justo para abarcar los efectos.
+   */
+  private patchFarPlane() {
+    const tr = (this.map as any).transform;
+    const orig = tr?._calculateNearFarZIfNeeded;
+    if (typeof orig !== 'function') return;
+    const self = this;
+    tr._calculateNearFarZIfNeeded = function (this: any, camToSea: number, pitchRad: number, offset: unknown) {
+      orig.call(this, camToSea, pitchRad, offset);
+      const helper = this._helper;
+      if (!self.modules.length || !self.extentM || !helper?.autoCalculateNearFarZ) return;
+      const ppm = helper._pixelPerMeter;
+      const c = this.center;
+      const cos = Math.cos((self.origin.lat * Math.PI) / 180);
+      const dE = (c.lng - self.origin.lng) * 111320 * cos, dN = (c.lat - self.origin.lat) * 110540;
+      const need = (camToSea + (Math.hypot(dE, dN) + self.extentM) * ppm) * 1.05;
+      if (need > helper._farZ) helper._farZ = need;
+    };
   }
 
   setOrigin(lng: number, lat: number, alt: number) {
@@ -92,6 +118,7 @@ export class FxLayer implements CustomLayerInterface {
       this.unproject(0, 0, -1, c.camPos);
     }
     c.mvp = this.mvp;
+    c.farView = c.camPos.length() > 45000 || this.map.getZoom() < 10.5;
 
     this.onFrame?.(c);
     for (const m of this.modules) m.update(c);

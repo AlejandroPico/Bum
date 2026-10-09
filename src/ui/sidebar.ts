@@ -135,7 +135,7 @@ export class Sidebar {
     const S = this.state;
     const head = h('div', { class: 'sb-head' },
       h('div', { class: 'logo' }),
-      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Simulador 3D de ataques nucleares · v0.2')),
+      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Simulador 3D de ataques nucleares · v0.3')),
       h('button', { class: 'icon-btn', title: 'Ocultar panel (H)', html: ICONS.hide, onclick: () => this.ev.onCollapse() }),
     );
 

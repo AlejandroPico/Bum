@@ -24,6 +24,7 @@ varying vec3 vP; varying vec3 vN; varying vec3 vW; varying float vD;
 ${NOISE}
 ${HEAT}
 void main(){
+  if (vW.y < -2.0) discard; // la parte bajo el suelo no se dibuja
   vec3 V = normalize(uCam - vW);
   vec3 N = normalize(vW - uCenter);
   float mu = clamp(dot(N, V), 0.0, 1.0);
@@ -131,6 +132,7 @@ export class Fireball implements FxModule {
     this.glow.visible = visible;
     this.ground.visible = visible && !P.highAltitude;
     if (!visible) return;
+    this.sMat.depthTest = this.gMat.depthTest = !ctx.farView;
     // la bola de fuego asciende y se convierte en el sombrero del hongo
     const zc = P.highAltitude ? P.h : Math.max(P.capZ(t), P.h + (P.contact > 0 ? R * (1 - P.contact) * 0.3 : 0));
     const cy = P.contact > 0 && t < P.tMax * 3 ? Math.max(P.h, R * 0.2) : zc;
@@ -143,7 +145,10 @@ export class Fireball implements FxModule {
     u.uTime.value = ctx.real * 0.6 + t * 0.05;
     u.uHeat.value = heat;
     u.uRough.value = 0.05 + 0.12 * Math.min(1, t / (P.tMax * 6));
-    u.uAlpha.value = Math.min(1, heat / 0.12);
+    // se funde con la nube volumétrica, que hereda su brillo
+    const swallow = Math.max(0, Math.min(1, (t - P.tMax * 3) / (P.tMax * 7 + 2)));
+    u.uAlpha.value = Math.min(1, heat / 0.12) * (1 - swallow * swallow * (3 - 2 * swallow));
+    this.sMat.depthWrite = u.uAlpha.value > 0.98;
     u.uCam.value.copy(ctx.camPos);
     u.uCenter.value.set(0, cy, 0);
 
@@ -151,16 +156,17 @@ export class Fireball implements FxModule {
     g.uRight.value.copy(ctx.right);
     g.uUp.value.copy(ctx.up);
     g.uCenter.value.set(0, cy, 0);
-    g.uSize.value = R * (3.2 + 4 * Math.max(0, heat - 1));
+    // el halo no debe cubrir media pantalla en explosiones gigantes
+    g.uSize.value = R * (P.isImpact || P.fireballR > 20000 ? 1.8 : 3.2 + 4 * Math.max(0, heat - 1));
     g.uHeat.value = heat;
-    g.uIntensity.value = Math.min(1.6, heat * heat) * (0.7 + ctx.night * 0.5);
+    g.uIntensity.value = Math.min(1.6, heat * heat) * (0.7 + ctx.night * 0.5) * (0.35 + 0.65 * ctx.glare);
 
     this.ground.position.set(0, 2, 0);
     this.ground.updateMatrixWorld();
     const gr = this.grMat.uniforms;
-    gr.uR.value = P.fireballR * 24;
+    gr.uR.value = Math.min(P.fireballR * 24, Math.max(P.psi5R * 1.5, P.fireballR * 5));
     gr.uHeat.value = heat;
-    gr.uIntensity.value = Math.min(1.4, heat * heat) * (0.25 + ctx.night * 0.75);
+    gr.uIntensity.value = Math.min(1.4, heat * heat) * (0.25 + ctx.night * 0.75) * (0.3 + 0.7 * ctx.glare);
   }
 
   dispose() {

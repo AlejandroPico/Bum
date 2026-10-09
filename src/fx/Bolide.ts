@@ -32,6 +32,7 @@ export class Bolide implements FxModule {
     const t = ctx.t;
     const T = P.entryDuration;
     const g = this.glow.buf, s = this.smoke.buf;
+    this.glow.material.depthTest = this.smoke.material.depthTest = !ctx.farView;
     const gu = this.glow.material.uniforms;
     gu.uSunColor.value.setRGB(0, 0, 0); gu.uAmbient.value.setRGB(0, 0, 0);
     const su = this.smoke.material.uniforms;
@@ -45,7 +46,7 @@ export class Bolide implements FxModule {
     if (t < 0 && t > -T) {
       const a = alt(headDist);
       const dens = Math.exp(-a / 9000);
-      const head = Math.max(this.diameter * 25, 450) * (1 + 3 * dens);
+      const head = Math.min(Math.max(this.diameter * 25, 450), Math.max(this.diameter * 6, 2500)) * (1 + 2 * dens);
       const trail = Math.min(L0 - headDist, 25000 + head * 40);
       for (let i = 0; i < this.NG; i++) {
         const f = i / this.NG;

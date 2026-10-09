@@ -108,7 +108,11 @@ export function computeEffects(sc: Scenario, env: Environment, lat: number, lon:
 
   const E_J = Y * KT_J;
   const contact = h < fireballR ? 1 - h / fireballR : 0;
-  const tMax = 0.032 * Math.sqrt(Y);
+  // tiempo hasta el máximo térmico: Glasstone para armas (limitado en megaexplosiones);
+  // en impactos, la pluma de vapor se expande a ~6 km/s
+  const tMax = isImpact
+    ? Math.min(25, Math.max(0.05, fireballR / 6000))
+    : Math.min(sc.kind === 'asteroid' ? 4 : 10, 0.032 * Math.sqrt(Y));
 
   // ---------- nube en forma de hongo ----------
   const top = Y < 1000 ? 7540 * Math.pow(Y, 0.155) : 22000 * Math.pow(Y / 1000, 0.22);
@@ -116,9 +120,9 @@ export function computeEffects(sc: Scenario, env: Environment, lat: number, lon:
   const cloud = {
     topM: cloudTop,
     capBottomM: cloudTop * 0.5,
-    capRadiusM: 1800 * Math.pow(Y, 0.25),
-    stemRadiusM: 1800 * Math.pow(Y, 0.25) * 0.24,
-    riseTimeS: 60 + 25 * Math.log10(Math.max(Y, 1)),
+    capRadiusM: Math.min(1800 * Math.pow(Y, 0.25), cloudTop * 5),
+    stemRadiusM: Math.min(1800 * Math.pow(Y, 0.25), cloudTop * 5) * 0.24,
+    riseTimeS: Math.min(480, 60 + 25 * Math.log10(Math.max(Y, 1))),
   };
 
   // ---------- funciones físicas ----------

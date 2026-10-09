@@ -16,6 +16,13 @@ export interface FrameCtx {
   night: number;
   /** metros por píxel aproximados en el centro de la vista */
   mpp: number;
+  /**
+   * cámara lejana: el relieve se dibuja con poco detalle y su profundidad no es fiable,
+   * así que los efectos grandes se dibujan sin prueba de profundidad contra el mapa
+   */
+  farView: boolean;
+  /** 0..1: intensidad del deslumbramiento (decae en tiempo real tras el destello) */
+  glare: number;
 }
 
 export interface FxModule {

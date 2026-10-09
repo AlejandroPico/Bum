@@ -92,6 +92,7 @@ Otros comandos:
 - [ ] Ataques múltiples (MIRV) y escenarios encadenados.
 - [ ] Explosiones subterráneas y submarinas.
 - [x] Hongo volumétrico con *ray-marching*.
+- [x] Disipación de la nube (el tronco se deshace, el sombrero se extiende, se erosiona y deriva con el viento).
 - [ ] Post-procesado (bloom, distorsión por calor).
 - [ ] Refugios y tiempo de permanencia recomendado frente a la lluvia radiactiva.
 - [ ] Versión en inglés.

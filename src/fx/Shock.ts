@@ -105,6 +105,7 @@ export class Shock implements FxModule {
     this.dust.visible = false;
     this.wilson.visible = false;
     if (!on) return;
+    this.shellMat.depthTest = this.wMat.depthTest = this.dMat.depthTest = !ctx.farView;
     const psi = P.fx.pressurePsiAt(Math.sqrt(Math.max(0, R * R - P.h * P.h)));
     const strength = Math.min(1, 0.15 + psi / 8) * Math.max(0, 1 - R / (P.psi1R * 2.2 + 1));
     this.shell.position.set(0, P.h, 0);

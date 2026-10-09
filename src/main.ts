@@ -58,6 +58,8 @@ interface Run {
   skyFlash: boolean;
   rate: number;
   orbit: { bearing: number; final: boolean } | null;
+  flashReal: number;
+  wideDone: boolean;
 }
 let run: Run | null = null;
 let atmosphere = { night: 0, sunAlt: 1, sunAz: 180 };
@@ -88,7 +90,7 @@ const results = new ResultsPanel(document.getElementById('results')!, {
 const timeline = new Timeline(document.getElementById('timeline')!, {
   onPlayPause: () => { if (run) { run.playing = !run.playing; run.lastReal = performance.now(); fxLayer.animating = true; map.triggerRepaint(); } },
   onRestart: () => { if (run) { restartClock(); } },
-  onSeek: (t) => { if (run) { run.t = t; run.boomDone = t > run.obsArrival; run.flashDone = t > 0.5; map.triggerRepaint(); } },
+  onSeek: (t) => { if (run) { run.t = t; run.boomDone = t > run.obsArrival; run.flashDone = t > 0.5; run.flashReal = t > 0.5 ? performance.now() - 1e5 : -1; map.triggerRepaint(); } },
   onSpeed: (s) => { if (run) run.speed = s; },
   onCloud: () => { if (run) { run.userCam = false; run.beats = Math.max(run.beats, 2); cloudShot(3500, run.t > run.plan.tau * 0.8, true); } },
 });
@@ -215,7 +217,10 @@ function cloudCamera(bearingDeg: number, final = true) {
   const Hm = H * 0.47;
   const A = Hm + D * Math.tan(down); // altura de la cámara sobre el suelo
   const ahead = A / Math.tan(down) - D; // de la zona cero al punto central del mapa
-  const center = destination(run.lat, run.lon, ahead, bearingDeg);
+  // sigue a la nube cuando el viento la arrastra
+  const [dx, dn] = P.drift(t, 1);
+  const [tlon, tlat] = localToLngLat(run.lat, run.lon, dx * 0.85, dn * 0.85);
+  const center = destination(tlat, tlon, ahead, bearingDeg);
   const dist = A / Math.sin(down);
   const ctcPx = (0.5 * hgt) / Math.tan(fovV / 2);
   const mpp = dist / ctcPx;
@@ -279,7 +284,8 @@ async function detonate() {
     let bearing = map.getBearing();
     if (plan.isAsteroid) {
       // vista lateral de la trayectoria para ver llegar el bólido
-      r0 = Math.max(r0, 45000, plan.h * 4);
+      const path = plan.entrySpeed * plan.entryDuration;
+      r0 = Math.max(path * 0.6, plan.fireballR * 2.5, plan.h * 4, 30000);
       bearing = state.ast.azimuth + 90;
     }
     const z0 = zoomForRadius(r0, lat);
@@ -289,6 +295,8 @@ async function detonate() {
     }
     const elev = map.queryTerrainElevation([lon, lat]) ?? 0;
     fxLayer.setOrigin(lon, lat, elev);
+    fxLayer.extentM = Math.max(...fx.rings.filter((r) => r.dome).map((r) => r.radiusM), fx.cloud.capRadiusM * 2.5, fx.cloud.topM * 1.5, 1000);
+    (map as any).transform?._calcMatrices?.();
     const elevAt = (e: number, n: number) => {
       const [x, y] = localToLngLat(lat, lon, e, n);
       const v = map.queryTerrainElevation([x, y]);
@@ -324,7 +332,7 @@ async function detonate() {
     run = {
       fx, plan, lat, lon, t: plan.isAsteroid ? -plan.entryDuration : 0, playing: true, speed: 1, lastReal: performance.now(),
       boomDone: false, flashDone: false, obsArrival: plan.shockTime(Math.hypot(dObs, plan.h)), obsPsi: fx.pressurePsiAt(dObs),
-      domes, beats: 0, userCam: !state.view.cinematic, lastOverlay: 0, skyFlash: false, rate: 1, orbit: null,
+      domes, beats: 0, userCam: !state.view.cinematic, lastOverlay: 0, skyFlash: false, rate: 1, orbit: null, flashReal: -1, wideDone: false,
     };
     const ev: { t: number; label: string }[] = [{ t: plan.tMax, label: 'Destello' }];
     if (plan.psi5R) ev.push({ t: plan.shockTime(Math.hypot(plan.psi5R, plan.h)), label: 'Onda 5 psi' });
@@ -352,6 +360,8 @@ function restartClock() {
   run.playing = true;
   run.boomDone = false;
   run.flashDone = false;
+  run.flashReal = -1;
+  run.wideDone = false;
   run.beats = 0;
   run.lastReal = performance.now();
   overlays.setReveal(0, 0);
@@ -408,7 +418,8 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
   const heat = P.heat(t);
   if (heat > 0.02) {
     const k = Math.min(1.5, heat * heat);
-    ctx.ambient.r += 0.9 * k; ctx.ambient.g += 0.5 * k; ctx.ambient.b += 0.2 * k;
+    const kg = k * (0.4 + 0.6 * ctx.glare);
+    ctx.ambient.r += 0.9 * kg; ctx.ambient.g += 0.5 * kg; ctx.ambient.b += 0.2 * kg;
   }
 
   // destello en pantalla
@@ -419,8 +430,14 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
     const camLL = (map as any).transform.getCameraLngLat();
     const dCam = haversineKm(camLL.lat, camLL.lng, R.lat, R.lon) * 1000 + 1;
     const near = Math.min(1, Math.max(0.35, (P.fireballR * 25) / dCam));
-    const a = Math.min(1, Math.max(0, (heat - 0.55) / 0.55)) ** 1.6 * near;
-    setFlash(a * 0.95, Math.min(0.75, heat * 0.6));
+    if (R.flashReal < 0) R.flashReal = now;
+    // el deslumbramiento dura pocos segundos reales aunque la bola de fuego siga caliente
+    const since = now - R.flashReal;
+    const envFlash = Math.exp(-since / 1600);
+    const envGrade = 0.25 + 0.75 * Math.exp(-since / 5000);
+    const a = Math.min(1, Math.max(0, (heat - 0.55) / 0.55)) ** 1.6 * near * envFlash;
+    setFlash(a * 0.95, Math.min(0.6, heat * 0.5) * envGrade);
+    ctx.glare = envGrade;
     if (!R.flashDone && t > 0) { R.flashDone = true; audio.flash(Math.min(1, near)); }
   } else {
     setFlash(0, 0);
@@ -430,7 +447,7 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
   if (now - R.lastOverlay > 120) {
     R.lastOverlay = now;
     if (heat > 0.03 && t > 0) {
-      const k = Math.min(1, heat) * 0.85;
+      const k = Math.min(1, heat) * 0.85 * (R.flashReal < 0 ? 1 : 0.2 + 0.8 * Math.exp(-(now - R.flashReal) / 5000));
       const mix = (a: string, b: string, x: number) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), x).getHexString();
       map.setSky({ 'sky-color': mix(n > 0.5 ? '#03060f' : '#4f8fd6', '#ffe1b0', k), 'horizon-color': mix(n > 0.5 ? '#0b1428' : '#cfe2f3', '#ffb46b', k), 'fog-color': mix(n > 0.5 ? '#070b16' : '#c8d8e6', '#ff9a50', k * 0.9) });
       map.setLight({ anchor: 'map', position: [1.4, atmosphere.sunAz, 40], color: mix('#ffffff', '#ffb070', k), intensity: 0.35 + 0.55 * k });
@@ -460,9 +477,14 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
 
   // cámara cinemática
   if (!R.userCam && !map.isMoving()) {
-    if (R.beats === 0 && t > P.shockTime(Math.hypot(P.psi5R || P.fireballR * 3, P.h)) * 0.6) {
+    if (R.beats === 0 && t > 0 && t > Math.min(P.shockTime(Math.hypot(P.psi5R || P.fireballR * 3, P.h)) * 0.6, P.tau * 0.4)) {
       R.beats = 1;
-      frame(Math.max(P.psi1R * 1.25, P.capTop * 0.9, P.fireballR * 8), 6000, 64, -25);
+      frame(Math.max(Math.min(P.psi1R * 1.25, P.capTop * 4), P.capTop * 0.9, P.fireballR * 8), 6000, 64, -25);
+    } else if (R.beats >= 2 && !R.wideDone && P.psi1R > P.capTop * 4 && t > P.shockTime(Math.hypot(P.psi1R, P.h)) * 0.7) {
+      // efectos gigantes: plano general cuando la onda ya ha recorrido la región
+      R.wideDone = true;
+      R.orbit = null;
+      frame(P.psi1R * 1.15, 8000, 50, 0);
     } else if (R.beats === 1 && t > P.tau * 0.8 && !P.highAltitude) {
       R.beats = 2;
       cloudShot(7000, true, true);
