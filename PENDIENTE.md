@@ -7,7 +7,7 @@
 
 ## Ya acordado
 - [x] Punto 6 (v0.7): app instalable (PWA, sin conexión), alternativa a las imágenes de Esri (la caché del tiempo ya está hecha).
-- [ ] Punto 2: ataques múltiples, explosiones subterráneas y submarinas, lluvia radiactiva realista, refugio, efectos a largo plazo, incendios con viento, pulso electromagnético detallado, asteroides (tsunami real, hielo, desviación) y otros escenarios (accidentes, bomba sucia, supervolcán).
+- [x] Punto 2 (v0.8): ataques múltiples, explosiones subterráneas y submarinas, lluvia radiactiva realista, refugio, efectos a largo plazo, incendios con viento, pulso electromagnético detallado, asteroides (tsunami real, hielo, desviación) y otros escenarios (accidentes, bomba sucia, supervolcán).
 - [ ] Punto 3: población real (GHSL/WorldPop), infraestructuras de OpenStreetMap por anillo, asteroides de la NASA, mapa de pruebas nucleares.
 - [ ] Punto 4: post-procesado (bloom, calor, destello), derrumbe de edificios y humo, vista desde el suelo, calidad automática.
 - [ ] Enciclopedia: menú superior derecho con desplegables (cuando se defina), revisar datos de 2025–2026 y la cifra de riesgo de Bennu.
