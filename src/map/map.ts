@@ -131,7 +131,7 @@ export function createMap(container: HTMLElement, center: [number, number]): MLM
     zoom: 12.6,
     pitch: 62,
     bearing: -20,
-    maxPitch: 85,
+    maxPitch: 89,
     canvasContextAttributes: { antialias: true, preserveDrawingBuffer: false },
     attributionControl: { compact: true },
     fadeDuration: 150,

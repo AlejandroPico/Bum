@@ -13,7 +13,7 @@ const FP = 7; // factor "pancake"
 const G = 9.81;
 export const KT_J = 4.184e12;
 
-export const TARGET_DENSITY: Record<TargetType, number> = { sediment: 2500, rock: 2750, water: 1000 };
+export const TARGET_DENSITY: Record<TargetType, number> = { sediment: 2500, rock: 2750, water: 1000, ice: 917 };
 
 export interface EntryResult extends AsteroidInfo {
   /** diámetro del cuerpo (o nube de fragmentos) al llegar al suelo */

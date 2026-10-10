@@ -44,8 +44,11 @@ Otros comandos:
   y bombas convencionales (FOAB, MOAB, GBU-57…) — o potencia libre (1 kg a 1 Gt), fracción de fisión, explosivo
   químico (sin radiación ni lluvia radiactiva) y tipo de detonación (superficie, aérea óptima o altura
   personalizada — hasta explosiones espaciales con EMP).
+- **Detonaciones bajo tierra y bajo el agua**: profundidad libre con profundidad escalada (m/kt^⅓): contenida (cavidad, sin lluvia radiactiva), cráter de excavación tipo Sedan, columna de agua y oleada de base tipo Baker, olas en el agua (Le Méhauté/Glasstone) y magnitud sísmica.
+- **Ataque múltiple**: varios objetivos (cada clic en el mapa añade uno) con armas distintas; los contadores combinan todas las detonaciones sin contar dos veces a nadie.
+- **Otros escenarios** (pestaña *Otros*): accidentes nucleares (Chernóbil, Fukushima, Kyshtym, Windscale…) y bombas sucias (cesio, cobalto, americio) con pluma gaussiana, zonas de contaminación tipo Chernóbil, población a evacuar, dosis colectiva y cánceres estimados; y supervolcanes (Yellowstone, Toba, Campos Flégreos, Tambora, Krakatoa, Pinatubo, St. Helens) con columna eruptiva, flujos piroclásticos, caída de ceniza y enfriamiento global.
 - **Impacto cósmico**: 22 escenarios (de 2008 TC3 a Hale-Bopp) o diámetro, composición/densidad, velocidad,
-  ángulo, dirección de llegada y terreno (sedimento, roca o agua con profundidad).
+  ángulo, dirección de llegada y terreno (sedimento, roca, hielo o agua con profundidad). Pestaña *Defensa*: desvío con impactadores cinéticos tipo DART según el tiempo de aviso. En el mar, el tsunami se propaga sobre la batimetría real (isócronas de llegada y altura de la ola en cada costa).
 - **Mapa**: plano 2D (por defecto) o **globo 3D** (botón del globo, arriba a la derecha, o en Visualización).
 - **Mapas y capas** (botón de capas, arriba a la derecha): satélite con relieve, satélite, Sentinel-2 (alternativa a Esri), político claro y oscuro, callejero de OpenStreetMap y topográfico; relieve 3D, edificios, nombres, luz de día fija y **opacidad de los efectos** (anillos, cúpulas y marcas).
 - **App instalable**: se puede instalar como aplicación (PWA) y guarda en caché la app, las teselas del mapa y los datos del tiempo para funcionar sin conexión.
@@ -59,6 +62,13 @@ Otros comandos:
   *Población* (por zona, viviendas, sanidad), *Física* (bola de fuego, onda por distancia, sonido, térmica,
   sismicidad, cráter, objeto, tsunami), *Radiación* (radiación inicial, isótopos, lluvia radiactiva por distancia
   con dosis acumuladas, superficie contaminada, protección civil) y *Comparar* (energía, clima, economía).
+- **Lluvia radiactiva realista**: nube dividida en capas y clases de partículas que caen atravesando el perfil de viento real de cada altura (la pluma se curva si el viento gira) y lavado por la lluvia (puntos calientes). Calculadora de **refugio**: dosis a cualquier distancia según el tipo de refugio y el tiempo de permanencia.
+- **Efectos a largo plazo**: cánceres adicionales (modelo lineal sin umbral), incendios que se extienden con el viento y criterio de tormenta de fuego, y **EMP** detallado (pulsos E1/E2/E3, mapa de intensidad en explosiones a gran altura).
+- **Población real**: rejillas de WorldPop 2020 (100 m en el centro, 1 km alrededor) para calcular las víctimas; sin conexión se usa el modelo urbano aproximado (se puede desactivar en *Entorno*).
+- **Infraestructuras por zona** (pestaña *Población*): hospitales, centros de salud, bomberos, comisarías, colegios, universidades, centrales y subestaciones eléctricas, potabilizadoras, aeropuertos, estaciones y gasolineras dentro de cada zona de daño, contados en OpenStreetMap (API Overpass).
+- **Riesgos reales de la NASA**: los objetos de la lista Sentry (NASA/JPL) con su probabilidad de impacto, como escenarios de asteroide.
+- **Mapa de pruebas nucleares** (capas): los 24 polígonos de pruebas con su número de ensayos y 24 pruebas célebres que se pueden simular en su lugar real.
+- **Imagen cinematográfica**: post-procesado con resplandor, destello de lente, distorsión por calor y refracción de la onda de choque; polvo del derrumbe de los edificios; **vista desde el suelo** (botón del testigo en la línea de tiempo) y **calidad automática** que ajusta la resolución según los fotogramas por segundo.
 - **Marcas en el terreno**: suelo quemado, cráter, manto de eyecta, suelo activado por neutrones y zona
   contaminada (rayado) que permanecen tras la explosión.
 - **Línea de tiempo**: reproducir/pausar, rebobinar, velocidad ×0,25–×16. La escala es logarítmica: los
@@ -85,6 +95,11 @@ Botón del libro (bajo el del globo, o tecla `E`): más de 170 artículos (funda
 | Escala planetaria | Ningún efecto supera las antípodas (20 015 km); los círculos son geodésicos (cruzan el antimeridiano y los polos); entradas limitadas a rangos físicos |
 | Explosivos químicos | Equivalencia de la onda ≈ 2× la de una nuclear de igual energía (no se pierde energía en radiación); bola de fuego `1,16·W^0,32` m (W en kg); sin radiación ni lluvia radiactiva |
 | Isótopos | 1 kt de fisión ≈ 1,45·10²³ fisiones; rendimientos acumulados de I-131 (2,9 %), Cs-137 (6,2 %) y Sr-90 (5,8 %) |
+| Explosiones enterradas | Profundidad escalada d/Y^⅓; contención ≥ 120 m/kt^⅓; cráter calibrado con Sedan (104 kt a 194 m → 390 m); magnitud mb = 4,45 + 0,75·log₁₀Y; olas H = 28,6·(305/R)·(Y/23)^0,54 m; oleada de base 3,2·(Y/23)^0,3 km |
+| Lluvia radiactiva (v0.8) | 6 capas × 18 clases log-normales de tiempo de caída, integración por el perfil de viento (850–200 hPa), núcleo de partículas gruesas y lavado por la lluvia |
+| Liberaciones radiactivas | Pluma gaussiana de Briggs (clase D) con serpenteo por la duración, capa de mezcla de 1 km y depósito seco por isótopo; dosis externa del primer año y riesgo 5 %/Sv |
+| Volcanes | Columna según el VEI, espesor de ceniza exponencial (Pyle 1989) alargado por el viento, alcance de los flujos piroclásticos y enfriamiento según erupciones históricas |
+| Tsunami sobre batimetría | Teselas Terrarium, Dijkstra con c = √(g·h) sobre el océano, ley de Green (A ∝ h^-¼) en la costa |
 | Víctimas | Densidad urbana de Clark (exponencial) a partir de la población metropolitana de ~100 ciudades + probabilidades de muerte/heridas tipo OTA (1979) combinadas con quemaduras y radiación |
 
 ## Tecnología
@@ -108,19 +123,26 @@ Botón del libro (bajo el del globo, o tecla `E`): más de 170 artículos (funda
 - Búsqueda de lugares: Nominatim (OpenStreetMap).
 - Mapas alternativos: Sentinel-2 cloudless de EOX (CC BY-NC-SA), OpenStreetMap, Esri World Topo.
 - Tiempo real: [Open-Meteo](https://open-meteo.com) (CC BY 4.0).
+- Población: [WorldPop](https://www.worldpop.org) 2020 (CC BY 4.0), servida por su ImageServer público de ArcGIS.
+- Infraestructuras: API [Overpass](https://overpass-api.de) de OpenStreetMap (ODbL).
+- Asteroides de riesgo: [Sentry de NASA/JPL](https://cneos.jpl.nasa.gov/sentry/) (instantánea de octubre de 2026; la API no permite consultas desde el navegador).
 
 ## Hoja de ruta
 
 - [ ] Ciudades fotorrealistas con Google Photorealistic 3D Tiles (requiere clave de API) o Cesium.
-- [ ] Población real con rejilla GHSL/WorldPop en lugar del modelo de densidad.
-- [ ] Ataques múltiples (MIRV) y escenarios encadenados.
-- [ ] Explosiones subterráneas y submarinas.
+- [x] Población real con rejilla WorldPop en lugar del modelo de densidad.
+- [x] Ataques múltiples con víctimas combinadas.
+- [x] Explosiones subterráneas y submarinas.
+- [x] Accidentes nucleares, bombas sucias y supervolcanes.
+- [x] Tsunami sobre la batimetría real y defensa planetaria (DART).
 - [x] Hongo volumétrico con *ray-marching*.
 - [x] Disipación de la nube (el tronco se deshace, el sombrero se extiende, se erosiona y deriva con el viento).
-- [ ] Post-procesado (bloom, distorsión por calor).
+- [x] Post-procesado (bloom, destello, distorsión por calor).
 - [x] Estadísticas ampliadas (población, sanidad, isótopos, dosis acumuladas, clima, economía).
 - [x] Tiempo real (viento en altura) con Open-Meteo.
-- [ ] Refugios y tiempo de permanencia recomendado frente a la lluvia radiactiva.
+- [x] Refugios y tiempo de permanencia recomendado frente a la lluvia radiactiva.
+- [x] Infraestructuras reales por zona (OpenStreetMap), asteroides reales de NASA/JPL y mapa de pruebas nucleares.
+- [x] Polvo del derrumbe, vista a pie de calle y calidad automática.
 - [ ] Versión en inglés.
 
 ## Icono

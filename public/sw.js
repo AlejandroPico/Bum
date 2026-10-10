@@ -1,5 +1,5 @@
 /* Service worker de Bum: la app funciona sin conexión y guarda en caché teselas y datos. */
-const VERSION = 'bum-v0.7';
+const VERSION = 'bum-v0.9';
 const SHELL = `${VERSION}-shell`;
 const TILES = `${VERSION}-tiles`;
 const DATA = `${VERSION}-data`;
@@ -34,8 +34,8 @@ self.addEventListener('fetch', (e) => {
     }));
     return;
   }
-  // tiempo y búsqueda: primero la red, la caché si no hay conexión
-  if (url.hostname.includes('open-meteo.com') || url.hostname.includes('nominatim.openstreetmap.org')) {
+  // tiempo, búsqueda y población: primero la red, la caché si no hay conexión
+  if (url.hostname.includes('open-meteo.com') || url.hostname.includes('nominatim.openstreetmap.org') || url.hostname.includes('worldpop.arcgis.com')) {
     e.respondWith(fetch(req).then((res) => { const cp = res.clone(); caches.open(DATA).then((c) => c.put(req, cp)); return res; }).catch(() => caches.match(req)));
     return;
   }

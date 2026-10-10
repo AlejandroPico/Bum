@@ -35,7 +35,7 @@ uniform vec2 uCollar; uniform vec3 uSkirt; // radio, altura, densidad
 uniform float uHeat; uniform float uDens; uniform float uSigma; uniform float uDirty;
 uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uAmb; uniform vec3 uFogCol; uniform float uFogDist;
 uniform vec3 uBoxMin; uniform vec3 uBoxMax;
-uniform float uGlow; uniform float uErode; uniform vec3 uFire;
+uniform float uGlow; uniform float uErode; uniform vec3 uFire; uniform vec3 uOff; uniform float uSmoke;
 varying vec3 vW;
 ${HEAT}
 
@@ -122,7 +122,7 @@ float densityCheap(vec3 p){
 }
 
 void main(){
-  vec3 ro = uCam;
+  vec3 ro = uCam - uOff;
   vec3 rd = normalize(vW - uCam);
   vec3 inv = 1.0 / rd;
   vec3 t0s = (uBoxMin - ro) * inv, t1s = (uBoxMax - ro) * inv;
@@ -163,6 +163,7 @@ void main(){
       Tl = mix(Tl, 1.0, 0.25 * (1.0 - hAmb));
       float powder = 1.0 - exp(-D.x * 4.0);
       vec3 albedo = mix(vec3(0.88, 0.85, 0.82), vec3(0.62, 0.53, 0.44), D.y);
+      albedo = mix(albedo, vec3(0.2, 0.19, 0.18), uSmoke);
       vec3 amb = uAmb * mix(0.5, 1.05, hAmb) * (D.y > 0.5 ? 0.85 : 1.0);
       vec3 lum = uSunCol * 1.45 * Tl * phase * mix(1.0, powder * 1.6, 0.35) + amb * 0.85;
       // luz de la bola de fuego y brasas del interior
@@ -210,7 +211,7 @@ export class VolumeCloud implements FxModule {
         uSun: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() },
         uFogCol: { value: new THREE.Color() }, uFogDist: { value: 300000 },
         uBoxMin: { value: new THREE.Vector3() }, uBoxMax: { value: new THREE.Vector3() },
-        uGlow: { value: 0 }, uErode: { value: 0 }, uFire: { value: new THREE.Color(0, 0, 0) },
+        uGlow: { value: 0 }, uErode: { value: 0 }, uFire: { value: new THREE.Color(0, 0, 0) }, uOff: { value: new THREE.Vector3() }, uSmoke: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
@@ -232,7 +233,7 @@ export class VolumeCloud implements FxModule {
     const P = this.plan;
     const t = ctx.t;
     const appear = smooth(P.tMax * 1.2, P.tMax * 8 + 1.5, t);
-    if (t <= 0 || P.highAltitude || appear <= 0 || P.cloudFade(t) <= 0) { this.mesh.visible = false; return; }
+    if (t <= 0 || P.highAltitude || appear <= 0 || P.cloudFade(t) <= 0 || P.buried?.contained) { this.mesh.visible = false; return; }
     this.mesh.visible = true;
     this.mat.depthTest = !ctx.farView;
     const u = this.mat.uniforms;
@@ -279,11 +280,12 @@ export class VolumeCloud implements FxModule {
     this.mesh.scale.set(maxX - minX, maxY, maxZ - minZ);
     this.mesh.updateMatrixWorld();
     // si la cámara está dentro, dibuja las caras traseras
-    const c = ctx.camPos;
+    const c = ctx.camPos.clone().sub(this.object.position);
+    u.uOff.value.copy(this.object.position);
     const inside = c.x > minX && c.x < maxX && c.z > minZ && c.z < maxZ && c.y < maxY && c.y > 0;
     this.mat.side = inside ? THREE.BackSide : THREE.FrontSide;
 
-    u.uCam.value.copy(c);
+    u.uCam.value.copy(ctx.camPos);
     u.uTime.value = ctx.real % 10000;
     u.uT.value = t;
     u.uCapC.value.copy(capC);
@@ -300,11 +302,12 @@ export class VolumeCloud implements FxModule {
     u.uCollar.value.set(collar, zc - Tc * 1.25);
     u.uSkirt.value.set(skirtR, skirtH, skirtD);
     const heat = P.heat(t);
-    u.uHeat.value = Math.pow(Math.max(0, 1 - t / (P.tMax * 20 + 45)), 1.5) * 0.9 + heat * 0.4;
+    u.uHeat.value = (Math.pow(Math.max(0, 1 - t / (P.tMax * 20 + 45)), 1.5) * 0.9 + heat * 0.4) * P.flashK;
     u.uGlow.value = Math.min(2, heat * heat * 1.5);
     u.uDens.value = appear * P.cloudFade(t) * (1 - 0.3 * diss);
     u.uSigma.value = 11 / Rc;
-    u.uDirty.value = P.contact > 0 ? 1 : 0.7;
+    u.uSmoke.value = P.smoke;
+    u.uDirty.value = P.buried?.mode === 'underwater' ? 0 : P.contact > 0 ? 1 : 0.7;
     u.uSun.value.copy(ctx.sunDir);
     u.uSunCol.value.copy(ctx.sunColor);
     u.uAmb.value.copy(ctx.ambient);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import maplibregl, { type CustomLayerInterface, type Map as MLMap, type CustomRenderMethodInput } from 'maplibre-gl';
 import type { FrameCtx, FxModule } from './types';
+import { PostFX } from './PostFX';
 
 /**
  * Capa personalizada de MapLibre que dibuja la escena three.js compartiendo el
@@ -32,6 +33,11 @@ export class FxLayer implements CustomLayerInterface {
   /** tamaño (m) de los efectos en escena, para ampliar el plano lejano si hace falta */
   extentM = 0;
   globe = false;
+  /** post-procesado (resplandor, destello, calor, refracción de la onda) */
+  post = new PostFX();
+  /** duración del último fotograma de la capa (ms), para la calidad automática */
+  frameMs = 16;
+  private lastT = 0;
 
   onAdd(map: MLMap, gl: WebGLRenderingContext | WebGL2RenderingContext) {
     this.map = map;
@@ -128,10 +134,16 @@ export class FxLayer implements CustomLayerInterface {
 
     this.renderer.resetState();
     this.renderer.render(this.scene, this.camera);
+    this.post.render(this.renderer, _gl as WebGL2RenderingContext, this.mvp, c.real);
+    const now = performance.now();
+    const gap = now - this.lastT;
+    if (this.lastT && gap < 400) this.frameMs = this.frameMs * 0.92 + gap * 0.08;
+    this.lastT = now;
     if (this.animating) this.map.triggerRepaint();
   }
 
   onRemove() {
     this.clear();
+    this.post.dispose();
   }
 }

@@ -98,6 +98,14 @@ export class Encyclopedia {
     this.show(id || this.current || 'inicio');
   }
   openPreset(name: string) { this.open(slug(name)); }
+  /** abre la ficha que mejor encaja con un nombre (preset, título o etiqueta) */
+  async openBest(name: string) {
+    await this.load();
+    if (this.byId.has(slug(name))) return this.open(slug(name));
+    const q = name.toLowerCase();
+    const hit = this.articles.find((a) => a.title.toLowerCase() === q) ?? this.articles.find((a) => a.tags?.some((t) => t.toLowerCase() === q)) ?? this.articles.find((a) => a.title.toLowerCase().includes(q));
+    return this.open(hit?.id ?? '');
+  }
   close() {
     this.el.classList.add('hidden');
     document.body.classList.remove('enc-open');

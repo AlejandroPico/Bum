@@ -121,6 +121,36 @@ const BACKGROUND = 12;
 interface Kernel { lat: number; lon: number; rho0: number; r0: number; name: string }
 
 /** Prepara los núcleos de densidad cercanos a un punto. */
+/** rejilla de población real (densidad hab/km², fila 0 = norte) */
+export interface PopGrid { w: number; h: number; lat0: number; lon0: number; dLat: number; dLon: number; dens: Float32Array; total: number; source: string }
+const GRIDS: PopGrid[] = [];
+let realPop = true;
+export function setRealPopulation(on: boolean) { realPop = on; }
+export function addPopGrid(g: PopGrid) {
+  const i = GRIDS.indexOf(g);
+  if (i >= 0) GRIDS.splice(i, 1);
+  GRIDS.unshift(g);
+  if (GRIDS.length > 8) GRIDS.pop();
+}
+/** densidad real en un punto, o null si ninguna rejilla lo cubre */
+export function realDensityAt(lat: number, lon: number): number | null {
+  if (!realPop) return null;
+  for (const g of GRIDS) {
+    const i = Math.floor((lon - g.lon0) / g.dLon), j = Math.floor((g.lat0 - lat) / g.dLat);
+    if (i >= 0 && j >= 0 && i < g.w && j < g.h) return g.dens[j * g.w + i];
+  }
+  return null;
+}
+/** fuente de los datos de población usados en un punto */
+export function popSourceAt(lat: number, lon: number): string | null {
+  if (!realPop) return null;
+  for (const g of GRIDS) {
+    const i = Math.floor((lon - g.lon0) / g.dLon), j = Math.floor((g.lat0 - lat) / g.dLat);
+    if (i >= 0 && j >= 0 && i < g.w && j < g.h) return g.source;
+  }
+  return null;
+}
+
 export function densityField(lat: number, lon: number, radiusKm: number) {
   const kernels: Kernel[] = [];
   for (const c of CITIES) {
@@ -138,6 +168,8 @@ export function densityField(lat: number, lon: number, radiusKm: number) {
       return this.atLatLon(lat + nKm / 111.32, lon + eKm / (111.32 * cosLat));
     },
     atLatLon(plat: number, plon: number) {
+      const real = realDensityAt(plat, plon);
+      if (real !== null) return real;
       let rho = BACKGROUND;
       for (const k of kernels) {
         const dn = (plat - k.lat) * 111.32;

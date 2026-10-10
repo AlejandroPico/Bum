@@ -127,7 +127,7 @@ export class Fireball implements FxModule {
     const t = ctx.t;
     const heat = P.heat(t);
     const R = P.fireballRadius(t);
-    const visible = t > 0 && heat > 0.02;
+    const visible = t > 0 && heat > 0.02 && P.flashK > 0.05;
     this.sphere.visible = visible;
     this.glow.visible = visible;
     this.ground.visible = visible && !P.highAltitude;

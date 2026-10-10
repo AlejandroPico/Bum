@@ -101,10 +101,29 @@ export class Shock implements FxModule {
     const P = this.plan;
     const t = ctx.t;
     const R = P.shockR(t);
-    const on = t > 0 && R > P.fireballR * 0.8 && R < Math.max(P.psi1R * 2.2, P.fireballR * 6) && !P.highAltitude;
-    this.shell.visible = on;
+    const on = t > 0 && R > P.fireballR * 0.8 && R < Math.max(P.psi1R * 2.2, P.fireballR * 6) && !P.highAltitude && !P.buried?.contained;
+    this.shell.visible = on && P.flashK > 0.05;
     this.dust.visible = false;
     this.wilson.visible = false;
+    // oleada de base (explosiones submarinas o enterradas poco profundas)
+    const surge = P.fx.rings.find((r) => r.id === 'surge');
+    if (surge && t > 0) {
+      const sr = Math.min(surge.radiusM, 60 * t + P.fireballR * 0.5);
+      const fade = Math.max(0, 1 - Math.max(0, t - surge.radiusM / 60) / 420);
+      if (fade > 0.01) {
+        const Hs = Math.min(700, Math.max(60, surge.radiusM * 0.12)) * (0.5 + 0.5 * Math.min(1, t / 20));
+        this.dust.visible = true;
+        this.dMat.depthTest = !ctx.farView;
+        this.dust.position.set(0, Hs / 2, 0);
+        this.dust.scale.set(sr, Hs, sr);
+        this.dust.updateMatrixWorld();
+        const d = this.dMat.uniforms;
+        d.uAlpha.value = 0.75 * fade;
+        d.uTime.value = ctx.real;
+        (d.uColor.value as THREE.Color).set(P.buried?.mode === 'underwater' ? 0xe8f2f8 : 0x9c8a74);
+      }
+      return;
+    }
     if (!on) return;
     this.shellMat.depthTest = this.wMat.depthTest = this.dMat.depthTest = !ctx.farView;
     const psi = P.fx.pressurePsiAt(Math.sqrt(Math.max(0, R * R - P.h * P.h)));

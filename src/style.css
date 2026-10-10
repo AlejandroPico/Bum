@@ -41,7 +41,7 @@ button { font-family: var(--font); }
 .icon-btn + .icon-btn { margin-left: 0; }
 .icon-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
 
-.tabs { display: grid; grid-template-columns: 1fr 1fr; margin: 8px 20px 0; border-bottom: 1px solid var(--line); }
+.tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; margin: 8px 20px 0; border-bottom: 1px solid var(--line); }
 .tab { border: 0; background: transparent; color: var(--faint); font: 600 12px var(--font); padding: 10px 4px 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.2s, border-color 0.2s; }
 .tab:hover { color: var(--muted); }
 .tab.active { color: #fff; border-bottom-color: var(--accent); }
@@ -370,3 +370,31 @@ body.enc-open #sidebar, body.enc-open #results, body.enc-open #timeline { visibi
 .lp-base:hover b { color: #fff; }
 .lp-base.on { box-shadow: inset 2px 0 0 var(--accent); background: rgba(255, 90, 31, 0.06); }
 .lp-tg { margin-top: 2px; }
+.seg { flex-wrap: wrap; } .seg button { min-width: 18%; white-space: nowrap; }
+
+/* ---------- ataque múltiple ---------- */
+.strike-marker { width: 22px; height: 22px; display: grid; place-items: center; background: var(--accent); color: #fff; font: 700 11px var(--mono); box-shadow: 0 0 0 3px rgba(255, 90, 31, 0.3); }
+.m-list { margin: 4px 0 10px; }
+.m-item { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 11.5px; color: var(--text); }
+.m-item b { font-family: var(--mono); color: var(--accent); }
+.m-item i { display: block; font-style: normal; color: var(--faint); font-size: 10.5px; }
+.m-item .icon-btn { width: 22px; height: 22px; }
+
+/* infraestructuras por zona */
+.infra-wrap { overflow-x: auto; margin: 4px 0 6px; }
+.infra { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.infra th { white-space: pre-line; font-weight: 500; color: var(--muted, #8b93a1); text-align: right; padding: 4px 6px; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.infra td { padding: 4px 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.05); font-family: var(--mono, ui-monospace, monospace); }
+.infra td:first-child, .infra th:first-child { text-align: left; font-family: inherit; }
+
+/* ficha emergente de las pruebas nucleares */
+.bum-popup .maplibregl-popup-content { background: rgba(10, 12, 16, 0.94); color: var(--text, #e6e9ef); border: 1px solid rgba(255,255,255,0.1); border-radius: 0; padding: 12px 14px 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); font-size: 12px; }
+.bum-popup .maplibregl-popup-tip { border-top-color: rgba(10, 12, 16, 0.94); border-bottom-color: rgba(10, 12, 16, 0.94); }
+.bum-popup .maplibregl-popup-close-button { color: var(--muted); font-size: 16px; padding: 2px 6px; }
+.test-pop .tp-k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #ffc400; }
+.test-pop h3 { margin: 4px 0 2px; font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+.test-pop .tp-y { font-family: var(--mono); font-size: 12px; color: #ffb38f; margin-bottom: 6px; }
+.test-pop p { margin: 0 0 6px; line-height: 1.45; color: #c9ced8; }
+.test-pop .tp-n { color: var(--muted); font-size: 11px; }
+.test-pop .tp-row { display: flex; gap: 8px; margin-top: 8px; }
+.test-pop .tp-row button { flex: 1; }

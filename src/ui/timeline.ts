@@ -6,6 +6,7 @@ export interface TimelineEvents {
   onSeek(t: number): void;
   onSpeed(s: number): void;
   onCloud(): void;
+  onGround(): void;
 }
 
 /** Línea de tiempo con escala logarítmica (los primeros segundos ocupan más espacio). */
@@ -35,7 +36,8 @@ export class Timeline {
       speed.append(h('button', { class: s === 1 ? 'on' : '', onclick: (e: Event) => { speed.querySelectorAll('button').forEach((b) => b.classList.remove('on')); (e.currentTarget as HTMLElement).classList.add('on'); ev.onSpeed(s); } }, `×${s}`));
     }
     const cloud = h('button', { class: 'tl-btn', title: 'Encuadrar el hongo completo', html: ICONS.cam, onclick: () => ev.onCloud() });
-    el.append(restart, this.play, this.time, h('div', { class: 'tl-track' }, this.events, this.range), speed, cloud);
+    const ground = h('button', { class: 'tl-btn', title: 'Vista desde el suelo (como un testigo a distancia)', html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="5" r="2"/><path d="M7 7v7M4 10h6M7 14l-3 6M7 14l3 6M2 21h20M14 21c1-6 3-9 5-9s3 3 3 9"/></svg>', onclick: () => ev.onGround() });
+    el.append(restart, this.play, this.time, h('div', { class: 'tl-track' }, this.events, this.range), speed, ground, cloud);
   }
 
   configure(tStart: number, tEnd: number, events: { t: number; label: string }[]) {

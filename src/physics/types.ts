@@ -1,5 +1,5 @@
-export type BurstMode = 'surface' | 'optimal' | 'custom';
-export type TargetType = 'sediment' | 'rock' | 'water';
+export type BurstMode = 'surface' | 'optimal' | 'custom' | 'underground' | 'underwater';
+export type TargetType = 'sediment' | 'rock' | 'water' | 'ice';
 
 export interface NuclearInput {
   kind: 'nuclear';
@@ -9,6 +9,10 @@ export interface NuclearInput {
   fission: number;
   burst: BurstMode;
   heightM: number;
+  /** profundidad (m) en explosiones subterráneas o submarinas */
+  depthM?: number;
+  /** profundidad del fondo marino (m) en explosiones submarinas */
+  seaDepthM?: number;
   /** explosivo químico (convencional o accidental): sin radiación ni lluvia radiactiva */
   chemical?: boolean;
 }
@@ -24,7 +28,34 @@ export interface AsteroidInput {
   waterDepthM: number;
 }
 
-export type Scenario = NuclearInput | AsteroidInput;
+export type Isotope = 'Cs-137' | 'I-131' | 'Co-60' | 'Sr-90' | 'Am-241';
+
+/** liberación radiactiva: accidente de un reactor o bomba sucia */
+export interface ReleaseInput {
+  kind: 'release';
+  name: string;
+  source: 'reactor' | 'dirtybomb';
+  isotope: Isotope;
+  /** actividad total (TBq) */
+  activityTBq: number;
+  /** altura de la emisión (m) */
+  heightM: number;
+  /** duración de la emisión (h) */
+  durationH?: number;
+  /** explosivo de la bomba sucia (kg de TNT) */
+  explosiveKg?: number;
+}
+
+/** erupción volcánica explosiva */
+export interface VolcanoInput {
+  kind: 'volcano';
+  name: string;
+  /** índice de explosividad volcánica 4..8 */
+  vei: number;
+  volumeMul?: number;
+}
+
+export type Scenario = NuclearInput | AsteroidInput | ReleaseInput | VolcanoInput;
 
 export interface Environment {
   /** dirección DESDE la que sopla el viento, grados (0 = norte) */
@@ -38,6 +69,8 @@ export interface Environment {
   hour: number;
   /** % de población al aire libre (null = automático según la hora) */
   outdoorPct?: number | null;
+  /** precipitación (mm/h) — con lluvia la lluvia radiactiva se concentra cerca */
+  rainMmH?: number;
   /** perfil vertical de viento (tiempo real); si falta, el viento es uniforme en altura */
   windProfile?: WindLevel[] | null;
 }
@@ -50,7 +83,7 @@ export interface WindLevel {
   kmh: number;
 }
 
-export type EffectGroup = 'fireball' | 'blast' | 'thermal' | 'radiation' | 'crater' | 'seismic' | 'emp' | 'ejecta' | 'tsunami';
+export type EffectGroup = 'fireball' | 'blast' | 'thermal' | 'radiation' | 'crater' | 'seismic' | 'emp' | 'ejecta' | 'tsunami' | 'surge' | 'fire';
 
 export interface Ring {
   id: string;
@@ -129,4 +162,22 @@ export interface Effects {
   outdoorPct: number;
   /** entorno usado en el cálculo */
   env: Environment;
+  /** explosión enterrada o submarina */
+  buried?: { mode: 'underground' | 'underwater'; depthM: number; scaledDepth: number; contained: boolean; airFrac: number; columnM?: number; surgeR?: number };
+  /** pulso electromagnético de gran altitud: campo pico (kV/m) en función de la distancia y el rumbo */
+  emp?: { heightM: number; horizonM: number; peakKVm: number; fieldAt: (groundM: number, bearingDeg: number) => number; latSign: number };
+  /** incendios: tormenta de fuego o incendio que avanza con el viento */
+  fires?: { kind: 'firestorm' | 'conflagration' | 'none'; ignitionR: number; spreadKmh: number; areaAt: (h: number) => number; reason: string };
+  /** efectos a largo plazo (estimaciones) */
+  longTerm?: { falloutDeathsNoShelter: number; falloutDeathsShelter: number; cancerDeaths: number; collectiveSv: number; popInFallout: number; thyroidNote: string };
+  /** funciones de la lluvia radiactiva: dosis acumulada (rem) en un punto entre ta y t (h) con un factor de protección */
+  falloutDoseAt?: (eM: number, nM: number, tStartH: number, tEndH: number, pf: number) => number;
+  /** sin destello ni bola de fuego (liberaciones, volcanes) */
+  noFlash?: boolean;
+  release?: { isotope: Isotope; isoName: string; activityBq: number; popZone: number; popAny: number; collectiveSv: number; cancerDeaths: number; depositAt: (eM: number, nM: number) => number; nSvhPerkBq: number; name: string };
+  volcano?: { vei: number; volumeKm3: number; columnM: number; pdcR: number; coolingC: number; ashAt: (eM: number, nM: number) => number; T0: number };
+  /** fuente de los datos de población (si se usó población real) */
+  popSource?: string;
+  /** hora de llegada (h) de la lluvia radiactiva a un punto */
+  falloutArrivalH?: (eM: number, nM: number) => number;
 }

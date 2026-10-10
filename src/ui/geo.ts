@@ -58,6 +58,8 @@ export interface Weather {
   visibilityKm: number;
   tempC: number;
   cloudPct: number;
+  /** precipitación actual (mm/h) */
+  rainMmH: number;
   /** hora local decimal en el objetivo */
   hour: number;
   localTime: string;
@@ -80,13 +82,13 @@ function cacheSet(key: string, v: unknown) {
 }
 
 export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
-  const key = `bum:wx:${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const key = `bum:wx2:${lat.toFixed(2)},${lon.toFixed(2)}`;
   const hit = cacheGet<Weather>(key, CACHE_MS);
   if (hit) return hit;
   const lv = LEVELS.map(([l]) => `wind_speed_${l},wind_direction_${l},geopotential_height_${l}`).join(',');
   const url = 'https://api.open-meteo.com/v1/forecast'
     + `?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
-    + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,cloud_cover'
+    + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation'
     + `&hourly=visibility,${lv}`
     + '&forecast_hours=1&wind_speed_unit=kmh&timezone=auto';
   const ctl = new AbortController();
@@ -117,6 +119,7 @@ export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
       visibilityKm: vis != null ? vis / 1000 : 25,
       tempC: +(cur.temperature_2m ?? 15),
       cloudPct: +(cur.cloud_cover ?? 0),
+      rainMmH: +(cur.precipitation ?? 0),
       hour, localTime: tm ? `${tm[1]}:${tm[2]}` : '—',
     };
     cacheSet(key, w);

@@ -256,7 +256,7 @@ export function buildStats(fx: Effects): StatSection[] {
       if (d < T.transientM / 2 || d > 13000e3) continue;
       rows.push({ k: `A ${fmtDist(d)}`, v: `${A >= 10 ? fmtNum(A) : n1(A, 1)} m`, hint: `llega en ${dur(d / cw)} · en la costa ×2–3` });
     }
-    S.push({ tab: 'phys', title: 'Tsunami', rows });
+    S.push({ tab: 'phys', title: 'Tsunami', rows, note: 'En el mapa: líneas azules = isócronas de llegada calculadas sobre la batimetría real (Dijkstra con c = √(g·h), cada 1–2 h); puntos en la costa = altura estimada de la ola al llegar (ley de Green, la ola crece al perder profundidad). Los continentes y las islas hacen sombra. No incluye la inundación tierra adentro ni las resonancias de bahías y puertos.' });
   }
 
   // ---------------------------------------------------------------- radiación
@@ -290,7 +290,7 @@ export function buildStats(fx: Effects): StatSection[] {
       });
     }
   }
-  if (fx.fallout.length) {
+  if (fx.fallout.length && !fx.release && !fx.volcano) {
     const to = ((fx.windFromDeg + 180) * Math.PI) / 180;
     const ex = Math.sin(to), ny = Math.cos(to);
     const u = Math.max(4, fx.windKmh);
@@ -368,6 +368,122 @@ export function buildStats(fx: Effects): StatSection[] {
       { k: 'Con infraestructuras y empresas', v: `${sci((cost * 2.5) / 1e9)} mil millones de €`, hint: 'sin contar pérdidas humanas ni efectos a largo plazo' },
     ],
   });
+  // ---------------------------------------------------------------- liberación radiactiva
+  if (fx.release) {
+    const L = fx.release;
+    const to = ((fx.windFromDeg + 180) * Math.PI) / 180;
+    const rows: StatRow[] = [
+      { k: 'Isótopo', v: L.isoName },
+      { k: 'Actividad dispersada', v: L.activityBq >= 1e15 ? `${n1(L.activityBq / 1e15, 2)} PBq` : `${n1(L.activityBq / 1e12, 3)} TBq`, hint: `${sci(L.activityBq / 3.7e10)} curios` },
+      { k: 'Viento', v: `${n1(fx.windKmh, 0)} km/h hacia ${compass(fx.windFromDeg + 180)}` },
+    ];
+    for (const dk of [1, 5, 30, 100, 300, 1000]) {
+      const d = L.depositAt(Math.sin(to) * dk * 1000, Math.cos(to) * dk * 1000);
+      if (d < 0.01) continue;
+      const uSvh = d * L.nSvhPerkBq / 1000;
+      rows.push({ k: `A ${dk} km a sotavento`, v: `${d >= 10 ? fmtNum(d) : n1(d, 2)} kBq/m²`, hint: `${uSvh >= 1 ? n1(uSvh, 1) : n1(uSvh * 1000, 0) + ' n'}${uSvh >= 1 ? ' µSv/h' : 'Sv/h'} en el suelo · ${n1(uSvh * 8760 * 0.3 / 1000, 1)} mSv el primer año (con 30 % de tiempo al aire libre)` });
+    }
+    S.push({ tab: 'rad', title: L.name, rows });
+    S.push({
+      tab: 'rad', title: 'Zonas contaminadas',
+      rows: [...fx.fallout].sort((a, b) => b.level - a.level).map((f) => ({ k: f.label, v: area(f.areaKm2), hint: `hasta ${fmtNum(f.maxDownwindKm)} km` })),
+      note: 'En Chernóbil se evacuó de forma permanente todo lo que superaba 1480 kBq/m² de cesio-137 (40 Ci/km²) y se reasentó a quien vivía por encima de 555 kBq/m².',
+    });
+    S.push({
+      tab: 'rad', title: 'Consecuencias sanitarias (estimación)',
+      rows: [
+        { k: 'Población en la zona más contaminada', v: fmtNum(L.popZone), strong: true, hint: 'habría que evacuarla' },
+        { k: 'Población en zonas contaminadas', v: fmtNum(L.popAny) },
+        { k: 'Dosis colectiva del primer año', v: `${fmtNum(L.collectiveSv)} Sv·persona`, hint: 'sólo irradiación externa desde el suelo' },
+        { k: 'Cánceres mortales a largo plazo', v: fmtNum(L.cancerDeaths), hint: 'modelo lineal sin umbral (5 %/Sv); sin contar alimentos ni inhalación' },
+      ],
+    });
+  }
+  // ---------------------------------------------------------------- erupción volcánica
+  if (fx.volcano) {
+    const V = fx.volcano;
+    const to = ((fx.windFromDeg + 180) * Math.PI) / 180;
+    const rows: StatRow[] = [
+      { k: 'Índice de explosividad', v: `VEI ${V.vei}` },
+      { k: 'Material expulsado', v: `${n1(V.volumeKm3, 1)} km³`, hint: 'tefra (ceniza y piedra pómez)' },
+      { k: 'Columna eruptiva', v: fmtDist(V.columnM) },
+      { k: 'Flujos piroclásticos', v: `hasta ${fmtDist(V.pdcR)}` },
+      { k: 'Ceniza en la zona del volcán', v: `${n1(V.T0, 2)} m` },
+    ];
+    for (const dk of [50, 200, 500, 1000, 2000]) {
+      const t = V.ashAt(Math.sin(to) * dk * 1000, Math.cos(to) * dk * 1000);
+      if (t < 0.0005) continue;
+      rows.push({ k: `Ceniza a ${dk} km a sotavento`, v: t >= 0.1 ? `${n1(t * 100, 0)} cm` : t >= 0.01 ? `${n1(t * 100, 1)} cm` : `${n1(t * 1000, 1)} mm`, hint: t >= 0.1 ? 'se hunden tejados (sobre todo con lluvia)' : t >= 0.01 ? 'cosechas perdidas, agua y electricidad cortadas' : 'aeropuertos cerrados, problemas respiratorios' });
+    }
+    S.push({ tab: 'phys', title: 'Erupción', rows });
+    S.push({ tab: 'cmp', title: 'Clima', rows: [{ k: 'Enfriamiento global (est.)', v: `${n1(V.coolingC, 1)} °C`, hint: 'durante 1–3 años por los aerosoles de azufre' }, { k: 'Comparación', v: V.vei >= 8 ? 'invierno volcánico' : V.vei === 7 ? 'como Tambora: año sin verano' : 'como Pinatubo' }] });
+  }
+
+  // ---------------------------------------------------------------- explosión enterrada o submarina
+  if (fx.buried) {
+    const B = fx.buried;
+    const rows: StatRow[] = [
+      { k: 'Tipo', v: B.mode === 'underground' ? (B.contained ? 'subterránea contenida' : 'subterránea poco profunda (de excavación)') : (B.contained ? 'submarina profunda' : 'submarina') },
+      { k: 'Profundidad', v: fmtDist(B.depthM), hint: `${n1(B.scaledDepth, 0)} m/kt^⅓ (profundidad escalada)` },
+      { k: 'Energía que llega al aire como onda', v: pct(B.airFrac), hint: 'el resto se queda en el terreno o el agua' },
+    ];
+    if (B.columnM) rows.push({ k: 'Columna de agua', v: fmtDist(B.columnM), hint: 'altura aproximada (Baker, 23 kt: ≈ 1,8 km)' });
+    if (B.surgeR) rows.push({ k: 'Oleada de base', v: fmtDist(B.surgeR), hint: 'radio de la niebla o el polvo radiactivo a ras de suelo' });
+    const waves = fx.rings.filter((r) => r.id.startsWith('wave'));
+    for (const w of waves) rows.push({ k: w.label, v: `hasta ${fmtDist(w.radiusM)}` });
+    if (fx.seismic) rows.push({ k: 'Magnitud sísmica registrada', v: n1(fx.seismic.magnitude, 1), hint: 'así se detectan las pruebas nucleares en todo el mundo' });
+    S.push({ tab: 'phys', title: B.mode === 'underground' ? 'Explosión subterránea' : 'Explosión submarina', rows, note: 'Estimaciones a partir de pruebas reales (Sedan 1962, Baker 1946, pruebas subterráneas de Nevada): orden de magnitud.' });
+  }
+
+  // ---------------------------------------------------------------- incendios
+  if (fx.fires && fx.fires.kind !== 'none') {
+    const F = fx.fires;
+    S.push({
+      tab: 'phys', title: F.kind === 'firestorm' ? 'Tormenta de fuego' : 'Incendio que avanza con el viento',
+      rows: [
+        { k: 'Tipo', v: F.kind === 'firestorm' ? 'tormenta de fuego (estacionaria)' : 'incendio que avanza a sotavento', hint: F.reason },
+        { k: 'Superficie incendiada al inicio', v: area((Math.PI * F.ignitionR ** 2) / 1e6) },
+        ...(F.kind === 'conflagration' ? [{ k: 'Velocidad de avance', v: `${n1(F.spreadKmh, 1)} km/h` }] : []),
+        { k: 'Superficie quemada a las 3 h', v: area(F.areaAt(3)) },
+        { k: 'Superficie quemada a las 12 h', v: area(F.areaAt(12)) },
+      ],
+      note: 'Criterios de Glasstone y de los estudios de Hiroshima y de los bombardeos incendiarios: densidad de combustible, superficie incendiada y viento.',
+    });
+  }
+
+  // ---------------------------------------------------------------- EMP de gran altitud
+  if (fx.emp) {
+    const E = fx.emp;
+    S.push({
+      tab: 'phys', title: 'Pulso electromagnético (gran altitud)',
+      rows: [
+        { k: 'Altura de la explosión', v: fmtDist(E.heightM) },
+        { k: 'Región afectada (hasta el horizonte)', v: `${fmtDist(E.horizonM)} de radio`, hint: `${area((Math.PI * E.horizonM ** 2) / 1e6)}` },
+        { k: 'Campo máximo E1', v: `≈ ${n1(E.peakKVm, 0)} kV/m`, hint: `hacia ${E.latSign > 0 ? 'el sur' : 'el norte'} del punto cero (forma de «sonrisa»)` },
+        { k: 'E1 (nanosegundos)', v: 'electrónica y comunicaciones' },
+        { k: 'E2 (microsegundos)', v: 'como un rayo' },
+        { k: 'E3 (segundos a minutos)', v: 'corrientes en líneas eléctricas largas y transformadores' },
+      ],
+      note: 'Starfish Prime (1962, 1,4 Mt a 400 km) apagó farolas y dañó equipos en Hawái, a 1400 km. Modelo simplificado de la distribución del campo.',
+    });
+  }
+
+  // ---------------------------------------------------------------- largo plazo
+  if (fx.longTerm && (fx.longTerm.collectiveSv > 0 || fx.longTerm.popInFallout > 0)) {
+    const L = fx.longTerm;
+    S.push({
+      tab: 'rad', title: 'Efectos a largo plazo (estimación)',
+      rows: [
+        { k: 'Población bajo la lluvia radiactiva', v: fmtNum(L.popInFallout), hint: 'supervivientes de la explosión dentro de la isolínea de 0,05 R/h' },
+        { k: 'Muertes por lluvia radiactiva sin refugio', v: fmtNum(L.falloutDeathsNoShelter), strong: true, hint: 'dosis de la primera semana (protección ×1,5)' },
+        { k: 'Con refugio los dos primeros días', v: fmtNum(L.falloutDeathsShelter), strong: true, hint: 'protección ×10 durante 48 h y ×2 después' },
+        { k: 'Dosis colectiva', v: `${fmtNum(L.collectiveSv)} Sv·persona`, hint: 'radiación inicial y lluvia radiactiva del primer año' },
+        { k: 'Muertes por cáncer a largo plazo', v: fmtNum(L.cancerDeaths), hint: 'modelo lineal sin umbral (≈ 5 % por sievert, ICRP); muy incierto a dosis bajas' },
+      ],
+      note: L.thyroidNote,
+    });
+  }
+
   return S;
 }
 

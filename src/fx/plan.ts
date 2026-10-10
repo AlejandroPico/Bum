@@ -39,6 +39,12 @@ export class FxPlan {
   fade0 = 0;
   fade1 = 1;
   tEnd: number;
+  /** fracción visible del destello (0 en explosiones contenidas o submarinas) */
+  flashK = 1;
+  /** explosión submarina o enterrada */
+  buried: Effects['buried'];
+  /** humo oscuro (incendio de reactor) o ceniza volcánica: 0 nube blanca · 1 hollín */
+  smoke = 0;
 
   constructor(fx: Effects, env: Environment) {
     this.fx = fx;
@@ -55,6 +61,11 @@ export class FxPlan {
     this.isAsteroid = fx.scenario.kind === 'asteroid';
     this.isImpact = this.isAsteroid && fx.burstHeightM === 0;
     this.highAltitude = this.h > 20000;
+    this.buried = fx.buried;
+    if (fx.release) this.smoke = fx.scenario.kind === 'release' && fx.scenario.source === 'reactor' ? 0.85 : 0.55;
+    else if (fx.volcano) this.smoke = 0.6;
+    if (fx.noFlash) this.flashK = 0;
+    else if (fx.buried) this.flashK = fx.buried.mode === 'underground' && !fx.buried.contained ? Math.exp(-fx.buried.scaledDepth / 8) : 0;
     // viento efectivo (media en la altura de la nube) calculado con los efectos
     const to = ((fx.windFromDeg + 180) * Math.PI) / 180;
     const ms = fx.windKmh / 3.6;
@@ -109,7 +120,10 @@ export class FxPlan {
 
   /** brillo/temperatura de la bola de fuego 0..1.2 */
   heat(t: number): number {
-    if (t <= 0) return 0;
+    if (t <= 0 || this.flashK <= 0) return 0;
+    return this.heat0(t) * this.flashK;
+  }
+  private heat0(t: number): number {
     const tm = this.tMax;
     if (t < tm * 0.1) return 1.25; // primer pulso
     if (t < tm) return 1.05 + 0.15 * (1 - t / tm);
