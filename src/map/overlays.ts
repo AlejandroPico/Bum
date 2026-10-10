@@ -116,6 +116,25 @@ export class Overlays {
   showFallout = true;
   showDamage = true;
   showMarks = true;
+  /** opacidad global de las capas de efectos (0..1) */
+  opacity = 1;
+
+  /** aplica la opacidad global a todas las capas de efectos del mapa */
+  setOpacity(k: number) {
+    this.opacity = Math.max(0, Math.min(1, k));
+    const m = this.map, o = this.opacity;
+    const set = (id: string, prop: string, v: unknown) => { if (m.getLayer(id)) m.setPaintProperty(id, prop as never, v as never); };
+    set('fx-rings-fill', 'fill-opacity', ['*', o, ['get', 'fillOpacity']]);
+    set('fx-rings-glow', 'line-opacity', ['*', 0.55 * o, ['get', 'lineOpacity']]);
+    set('fx-rings-line', 'line-opacity', ['*', o, ['get', 'lineOpacity']]);
+    set('fx-fallout', 'fill-opacity', 0.2 * o);
+    set('fx-fallout-line', 'line-opacity', 0.9 * o);
+    set('fx-deposit', 'fill-opacity', ['*', o, ['get', 'opacity']]);
+    set('fx-deposit-line', 'line-opacity', ['*', 0.9 * o, ['get', 'opacity']]);
+    set('fx-scorch', 'fill-opacity', ['*', o, ['get', 'opacity']]);
+    set('fx-labels', 'text-opacity', Math.min(1, 0.25 + o));
+    set('fx-fallout-labels', 'text-opacity', Math.min(1, 0.25 + o));
+  }
 
   constructor(map: MLMap) {
     this.map = map;

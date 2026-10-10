@@ -5,6 +5,7 @@ import './style.css';
 import maplibregl from 'maplibre-gl';
 import * as THREE from 'three';
 import { createMap, applyTimeOfDay, setGlobe, SKY_BLENDS } from './map/map';
+import { BASEMAPS, setBasemap, type BasemapId } from './map/basemaps';
 import { sampleElevation } from './map/elevation';
 import { Overlays, localToLngLat, destination } from './map/overlays';
 import { FxLayer } from './fx/FxLayer';
@@ -25,7 +26,7 @@ import type { Effects } from './physics/types';
 import { Sidebar, defaultState, type AppState } from './ui/sidebar';
 import { ResultsPanel } from './ui/results';
 import { Timeline } from './ui/timeline';
-import { h, ICONS, toast, fmtTime } from './ui/dom';
+import { h, ICONS, toast, fmtTime, setRangeFill } from './ui/dom';
 
 // ---------------------------------------------------------------------------
 // estado
@@ -66,6 +67,20 @@ interface Run {
 }
 let run: Run | null = null;
 let atmosphere = { night: 0, sunAlt: 1, sunAz: 180 };
+/** iluminación según la hora (o siempre de día si el usuario lo elige) */
+function tod() { return applyTimeOfDay(map, state.view.forceDay ? 12.5 : state.env.hour); }
+
+// preferencias de mapa guardadas en este navegador
+const PREF_KEY = 'bum:mapprefs';
+try {
+  const pr = JSON.parse(localStorage.getItem(PREF_KEY) ?? '{}');
+  for (const k of ['basemap', 'fxOpacity', 'forceDay', 'terrain3d', 'buildings', 'mapLabels'] as const) if (k in pr) (state.view as any)[k] = pr[k];
+} catch { /* sin almacenamiento */ }
+function savePrefs() {
+  const V = state.view;
+  try { localStorage.setItem(PREF_KEY, JSON.stringify({ basemap: V.basemap, fxOpacity: V.fxOpacity, forceDay: V.forceDay, terrain3d: V.terrain3d, buildings: V.buildings, mapLabels: V.mapLabels })); } catch { /* sin almacenamiento */ }
+}
+
 
 // ---------------------------------------------------------------------------
 // interfaz
@@ -74,7 +89,7 @@ const sidebar = new Sidebar(document.getElementById('sidebar')!, state, {
   onDetonate: () => detonate(),
   onClear: () => clearRun(),
   onTarget: (lat, lon, label, fly) => setTarget(lat, lon, label, fly),
-  onEnv: () => { atmosphere = applyTimeOfDay(map, state.env.hour); },
+  onEnv: () => { atmosphere = tod(); },
   onView: () => applyView(),
   onCollapse: () => toggleUI(),
   onProjection: (g) => applyProjection(g),
@@ -206,10 +221,73 @@ class BookControl {
 }
 map.addControl(new BookControl() as any, 'top-right');
 
+// ---------------------------------------------------------------- capas del mapa
+const LAYERS_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="miter"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>';
+const layersPanel = h('div', { id: 'layers-panel', class: 'glass hidden' });
+document.getElementById('app')!.append(layersPanel);
+function buildLayersPanel() {
+  const V = state.view;
+  layersPanel.innerHTML = '';
+  layersPanel.append(h('div', { class: 'lp-h' }, 'Mapa base'));
+  for (const b of BASEMAPS) {
+    const row = h('button', { type: 'button', class: 'lp-base' + (V.basemap === b.id ? ' on' : ''), onclick: () => { V.basemap = b.id; applyMapPrefs(); buildLayersPanel(); } },
+      h('b', {}, b.name), h('span', {}, b.desc));
+    layersPanel.append(row);
+  }
+  layersPanel.append(h('div', { class: 'lp-h' }, 'Opciones'));
+  const tg = (label: string, key: 'terrain3d' | 'buildings' | 'mapLabels' | 'forceDay') => {
+    const inp = h('input', { type: 'checkbox' }) as HTMLInputElement;
+    inp.checked = V[key];
+    inp.addEventListener('change', () => { V[key] = inp.checked; applyMapPrefs(); });
+    return h('label', { class: 'toggle' }, inp, h('span', { class: 'sw' }), label);
+  };
+  layersPanel.append(h('div', { class: 'toggles one lp-tg' }, tg('Relieve 3D', 'terrain3d'), tg('Edificios 3D', 'buildings'), tg('Nombres de lugares', 'mapLabels'), tg('Luz de día siempre', 'forceDay')));
+  const val = h('b', {}, `${Math.round(V.fxOpacity * 100)} %`);
+  const r = h('input', { type: 'range', min: 0, max: 100, step: 1, value: Math.round(V.fxOpacity * 100) }) as HTMLInputElement;
+  setRangeFill(r);
+  r.addEventListener('input', () => { V.fxOpacity = +r.value / 100; val.textContent = `${r.value} %`; setRangeFill(r); applyFxOpacity(); savePrefs(); });
+  layersPanel.append(h('div', { class: 'lp-h' }, 'Efectos'), h('label', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Opacidad de anillos, cúpulas y marcas'), val), r));
+}
+function applyFxOpacity() {
+  overlays.setOpacity(state.view.fxOpacity);
+  if (run) run.domes.opacity = state.view.fxOpacity;
+  map.triggerRepaint();
+}
+function applyMapPrefs() {
+  const V = state.view;
+  setBasemap(map, (BASEMAPS.some((b) => b.id === V.basemap) ? V.basemap : 'relieve') as BasemapId);
+  map.setTerrain(V.terrain3d ? { source: 'terrain', exaggeration: 1 } : null);
+  if (map.getLayer('buildings')) map.setLayoutProperty('buildings', 'visibility', V.buildings ? 'visible' : 'none');
+  if (map.getLayer('place-labels')) map.setLayoutProperty('place-labels', 'visibility', V.mapLabels ? 'visible' : 'none');
+  if (map.getLayer('vb-labels')) map.setLayoutProperty('vb-labels', 'visibility', V.mapLabels ? 'visible' : 'none');
+  atmosphere = tod();
+  applyFxOpacity();
+  savePrefs();
+}
+class LayersControl {
+  onAdd() {
+    const div = document.createElement('div');
+    div.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'layers-btn';
+    b.title = 'Mapas y capas';
+    b.setAttribute('aria-label', 'Mapas y capas');
+    b.innerHTML = LAYERS_ICON;
+    b.onclick = (e) => { e.stopPropagation(); const open = layersPanel.classList.toggle('hidden') === false; b.classList.toggle('on', open); if (open) { buildLayersPanel(); const r = b.getBoundingClientRect(); layersPanel.style.top = `${r.top}px`; layersPanel.style.right = `${window.innerWidth - r.left + 8}px`; } };
+    div.append(b);
+    document.addEventListener('click', (e) => { if (!layersPanel.contains(e.target as Node) && e.target !== b) { layersPanel.classList.add('hidden'); b.classList.remove('on'); } });
+    return div;
+  }
+  onRemove() {}
+}
+map.addControl(new LayersControl() as any, 'top-right');
+
 map.on('load', () => {
   overlays.install();
+  applyMapPrefs();
   map.addLayer(fxLayer, 'fx-labels');
-  atmosphere = applyTimeOfDay(map, state.env.hour);
+  atmosphere = tod();
   puffTex = createPuffAtlas(1024);
   if (state.view.globe) applyProjection(true);
   detectSurface(state.target.lat, state.target.lon);
@@ -324,7 +402,7 @@ function clearRun() {
   document.getElementById('timeline')!.classList.add('hidden');
   document.body.classList.remove('detonated');
   setFlash(0, 0);
-  atmosphere = applyTimeOfDay(map, state.env.hour);
+  atmosphere = tod();
   map.triggerRepaint();
 }
 
@@ -385,6 +463,7 @@ async function detonate() {
     const q = state.view.quality;
     const domes = new Domes(plan);
     domes.enabled = state.view.domes;
+    domes.opacity = state.view.fxOpacity;
     domes.hidden = new Set(results.hidden);
     fxLayer.add(domes);
     if (plan.isAsteroid) fxLayer.add(new Bolide(plan, puffTex));
@@ -536,7 +615,7 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
       R.skyFlash = true;
     } else if (R.skyFlash) {
       R.skyFlash = false;
-      atmosphere = applyTimeOfDay(map, state.env.hour);
+      atmosphere = tod();
     }
     const g = P.shockGroundR(t);
     overlays.setReveal(t <= 0 ? 0 : t > P.shockTime(P.psi1R * 3 + P.h) ? Infinity : Math.max(g, t > P.tMax * 3 ? Math.max(P.burnR, P.fireballR) : 0), t / 3600, t);
@@ -640,3 +719,19 @@ function share() {
 
 // depuración / pruebas automáticas
 (window as any).__an = { map, state, detonate, enc, cloudShot, fxLayer, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.lastOverlay = 0; run.playing = false; map.triggerRepaint(); } }, fmtTime };
+
+// ---------------------------------------------------------------- app instalable (PWA)
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => { /* sin service worker */ }); });
+}
+let installEvt: (Event & { prompt(): Promise<void> }) | null = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installEvt = e as never;
+  const head = document.querySelector('.sb-head');
+  if (head && !head.querySelector('.install-btn')) {
+    const b = h('button', { class: 'btn-ghost install-btn', type: 'button', title: 'Instalar Bum como aplicación', onclick: async () => { if (!installEvt) return; await installEvt.prompt(); installEvt = null; b.remove(); } }, 'Instalar');
+    head.insertBefore(b, head.querySelector('.icon-btn'));
+  }
+});
+

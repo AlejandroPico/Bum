@@ -34,6 +34,8 @@ export class Domes implements FxModule {
   private plan: FxPlan;
   hidden = new Set<string>();
   enabled = true;
+  /** opacidad global elegida por el usuario */
+  opacity = 1;
   highlight: string | null = null;
 
   constructor(plan: FxPlan) {
@@ -75,7 +77,7 @@ export class Domes implements FxModule {
       // durante la formación del hongo las cúpulas se atenúan para no tapar el espectáculo
       const P = this.plan;
       const calm = P.highAltitude ? 1 : 0.35 + 0.65 * Math.max(0, Math.min(1, (ctx.t - P.tau * 2.5) / (P.tau * 1.5)));
-      const a = show ? k * calm * (it.ring.group === 'blast' ? 0.3 : it.ring.group === 'fireball' ? 0.4 : 0.18) : 0;
+      const a = show ? this.opacity * k * calm * (it.ring.group === 'blast' ? 0.3 : it.ring.group === 'fireball' ? 0.4 : 0.18) : 0;
       if (k <= 0) it.revealReal = -1;
       else if (it.revealReal < 0) it.revealReal = ctx.t - it.revealT < it.revealT * 0.5 + 2 ? ctx.real : ctx.real - 100;
       const pulse = show && it.pulse && it.revealReal >= 0 ? Math.exp(-(ctx.real - it.revealReal) / 1.4) * (it.ring.group === 'blast' ? 0.5 : 0.25) : 0;

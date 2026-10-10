@@ -35,7 +35,7 @@ uniform vec2 uCollar; uniform vec3 uSkirt; // radio, altura, densidad
 uniform float uHeat; uniform float uDens; uniform float uSigma; uniform float uDirty;
 uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uAmb; uniform vec3 uFogCol; uniform float uFogDist;
 uniform vec3 uBoxMin; uniform vec3 uBoxMax;
-uniform float uGlow; uniform float uErode;
+uniform float uGlow; uniform float uErode; uniform vec3 uFire;
 varying vec3 vW;
 ${HEAT}
 
@@ -157,16 +157,18 @@ void main(){
         od += densityCheap(p + uSun * L) * (L - prev);
         prev = L;
       }
+      float hAmb = clamp((p.y - (uCapC.y - uTc)) / (2.0 * uTc), 0.0, 1.0);
       float Tl = exp(-od * uSigma * 0.8);
       // la columna recibe luz lateral y del cielo aunque el sombrero le haga sombra
       Tl = mix(Tl, 1.0, 0.25 * (1.0 - hAmb));
       float powder = 1.0 - exp(-D.x * 4.0);
       vec3 albedo = mix(vec3(0.88, 0.85, 0.82), vec3(0.62, 0.53, 0.44), D.y);
-      float hAmb = clamp((p.y - (uCapC.y - uTc)) / (2.0 * uTc), 0.0, 1.0);
       vec3 amb = uAmb * mix(0.5, 1.05, hAmb) * (D.y > 0.5 ? 0.85 : 1.0);
       vec3 lum = uSunCol * 1.45 * Tl * phase * mix(1.0, powder * 1.6, 0.35) + amb * 0.85;
       // luz de la bola de fuego y brasas del interior
       lum += uGlow * vec3(1.0, 0.42, 0.12) * (1.0 - hAmb) * 0.6;
+      // resplandor de los incendios de la ciudad sobre la cara inferior (visible sobre todo de noche)
+      lum += uFire * (1.0 - hAmb * 0.75) * (0.6 + 0.4 * D.y);
       float e = uHeat * (0.25 + 0.75 * D.z);
       vec3 em = heatColor(e * 0.85) * e * 1.4;
       float a = 1.0 - exp(-sig * D.x * stepL);
@@ -208,7 +210,7 @@ export class VolumeCloud implements FxModule {
         uSun: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() },
         uFogCol: { value: new THREE.Color() }, uFogDist: { value: 300000 },
         uBoxMin: { value: new THREE.Vector3() }, uBoxMax: { value: new THREE.Vector3() },
-        uGlow: { value: 0 }, uErode: { value: 0 },
+        uGlow: { value: 0 }, uErode: { value: 0 }, uFire: { value: new THREE.Color(0, 0, 0) },
       },
       transparent: true,
       depthWrite: false,
@@ -306,6 +308,13 @@ export class VolumeCloud implements FxModule {
     u.uSun.value.copy(ctx.sunDir);
     u.uSunCol.value.copy(ctx.sunColor);
     u.uAmb.value.copy(ctx.ambient);
+    // de noche la nube sigue siendo visible: luz de luna mínima y fuego de la ciudad desde abajo
+    const n = ctx.night ?? 0;
+    u.uSunCol.value.r = Math.max(u.uSunCol.value.r, 0.3 * n); u.uSunCol.value.g = Math.max(u.uSunCol.value.g, 0.34 * n); u.uSunCol.value.b = Math.max(u.uSunCol.value.b, 0.46 * n);
+    u.uAmb.value.r = Math.max(u.uAmb.value.r, 0.2 * n); u.uAmb.value.g = Math.max(u.uAmb.value.g, 0.2 * n); u.uAmb.value.b = Math.max(u.uAmb.value.b, 0.25 * n);
+    const fires = P.ignitionR > 0 ? smooth(P.tMax * 4, P.tMax * 4 + 40, t) : 0;
+    const fk = fires * (0.1 + 0.42 * n) * Math.max(0.3, 1 - diss);
+    u.uFire.value.setRGB(1.0 * fk, 0.45 * fk, 0.16 * fk);
     u.uFogCol.value.copy(ctx.fogColor);
   }
 

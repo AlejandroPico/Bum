@@ -1,4 +1,5 @@
 import maplibregl, { type StyleSpecification, type Map as MLMap } from 'maplibre-gl';
+import { dimBase } from './basemaps';
 
 export const SOURCES = {
   satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -24,13 +25,6 @@ function style(): StyleSpecification {
     version: 8,
     glyphs: SOURCES.glyphs,
     sources: {
-      satellite: {
-        type: 'raster',
-        tiles: [SOURCES.satellite],
-        tileSize: 256,
-        maxzoom: 19,
-        attribution: 'Imágenes © Esri, Maxar, Earthstar Geographics',
-      },
       terrain: {
         type: 'raster-dem',
         tiles: [SOURCES.terrarium],
@@ -54,12 +48,6 @@ function style(): StyleSpecification {
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#020306' } },
-      {
-        id: 'sat',
-        type: 'raster',
-        source: 'satellite',
-        paint: { 'raster-saturation': -0.18, 'raster-contrast': 0.12, 'raster-brightness-max': 0.92, 'raster-fade-duration': 200 },
-      },
       {
         id: 'hillshade',
         type: 'hillshade',
@@ -176,11 +164,10 @@ export function applyTimeOfDay(map: MLMap, hour: number) {
     'fog-color': fog,
     ...SKY_BLENDS,
   });
-  map.setPaintProperty('sat', 'raster-brightness-max', 0.92 - night * 0.8);
-  map.setPaintProperty('sat', 'raster-saturation', -0.18 - night * 0.5);
+  dimBase(map, night);
   map.setPaintProperty('city-lights', 'line-opacity', night * 0.9);
   map.setPaintProperty('city-lights-glow', 'line-opacity', night * 0.35);
-  map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0.35 * (1 - night * 0.7));
+  if (map.getLayoutProperty('hillshade', 'visibility') !== 'none') map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0.35 * (1 - night * 0.7));
   const az = 90 + ((hour - 6) / 12) * 180;
   map.setLight({ anchor: 'map', position: [1.4, az, Math.max(10, 90 - Math.max(0, sunAlt) * 70)], color: mix('#ffffff', '#6a7fb0', night), intensity: 0.35 - night * 0.15 });
   return { night, sunAlt, sunAz: az };

@@ -9,6 +9,12 @@ export interface ViewOptions {
   domes: boolean; rings: boolean; fallout: boolean; damage: boolean; fires: boolean; sound: boolean; cinematic: boolean; labels: boolean;
   globe: boolean;
   marks: boolean;
+  basemap: string;
+  fxOpacity: number;
+  forceDay: boolean;
+  terrain3d: boolean;
+  buildings: boolean;
+  mapLabels: boolean;
   quality: number;
 }
 
@@ -30,7 +36,7 @@ export function defaultState(): AppState {
     ast: { kind: 'asteroid', name: 'Tunguska (Siberia, 1908)', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'sediment', waterDepthM: 0, azimuth: 250, surface: 'auto' },
     env: { windFromDeg: 270, windKmh: 24, visibilityKm: 25, humidity: 65, hour: 12, outdoorPct: null },
     target: { lat: 40.4168, lon: -3.7038, label: 'Madrid' },
-    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1 },
+    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1, basemap: 'relieve', fxOpacity: 1, forceDay: false, terrain3d: true, buildings: true, mapLabels: true },
     live: true,
   };
 }
@@ -172,7 +178,7 @@ export class Sidebar {
     const S = this.state;
     const head = h('div', { class: 'sb-head' },
       h('img', { class: 'logo', src: logoUrl, alt: 'Bum' }),
-      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Ataques nucleares e impactos · v0.6')),
+      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Ataques nucleares e impactos · v0.7')),
       h('button', { class: 'icon-btn', title: 'Ocultar panel (H)', html: ICONS.hide, onclick: () => this.ev.onCollapse() }),
     );
 

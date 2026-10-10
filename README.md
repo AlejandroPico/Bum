@@ -47,6 +47,8 @@ Otros comandos:
 - **Impacto cósmico**: 22 escenarios (de 2008 TC3 a Hale-Bopp) o diámetro, composición/densidad, velocidad,
   ángulo, dirección de llegada y terreno (sedimento, roca o agua con profundidad).
 - **Mapa**: plano 2D (por defecto) o **globo 3D** (botón del globo, arriba a la derecha, o en Visualización).
+- **Mapas y capas** (botón de capas, arriba a la derecha): satélite con relieve, satélite, Sentinel-2 (alternativa a Esri), político claro y oscuro, callejero de OpenStreetMap y topográfico; relieve 3D, edificios, nombres, luz de día fija y **opacidad de los efectos** (anillos, cúpulas y marcas).
+- **App instalable**: se puede instalar como aplicación (PWA) y guarda en caché la app, las teselas del mapa y los datos del tiempo para funcionar sin conexión.
 - **Terreno automático**: en impactos se detecta si el punto es tierra u océano y la profundidad del agua (batimetría de los datos de relieve).
 - **Entorno**: botón de **tiempo real** (Open-Meteo, gratuito y sin clave) que trae viento, humedad, visibilidad,
   temperatura, nubosidad y hora local del objetivo; para la lluvia radiactiva se usa el viento medio entre 850 y
@@ -104,6 +106,7 @@ Botón del libro (bajo el del globo, o tecla `E`): más de 170 artículos (funda
 - Relieve: Mapzen Terrain Tiles en AWS Open Data.
 - Edificios, carreteras y topónimos: [OpenFreeMap](https://openfreemap.org) © colaboradores de OpenStreetMap.
 - Búsqueda de lugares: Nominatim (OpenStreetMap).
+- Mapas alternativos: Sentinel-2 cloudless de EOX (CC BY-NC-SA), OpenStreetMap, Esri World Topo.
 - Tiempo real: [Open-Meteo](https://open-meteo.com) (CC BY 4.0).
 
 ## Hoja de ruta
