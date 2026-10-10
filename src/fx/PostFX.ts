@@ -55,7 +55,7 @@ void main(){
     float band = exp(-pow((r - 1.0) / 0.035, 2.0));
     off += normalize(d + 1e-6) * band * uShockK * 0.006 / vec2(asp, 1.0);
   }
-  vec3 col = texture(uFb, uv + off).rgb;
+  vec3 col = textureLod(uFb, uv + off, 0.0).rgb;
 
   // resplandor a partir de los mipmaps
   if (uBloom > 0.001) {

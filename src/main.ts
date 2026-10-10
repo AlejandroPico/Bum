@@ -427,7 +427,7 @@ function cloudCamera(bearingDeg: number, final = true) {
  * Cada pulsación aleja al testigo un poco más.
  */
 /** estado de la calidad automática */
-const autoQ = { last: 0, ratio: 0, fps: 60 };
+const autoQ = { last: 0, fps: 60 };
 let groundStep = 0;
 let groundFov = false;
 /** vuelve al campo de visión normal tras la vista desde el suelo */
@@ -574,10 +574,7 @@ async function detonate() {
     fxLayer.setOrigin(lon, lat, elev);
     fxLayer.extentM = Math.max(...fx.rings.filter((r) => r.dome).map((r) => r.radiusM), fx.cloud.capRadiusM * 2.5, fx.cloud.topM * 1.5, 1000) + spread * 2;
     (map as any).transform?._calcMatrices?.();
-    if (state.view.autoQ) {
-      const dpr = window.devicePixelRatio || 1;
-      state.view.quality = autoQ.fps < 22 || (autoQ.ratio && autoQ.ratio < dpr * 0.7) ? 0.5 : 1;
-    } else if (autoQ.ratio) { autoQ.ratio = 0; map.setPixelRatio(window.devicePixelRatio || 1); }
+    if (state.view.autoQ) state.view.quality = autoQ.fps < 22 ? 0.5 : 1;
     const q = state.view.quality;
     // espera a la textura de ruido 3D (se genera en segundo plano al cargar)
     for (let i = 0; i < 60 && !cloudNoise; i++) await new Promise((r) => setTimeout(r, 50));
@@ -854,17 +851,12 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
     }
   }
 
-  // calidad automática: ajusta la resolución de dibujo según los fotogramas por segundo
+  // calidad automática: mide los fotogramas por segundo para elegir la calidad de la próxima
+  // simulación (nunca baja la resolución del mapa: los textos y las líneas se verían borrosos)
   if (state.view.autoQ && R.playing && now - autoQ.last > 1500) {
     autoQ.last = now;
-    const fps = 1000 / Math.max(1, fxLayer.frameMs);
-    const dpr = window.devicePixelRatio || 1;
-    let r = autoQ.ratio || dpr;
-    if (fps < 24 && r > dpr * 0.5) r = Math.max(dpr * 0.5, r * 0.85);
-    else if (fps > 48 && r < dpr) r = Math.min(dpr, r * 1.12);
-    if (Math.abs(r - (autoQ.ratio || dpr)) > 0.01) { autoQ.ratio = r; map.setPixelRatio(r); }
-    autoQ.fps = fps;
-    sidebar.qualVal.textContent = `${Math.round(fps)} fps · ${Math.round((r / dpr) * 100)} %`;
+    autoQ.fps = 1000 / Math.max(1, fxLayer.frameMs);
+    sidebar.qualVal.textContent = `${Math.round(autoQ.fps)} fps`;
   }
 
   // post-procesado
@@ -877,9 +869,8 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
     const hk = Math.min(1.2, heat);
     pp.flare = hk * 0.9 * (0.5 + 0.5 * ctx.glare);
     pp.haze = P.flashK > 0 ? Math.min(1, hk * 1.2 + 0.55 * Math.exp(-t / (P.tau * 0.7 + 1))) * P.flashK : 0;
-    const firesOn = state.view.fires && P.ignitionR > 0 && t > P.tMax * 4 ? 1 : 0;
-    pp.bloom = Math.min(0.9, 0.45 * Math.min(1, hk * 1.4) + n * 0.4 * firesOn);
-    pp.threshold = n > 0.5 ? 0.55 : 0.8;
+    pp.bloom = hk > 0.05 ? Math.min(0.6, 0.45 * Math.min(1, hk * 1.4)) : 0;
+    pp.threshold = 0.85;
     const gR = P.shockGroundR(t), lim = P.psi1R * 1.3;
     pp.shockR = gR;
     pp.shockK = gR > 0 && lim > 0 && gR < lim ? Math.pow(1 - gR / lim, 0.7) * (P.buried?.contained ? 0 : 1) : 0;
