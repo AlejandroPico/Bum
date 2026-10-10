@@ -201,6 +201,10 @@ export class Overlays {
 
   setHidden(ids: Set<string>) {
     this.hidden = ids;
+    const m = this.map;
+    const vis = (id: string, on: boolean) => { if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); };
+    vis('fx-tsu-iso', !ids.has('tsu-iso')); vis('fx-tsu-lbl', !ids.has('tsu-iso'));
+    vis('fx-tsu-coast', !ids.has('tsu-coast'));
     this.refresh();
   }
 
@@ -314,6 +318,7 @@ export class Overlays {
         const tS = this.falloutT * 3600 - this.falloutDelayS;
         const front = this.falloutT === Infinity ? Infinity : tS <= 0 ? 0 : windKmh * (tS / 3600) * 1000 + fx.cloud.capRadiusM * Math.min(1, tS / Math.max(1, this.falloutDelayS * 2));
         for (const c of fx.fallout) {
+          if (this.hidden.has(`fo:${c.level}`)) continue;
           for (const poly of c.polygons) {
             const coords = poly.map((ring) => ring.map(([e, n]) => {
               // recorta al frente de deposición
@@ -358,7 +363,7 @@ export class Overlays {
         for (const st of steps) if (st.r > 1) sc.push({ type: 'Feature', properties: { color: st.color, opacity: st.opacity }, geometry: { type: 'Polygon', coordinates: circlePolygon(lat, lon, st.r, 120) } });
 
         // superficie quemada: el incendio avanza con el viento durante horas
-        if (fx.fires && fx.fires.kind !== 'none' && this.showDamage) {
+        if (fx.fires && fx.fires.kind !== 'none' && this.showDamage && !this.hidden.has('burn')) {
           const hh = this.simT === Infinity ? 12 : Math.max(0, this.simT / 3600);
           const R0 = fx.fires.ignitionR;
           const v = fx.fires.spreadKmh * 1000;

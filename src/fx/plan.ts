@@ -87,7 +87,8 @@ export class FxPlan {
     const shockEnd = this.shockTime(Math.max(this.psi1R * 1.6, this.fireballR * 4));
     const ext = fx.fallout.length ? Math.max(...fx.fallout.map((f) => f.maxDownwindKm)) : 0;
     this.falloutExtKm = ext;
-    const falloutEnd = fx.fallout.length ? Math.min(48 * 3600, Math.max(6 * 3600, (ext / Math.max(fx.windKmh, 4) + 1) * 3600)) : 0;
+    // la línea de tiempo dura hasta que la lluvia radiactiva (o la ceniza) termina de dibujarse
+    const falloutEnd = fx.fallout.length ? Math.min(14 * 86400, Math.max(6 * 3600, (ext / Math.max(fx.windKmh, 4) * 1.08 + 1) * 3600 + this.tau * 3)) : 0;
     // la nube se disipa por completo antes de terminar la línea de tiempo
     const y = Math.max(fx.energyKt, 0.001);
     this.fade0 = this.tau * 6;
@@ -95,7 +96,8 @@ export class FxPlan {
     // el tsunami viaja a √(g·h): en mar profundo tarda horas en cruzar el océano
     const tsuR = Math.max(0, ...fx.rings.filter((r) => r.group === 'tsunami').map((r) => r.radiusM));
     const tsuEnd = fx.tsunami && tsuR ? (tsuR / Math.sqrt(9.81 * Math.max(10, fx.tsunami.depthM))) * 1.05 : 0;
-    this.tEnd = Math.min(72 * 3600, Math.max(20 * 60, shockEnd * 1.2, falloutEnd, this.fade1 * 1.05, tsuEnd));
+    const fireEnd = fx.fires && fx.fires.kind !== 'none' ? (fx.fires.kind === 'firestorm' ? 3 : 12) * 3600 : 0;
+    this.tEnd = Math.min(14 * 86400, Math.max(20 * 60, shockEnd * 1.2, falloutEnd, this.fade1 * 1.05, tsuEnd, fireEnd));
   }
 
   /** radio del frente de choque (m, desde el punto de explosión) */

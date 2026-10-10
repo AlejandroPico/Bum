@@ -1,4 +1,6 @@
 import { Encyclopedia, BOOK_ICON } from './encyclopedia/Encyclopedia';
+import { THEME_ICONS, THEME_NAMES, THEME_HOUR, autoTheme, resolveTheme, applyThemeClass, type ThemeChoice, type ThemeId } from './ui/theme';
+import logoUrl from '../favicon.svg';
 import { slug } from './encyclopedia/slug';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
@@ -74,18 +76,19 @@ interface Run {
 }
 let run: Run | null = null;
 let atmosphere = { night: 0, sunAlt: 1, sunAz: 180 };
-/** iluminación según la hora (o siempre de día si el usuario lo elige) */
-function tod() { return applyTimeOfDay(map, state.view.forceDay ? 12.5 : state.env.hour); }
+/** iluminación del mapa según el tema (día, tarde o noche); la hora del entorno sólo influye en los cálculos */
+function tod() { return applyTimeOfDay(map, THEME_HOUR[resolveTheme(state.view.theme)]); }
 
 // preferencias de mapa guardadas en este navegador
 const PREF_KEY = 'bum:mapprefs';
 try {
   const pr = JSON.parse(localStorage.getItem(PREF_KEY) ?? '{}');
-  for (const k of ['basemap', 'fxOpacity', 'forceDay', 'terrain3d', 'buildings', 'mapLabels', 'tests', 'post', 'autoQ', 'quality', 'realPop'] as const) if (k in pr) (state.view as any)[k] = pr[k];
+  for (const k of ['basemap', 'fxOpacity', 'theme', 'terrain3d', 'buildings', 'mapLabels', 'tests', 'post', 'autoQ', 'quality', 'realPop'] as const) if (k in pr) (state.view as any)[k] = pr[k];
 } catch { /* sin almacenamiento */ }
+if (!['day', 'evening', 'night', 'auto'].includes(state.view.theme)) state.view.theme = 'auto';
 function savePrefs() {
   const V = state.view;
-  try { localStorage.setItem(PREF_KEY, JSON.stringify({ basemap: V.basemap, fxOpacity: V.fxOpacity, forceDay: V.forceDay, terrain3d: V.terrain3d, buildings: V.buildings, mapLabels: V.mapLabels, tests: V.tests, post: V.post, autoQ: V.autoQ, quality: V.quality, realPop: V.realPop })); } catch { /* sin almacenamiento */ }
+  try { localStorage.setItem(PREF_KEY, JSON.stringify({ basemap: V.basemap, fxOpacity: V.fxOpacity, theme: V.theme, terrain3d: V.terrain3d, buildings: V.buildings, mapLabels: V.mapLabels, tests: V.tests, post: V.post, autoQ: V.autoQ, quality: V.quality, realPop: V.realPop })); } catch { /* sin almacenamiento */ }
 }
 
 
@@ -108,7 +111,7 @@ const enc = new Encyclopedia((preset) => {
 });
 
 const results = new ResultsPanel(document.getElementById('results')!, {
-  onBook: (name) => { enc.hasPreset(name).then((ok) => enc.open(ok ? slug(name) : '')); },
+  onBook: (name) => { void enc.openBest(name); },
   onToggle: () => syncHidden(),
   onHover: (id) => { overlays.highlight = id; overlays.refresh(); if (run) run.domes.highlight = id; map.triggerRepaint(); },
   onShare: () => share(),
@@ -134,7 +137,8 @@ document.getElementById('app')!.append(showBtn);
 /** deja libre el espacio de los paneles para que la zona cero quede centrada en la parte visible */
 function updatePadding() {
   const left = document.body.classList.contains('ui-collapsed') || window.innerWidth < 760 ? 0 : 340;
-  const right = run && !document.getElementById('results')!.classList.contains('hidden') && window.innerWidth >= 760 ? 392 : 0;
+  const rp = document.getElementById('results')!;
+  const right = run && !rp.classList.contains('hidden') && !rp.classList.contains('min') && window.innerWidth >= 760 ? 392 : 0;
   map.setPadding({ left, right, top: 0, bottom: 0 });
 }
 
@@ -207,41 +211,6 @@ function setTarget(lat: number, lon: number, label: string, fly: boolean) {
 // ---------------------------------------------------------------------------
 // mapa
 // ---------------------------------------------------------------------------
-class GlobeControl {
-  onAdd() {
-    const div = document.createElement('div');
-    div.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-    globeBtn = document.createElement('button');
-    globeBtn.type = 'button';
-    globeBtn.className = 'globe-btn';
-    globeBtn.title = 'Cambiar entre mapa plano y globo 3D';
-    globeBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7h14M5 17h14"/></svg>';
-    globeBtn.onclick = () => applyProjection(!state.view.globe);
-    div.append(globeBtn);
-    return div;
-  }
-  onRemove() {}
-}
-map.addControl(new GlobeControl() as any, 'top-right');
-
-class BookControl {
-  onAdd() {
-    const div = document.createElement('div');
-    div.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'book-btn';
-    b.title = 'Enciclopedia (E)';
-    b.setAttribute('aria-label', 'Abrir la enciclopedia');
-    b.innerHTML = BOOK_ICON;
-    b.onclick = () => enc.toggle();
-    div.append(b);
-    return div;
-  }
-  onRemove() {}
-}
-map.addControl(new BookControl() as any, 'top-right');
-
 // ---------------------------------------------------------------- capas del mapa
 const LAYERS_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="miter"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>';
 const layersPanel = h('div', { id: 'layers-panel', class: 'glass hidden' });
@@ -262,13 +231,125 @@ function buildLayersPanel() {
     inp.addEventListener('change', () => { V[key] = inp.checked; applyMapPrefs(); });
     return h('label', { class: 'toggle' }, inp, h('span', { class: 'sw' }), label);
   };
-  layersPanel.append(h('div', { class: 'toggles one lp-tg' }, tg('Relieve 3D', 'terrain3d'), tg('Edificios 3D', 'buildings'), tg('Nombres de lugares', 'mapLabels'), tg('Luz de día siempre', 'forceDay'), tg('Pruebas nucleares (1945–2017)', 'tests')));
+  layersPanel.append(h('div', { class: 'toggles one lp-tg' }, tg('Relieve 3D', 'terrain3d'), tg('Edificios 3D', 'buildings'), tg('Nombres de lugares', 'mapLabels'), tg('Pruebas nucleares (1945–2017)', 'tests')));
   const val = h('b', {}, `${Math.round(V.fxOpacity * 100)} %`);
   const r = h('input', { type: 'range', min: 0, max: 100, step: 1, value: Math.round(V.fxOpacity * 100) }) as HTMLInputElement;
   setRangeFill(r);
   r.addEventListener('input', () => { V.fxOpacity = +r.value / 100; val.textContent = `${r.value} %`; setRangeFill(r); applyFxOpacity(); savePrefs(); });
   layersPanel.append(h('div', { class: 'lp-h' }, 'Efectos'), h('label', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Opacidad de anillos, cúpulas y marcas'), val), r));
 }
+// ---------------------------------------------------------------- barra de botones (arriba a la derecha)
+const GLOBE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7h14M5 17h14"/></svg>';
+const INFO_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 10.5V17M12 7v.5" stroke-width="2"/></svg>';
+const toolbar = h('div', { id: 'toolbar', class: 'glass' });
+document.getElementById('app')!.append(toolbar);
+const tbBtn = (cls: string, title: string, icon: string, onclick: (e: MouseEvent) => void) => {
+  const b = h('button', { type: 'button', class: `tb-btn ${cls}`, title, 'aria-label': title, html: icon, onclick }) as HTMLButtonElement;
+  toolbar.append(b);
+  return b;
+};
+/** abre un menú emergente bajo su botón (y cierra los demás) */
+const popovers: { el: HTMLElement; btn: HTMLElement }[] = [];
+function togglePopover(el: HTMLElement, btn: HTMLElement, build: () => void) {
+  const open = el.classList.contains('hidden');
+  for (const p of popovers) { p.el.classList.add('hidden'); p.btn.classList.remove('on'); }
+  if (!open) return;
+  build();
+  el.classList.remove('hidden');
+  btn.classList.add('on');
+  const r = btn.getBoundingClientRect();
+  el.style.top = `${r.bottom + 8}px`;
+  el.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+}
+document.addEventListener('click', (e) => {
+  for (const p of popovers) if (!p.el.contains(e.target as Node) && !p.btn.contains(e.target as Node)) { p.el.classList.add('hidden'); p.btn.classList.remove('on'); }
+});
+globeBtn = tbBtn('globe-btn', 'Mapa plano o globo 3D', GLOBE_ICON, () => applyProjection(!state.view.globe));
+globeBtn.classList.toggle('on', state.view.globe);
+tbBtn('book-btn', 'Enciclopedia (E)', BOOK_ICON, () => enc.toggle());
+const layersBtn = tbBtn('layers-btn', 'Mapas y capas', LAYERS_ICON, (e) => { e.stopPropagation(); togglePopover(layersPanel, layersBtn, buildLayersPanel); });
+popovers.push({ el: layersPanel, btn: layersBtn });
+
+// tema: día, tarde, noche o automático
+const themePop = h('div', { id: 'theme-pop', class: 'glass hidden' });
+document.getElementById('app')!.append(themePop);
+const themeBtn = tbBtn('theme-btn', 'Tema', THEME_ICONS[state.view.theme], (e) => { e.stopPropagation(); togglePopover(themePop, themeBtn, buildThemePop); });
+popovers.push({ el: themePop, btn: themeBtn });
+function buildThemePop() {
+  themePop.innerHTML = '';
+  for (const c of ['day', 'evening', 'night', 'auto'] as ThemeChoice[]) {
+    const now = c === 'auto' ? ` · ahora ${THEME_NAMES[autoTheme()].toLowerCase()}` : '';
+    themePop.append(h('button', { type: 'button', class: 'tp-opt' + (state.view.theme === c ? ' on' : ''), onclick: () => { state.view.theme = c; applyTheme(); savePrefs(); buildThemePop(); } },
+      h('span', { class: 'tp-ic', html: THEME_ICONS[c] }), h('span', {}, THEME_NAMES[c], h('small', {}, c === 'auto' ? `Según la hora y la fecha de tu equipo${now}` : c === 'day' ? 'Interfaz clara y mapa a pleno sol' : c === 'evening' ? 'Tonos cálidos y luz de atardecer' : 'Interfaz oscura y mapa nocturno'))));
+  }
+}
+let themeNow: ThemeId | null = null;
+function applyTheme() {
+  const t = resolveTheme(state.view.theme);
+  themeBtn.innerHTML = THEME_ICONS[state.view.theme];
+  themeBtn.title = `Tema: ${THEME_NAMES[state.view.theme]}${state.view.theme === 'auto' ? ` (${THEME_NAMES[t].toLowerCase()})` : ''}`;
+  if (t === themeNow) return;
+  themeNow = t;
+  applyThemeClass(t);
+  if (map.loaded()) atmosphere = tod();
+}
+applyTheme();
+// en automático, revisa cada pocos minutos si ha cambiado la luz
+setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) applyTheme(); }, 5 * 60 * 1000);
+
+tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
+
+// ---------------------------------------------------------------- acerca de
+const APP_VERSION = '0.10';
+const LINKS = {
+  repo: 'https://github.com/AlejandroPico/Bum',
+  portfolio: 'https://alejandropico.github.io/Portfolio/',
+};
+const aboutEl = h('div', { id: 'about', class: 'hidden' });
+document.getElementById('app')!.append(aboutEl);
+aboutEl.addEventListener('click', (e) => { if (e.target === aboutEl) closeAbout(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !aboutEl.classList.contains('hidden')) closeAbout(); });
+function closeAbout() { aboutEl.classList.add('hidden'); }
+function openAbout() {
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches;
+  const install = h('button', { type: 'button', class: 'btn-line about-install', onclick: async () => {
+    if (!installEvt) return;
+    await installEvt.prompt();
+    installEvt = null;
+    openAbout();
+  } }, h('span', { html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>' }), 'Instalar como aplicación');
+  const feat = (t: string, d: string) => h('li', {}, h('b', {}, t), ' ', d);
+  aboutEl.innerHTML = '';
+  aboutEl.append(h('div', { class: 'about-card glass', role: 'dialog', 'aria-label': 'Acerca de Bum' },
+    h('button', { type: 'button', class: 'icon-btn about-x', title: 'Cerrar', html: ICONS.close, onclick: () => closeAbout() }),
+    // cabecera fija: nombre, versión y presentación
+    h('div', { class: 'about-top' },
+      h('div', { class: 'about-head' },
+        h('img', { src: logoUrl, alt: '', class: 'about-logo' }),
+        h('div', {}, h('h2', {}, 'Bum'), h('div', { class: 'about-ver' }, `Versión ${APP_VERSION}`))),
+      h('p', { class: 'about-lead' }, 'Simulador que muestra, sobre un mapa 3D de cualquier lugar del mundo, qué pasaría si allí estallara un arma nuclear, cayera un asteroide o se produjera otra gran catástrofe: hasta dónde llega cada efecto, cuántas personas se verían afectadas y cómo evoluciona todo con el paso de las horas.')),
+    // contenido (en el móvil es lo único que se desplaza)
+    h('div', { class: 'about-mid' },
+      h('ul', { class: 'about-feat' },
+        feat('Armas nucleares y explosivos.', 'Más de 70 armas reales, de las bombas de Hiroshima y Nagasaki a la Bomba del Zar y los arsenales actuales, o una potencia a tu medida; en superficie, en el aire, en el espacio, bajo tierra o bajo el agua, y ataques con varias detonaciones a la vez.'),
+        feat('Asteroides y cometas.', 'Impactos históricos e hipotéticos y los objetos reales que vigila la NASA, con su cráter, el terremoto, el tsunami que recorre los océanos y la posibilidad de desviarlos a tiempo.'),
+        feat('Otras catástrofes.', 'Accidentes nucleares como Chernóbil o Fukushima, bombas sucias y erupciones de supervolcanes como Yellowstone.'),
+        feat('Efectos y víctimas.', 'Bola de fuego, onda expansiva, quemaduras, radiación, lluvia radiactiva, incendios, pulso electromagnético, ceniza y contaminación, con la población real de la zona, los hospitales y servicios afectados y cuánto protege cada tipo de refugio.'),
+        feat('Tiempo real.', 'El viento, la lluvia y la hora del lugar cambian el resultado; una línea de tiempo deja ver la explosión a cámara lenta o el avance de la nube durante días.'),
+        feat('Enciclopedia.', 'Cientos de artículos sobre la historia, la ciencia y los efectos de estas armas y catástrofes, con esquemas animados y modelos 3D que se pueden desmontar.'),
+      ),
+      h('p', { class: 'about-note' }, 'Herramienta divulgativa y educativa: las cifras son estimaciones a partir de modelos científicos públicos y no sustituyen a los planes oficiales de protección civil.'),
+      standalone ? h('div', { class: 'about-installed' }, 'Instalada como aplicación en este equipo.') : installEvt ? install : h('div', { class: 'about-installed' }, 'Para instalarla como aplicación, usa la opción «Instalar» del menú de tu navegador.')),
+    // pie fijo: enlaces y autor
+    h('div', { class: 'about-foot' },
+      h('div', { class: 'about-links' },
+        h('a', { href: LINKS.repo, target: '_blank', rel: 'noopener' }, h('span', {}, 'Repositorio del proyecto'), h('small', {}, 'GitHub · código fuente de Bum')),
+        h('a', { href: LINKS.portfolio, target: '_blank', rel: 'noopener' }, h('span', {}, 'Portfolio del autor'), h('small', {}, 'Otros proyectos de Alejandro'))),
+      h('div', { class: 'about-by' }, 'Creado por ', h('b', {}, 'Alejandro Pico Pérez'))),
+  ));
+  aboutEl.classList.remove('hidden');
+}
+
 function applyFxOpacity() {
   overlays.setOpacity(state.view.fxOpacity);
   if (run) { run.domes.opacity = state.view.fxOpacity; for (const x of run.extras) x.domes.opacity = state.view.fxOpacity; }
@@ -286,24 +367,28 @@ function applyMapPrefs() {
   applyFxOpacity();
   savePrefs();
 }
-class LayersControl {
-  onAdd() {
-    const div = document.createElement('div');
-    div.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'layers-btn';
-    b.title = 'Mapas y capas';
-    b.setAttribute('aria-label', 'Mapas y capas');
-    b.innerHTML = LAYERS_ICON;
-    b.onclick = (e) => { e.stopPropagation(); const open = layersPanel.classList.toggle('hidden') === false; b.classList.toggle('on', open); if (open) { buildLayersPanel(); const r = b.getBoundingClientRect(); layersPanel.style.top = `${r.top}px`; layersPanel.style.right = `${window.innerWidth - r.left + 8}px`; } };
-    div.append(b);
-    document.addEventListener('click', (e) => { if (!layersPanel.contains(e.target as Node) && e.target !== b) { layersPanel.classList.add('hidden'); b.classList.remove('on'); } });
-    return div;
-  }
-  onRemove() {}
+
+
+/** ficha al pasar el ratón por los puntos de costa y las isócronas del tsunami */
+function installTsunamiHover() {
+  const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'bum-popup bum-tip', offset: 12, maxWidth: '260px' });
+  const hrs = (h: number) => { const m = Math.round(h * 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`; };
+  const effect = (a: number) => a < 1 ? 'Corrientes peligrosas en puertos y playas.' : a < 3 ? 'Inunda la primera línea de costa.' : a < 10 ? 'Ola destructiva: arrasa paseos marítimos y puertos.' : 'Catastrófica: penetra kilómetros tierra adentro.';
+  map.on('mousemove', 'fx-tsu-coast', (e) => {
+    const p = e.features?.[0]?.properties as { amp: number; h: number } | undefined;
+    if (!p) return;
+    const a = +p.amp;
+    tip.setLngLat(e.lngLat).setHTML(`<div class="tp-k">Tsunami · costa</div><h3>Ola de ${a >= 10 ? Math.round(a) : a.toLocaleString('es-ES', { maximumFractionDigits: 1 })} m</h3><p>Llega ${hrs(+p.h)} después de la explosión. ${effect(a)}</p>`).addTo(map);
+    map.getCanvas().style.cursor = 'help';
+  });
+  map.on('mouseleave', 'fx-tsu-coast', () => { tip.remove(); map.getCanvas().style.cursor = ''; });
+  map.on('mousemove', 'fx-tsu-iso', (e) => {
+    const p = e.features?.[0]?.properties as { hours: number } | undefined;
+    if (!p) return;
+    tip.setLngLat(e.lngLat).setHTML(`<div class="tp-k">Tsunami · frente de la ola</div><h3>${p.hours} h</h3><p>Hasta aquí ha llegado la ola ${p.hours} h después de la explosión.</p>`).addTo(map);
+  });
+  map.on('mouseleave', 'fx-tsu-iso', () => tip.remove());
 }
-map.addControl(new LayersControl() as any, 'top-right');
 
 // capa de pruebas nucleares
 const testsLayer = new TestsLayer(map);
@@ -319,6 +404,7 @@ testsLayer.onSimulate = (t) => {
 map.on('load', () => {
   overlays.install();
   testsLayer.install();
+  installTsunamiHover();
   applyMapPrefs();
   map.addLayer(fxLayer, 'fx-labels');
   atmosphere = tod();
@@ -341,6 +427,26 @@ map.on('click', (e) => {
     syncStrikeMarkers();
   }
 });
+
+// doble clic derecho: norte arriba y vista cenital (sustituye al botón de la brújula)
+{
+  let rDown: { x: number; y: number } | null = null;
+  let lastCtx = 0;
+  map.getCanvasContainer().addEventListener('mousedown', (e) => { if (e.button === 2) rDown = { x: e.clientX, y: e.clientY }; });
+  map.on('contextmenu', (e) => {
+    const oe = e.originalEvent;
+    oe.preventDefault();
+    // si ha arrastrado para girar, no cuenta como clic
+    if (rDown && Math.hypot(oe.clientX - rDown.x, oe.clientY - rDown.y) > 5) { lastCtx = 0; return; }
+    const now = performance.now();
+    if (now - lastCtx < 450) {
+      lastCtx = 0;
+      if (run) { run.userCam = true; run.orbit = null; }
+      resetFov();
+      map.easeTo({ bearing: 0, pitch: 0, duration: 900, essential: true });
+    } else lastCtx = now;
+  });
+}
 
 for (const ev of ['dragstart', 'rotatestart', 'pitchstart', 'wheel'] as const) {
   map.on(ev, (e: any) => { if (run && e.originalEvent) { run.userCam = true; run.orbit = null; } });
@@ -621,6 +727,7 @@ async function detonate() {
     const dObs = haversineKm(camLL.lat, camLL.lng, lat, lon) * 1000;
 
     results.hidden.clear();
+    overlays.setHidden(new Set());
     overlays.set(fx, lat, lon, fx.windKmh);
     overlays.extras = extras.map((x) => ({ fx: x.fx, lat: x.lat, lon: x.lon }));
     overlays.gateT = plan.fbDone;
@@ -718,7 +825,8 @@ function restartClock() {
 /** ritmo de la simulación: cámara lenta en el destello, acelerado después */
 function rateAt(t: number, speed: number) {
   if (t < 0) return 0.6 * speed;
-  return speed * Math.min(2400, 0.12 + 0.35 * t);
+  // con el paso de los días se acelera para recorrer la lluvia radiactiva o la ceniza en pocos minutos
+  return speed * Math.min(Math.max(2400, t / 36), 0.12 + 0.35 * t);
 }
 
 const flashEl = document.getElementById('flash')!;
@@ -951,10 +1059,6 @@ let installEvt: (Event & { prompt(): Promise<void> }) | null = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   installEvt = e as never;
-  const head = document.querySelector('.sb-head');
-  if (head && !head.querySelector('.install-btn')) {
-    const b = h('button', { class: 'btn-ghost install-btn', type: 'button', title: 'Instalar Bum como aplicación', onclick: async () => { if (!installEvt) return; await installEvt.prompt(); installEvt = null; b.remove(); } }, 'Instalar');
-    head.insertBefore(b, head.querySelector('.icon-btn'));
-  }
 });
+window.addEventListener('appinstalled', () => { installEvt = null; });
 

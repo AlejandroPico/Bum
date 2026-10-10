@@ -35,23 +35,36 @@ export class Timeline {
     for (const s of [0.25, 1, 4, 16]) {
       speed.append(h('button', { class: s === 1 ? 'on' : '', onclick: (e: Event) => { speed.querySelectorAll('button').forEach((b) => b.classList.remove('on')); (e.currentTarget as HTMLElement).classList.add('on'); ev.onSpeed(s); } }, `×${s}`));
     }
-    const cloud = h('button', { class: 'tl-btn', title: 'Encuadrar el hongo completo', html: ICONS.cam, onclick: () => ev.onCloud() });
-    const ground = h('button', { class: 'tl-btn', title: 'Vista desde el suelo (como un testigo a distancia)', html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="5" r="2"/><path d="M7 7v7M4 10h6M7 14l-3 6M7 14l3 6M2 21h20M14 21c1-6 3-9 5-9s3 3 3 9"/></svg>', onclick: () => ev.onGround() });
+    const cloud = h('button', { class: 'tl-btn', title: 'Encuadrar la nube completa', html: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><path d="M8 11.2c0-2.2 1.8-3.7 4-3.7s4 1.5 4 3.7c0 1.3-1.8 2-4 2s-4-.7-4-2z"/><path d="M11 13.2h2V18h-2z"/></svg>', onclick: () => ev.onCloud() });
+    const ground = h('button', { class: 'tl-btn', title: 'Vista desde el suelo: un testigo a distancia (pulsa otra vez para alejarlo o acercarlo)', html: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 20h20"/><path d="M3.5 13c2.3-3.2 5.2-4.8 8.5-4.8s6.2 1.6 8.5 4.8c-2.3 3.2-5.2 4.8-8.5 4.8S5.8 16.2 3.5 13z"/><circle cx="12" cy="13" r="2.4"/></svg>', onclick: () => ev.onGround() });
     el.append(restart, this.play, this.time, h('div', { class: 'tl-track' }, this.events, this.range), speed, ground, cloud);
   }
 
   configure(tStart: number, tEnd: number, events: { t: number; label: string }[]) {
     this.tStart = tStart;
     this.tEnd = tEnd;
+    this.evList = [...events].sort((a, b) => a.t - b.t);
+    this.el.classList.remove('hidden');
+    this.layoutEvents();
+  }
+
+  private evList: { t: number; label: string }[] = [];
+  private ro: ResizeObserver | null = null;
+  /** coloca las marcas de eventos sin que los rótulos se pisen (según el ancho real de la barra) */
+  private layoutEvents() {
+    if (!this.ro) { this.ro = new ResizeObserver(() => this.layoutEvents()); this.ro.observe(this.events); }
+    const W = this.events.clientWidth || 600;
     this.events.innerHTML = '';
-    let lastPos = -1;
-    for (const e of events.sort((a, b) => a.t - b.t)) {
+    let lastRight = -Infinity;
+    for (const e of this.evList) {
       const p = this.toS(e.t);
-      if (p < 0 || p > 1 || p - lastPos < 0.09) continue;
-      lastPos = p;
+      if (p < 0 || p > 1) continue;
+      const w = e.label.length * 5.4 + 14;
+      const x = p * W;
+      if (x - w / 2 < lastRight || x - w / 2 < -8 || x + w / 2 > W + 8) continue;
+      lastRight = x + w / 2;
       this.events.append(h('span', { style: { left: `${p * 100}%` } }, e.label));
     }
-    this.el.classList.remove('hidden');
   }
 
   private get entry() { return this.tStart < 0 ? 0.12 : 0; }

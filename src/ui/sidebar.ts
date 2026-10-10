@@ -1,10 +1,10 @@
 import { h, setRangeFill, ICONS, toast } from './dom';
-import logoUrl from '../../favicon.svg';
 import { NUKE_PRESETS, ASTEROID_PRESETS, COMPOSITIONS } from '../data/presets';
 import { parseCoords, fetchWeather, type Weather } from './geo';
 import { fmtEnergy } from '../physics/effects';
 import type { NuclearInput, AsteroidInput, Environment, BurstMode, TargetType, Scenario, ReleaseInput, VolcanoInput, Isotope } from '../physics/types';
 import { ISOTOPES } from '../physics/other';
+import type { ThemeChoice } from './theme';
 
 export interface ViewOptions {
   domes: boolean; rings: boolean; fallout: boolean; damage: boolean; fires: boolean; sound: boolean; cinematic: boolean; labels: boolean;
@@ -25,6 +25,8 @@ export interface ViewOptions {
   realPop: boolean;
   /** capa de pruebas nucleares en el mapa */
   tests: boolean;
+  /** tema de la interfaz y de la luz del mapa */
+  theme: ThemeChoice;
 }
 
 export interface AppState {
@@ -50,7 +52,7 @@ export function defaultState(): AppState {
     ast: { kind: 'asteroid', name: 'Tunguska (Siberia, 1908)', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'sediment', waterDepthM: 0, azimuth: 250, surface: 'auto' },
     env: { windFromDeg: 270, windKmh: 24, visibilityKm: 25, humidity: 65, hour: 12, outdoorPct: null },
     target: { lat: 40.4168, lon: -3.7038, label: 'Madrid' },
-    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1, basemap: 'relieve', fxOpacity: 1, forceDay: false, terrain3d: true, buildings: true, mapLabels: true, autoQ: true, post: true, realPop: true, tests: false },
+    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1, basemap: 'relieve', fxOpacity: 1, forceDay: false, terrain3d: true, buildings: true, mapLabels: true, autoQ: true, post: true, realPop: true, tests: false, theme: 'auto' },
     live: true,
     other: { type: 'reactor', release: { kind: 'release', name: 'Chernóbil (1986)', source: 'reactor', isotope: 'Cs-137', activityTBq: 85000, heightM: 1000, durationH: 240 }, volcano: { kind: 'volcano', name: 'Yellowstone (supererupción)', vei: 8, volumeMul: 2.5 } },
     multi: { on: false, strikes: [] },
@@ -111,11 +113,11 @@ function compassInput(value: number, onChange: (deg: number) => void, label = 'v
   svg.setAttribute('viewBox', '-50 -50 100 100');
   svg.classList.add('compass');
   svg.innerHTML = `
-    <circle r="46" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)"/>
-    <circle r="34" fill="none" stroke="rgba(255,255,255,0.06)"/>
-    ${[0, 90, 180, 270].map((a) => `<text x="${Math.sin((a * Math.PI) / 180) * 40}" y="${-Math.cos((a * Math.PI) / 180) * 40 + 3.5}" font-size="9" fill="#8b93a7" text-anchor="middle" font-family="Inter" font-weight="700">${'NESO'[a / 90]}</text>`).join('')}
+    <circle r="46" style="fill: rgba(var(--ink), 0.03); stroke: rgba(var(--ink), 0.14)"/>
+    <circle r="34" fill="none" style="stroke: rgba(var(--ink), 0.07)"/>
+    ${[0, 90, 180, 270].map((a) => `<text x="${Math.sin((a * Math.PI) / 180) * 40}" y="${-Math.cos((a * Math.PI) / 180) * 40 + 3.5}" font-size="9" style="fill: var(--muted)" text-anchor="middle" font-family="Inter" font-weight="700">${'NESO'[a / 90]}</text>`).join('')}
     <g class="arrow"><path d="M0 -30 L7 -14 L2 -16 L2 28 L-2 28 L-2 -16 L-7 -14 Z" fill="#ff8a3d"/></g>
-    <circle r="3" fill="#fff"/>`;
+    <circle r="3" style="fill: var(--hi)"/>`;
   const arrow = svg.querySelector('.arrow') as SVGGElement;
   // la flecha apunta hacia donde va el viento/objeto (desde + 180)
   const set = (deg: number) => arrow.setAttribute('transform', `rotate(${deg + 180})`);
@@ -204,17 +206,14 @@ export class Sidebar {
 
   private build() {
     const S = this.state;
-    const head = h('div', { class: 'sb-head' },
-      h('img', { class: 'logo', src: logoUrl, alt: 'Bum' }),
-      h('div', { class: 'brand' }, h('h1', {}, 'BUM'), h('p', {}, 'Ataques nucleares e impactos · v0.9')),
-      h('button', { class: 'icon-btn', title: 'Ocultar panel (H)', html: ICONS.hide, onclick: () => this.ev.onCollapse() }),
-    );
-
-    // pestañas
+    // pestañas (la marca, la versión y la instalación están en «Acerca de»)
     this.tabs = h('div', { class: 'tabs' },
-      h('button', { class: 'tab', 'data-m': 'nuclear', html: `${ICONS.atom}<span>Arma nuclear</span>`, onclick: () => this.setMode('nuclear') }),
-      h('button', { class: 'tab', 'data-m': 'asteroid', html: `${ICONS.rock}<span>Impacto</span>`, onclick: () => this.setMode('asteroid') }),
-      h('button', { class: 'tab', 'data-m': 'other', html: `${ICONS.weather}<span>Otros</span>`, onclick: () => this.setMode('other') }),
+      h('button', { class: 'tab', 'data-m': 'nuclear', title: 'Arma nuclear o explosivo', html: `${ICONS.atom}<span>Nuclear</span>`, onclick: () => this.setMode('nuclear') }),
+      h('button', { class: 'tab', 'data-m': 'asteroid', title: 'Impacto de asteroide o cometa', html: `${ICONS.rock}<span>Asteroide</span>`, onclick: () => this.setMode('asteroid') }),
+      h('button', { class: 'tab', 'data-m': 'other', title: 'Accidentes, bombas sucias y volcanes', html: `${ICONS.weather}<span>Otros</span>`, onclick: () => this.setMode('other') }),
+    );
+    const head = h('div', { class: 'sb-head' }, this.tabs,
+      h('button', { class: 'icon-btn', title: 'Ocultar panel (H)', html: ICONS.hide, onclick: () => this.ev.onCollapse() }),
     );
 
     // ---------- objetivo ----------
@@ -283,7 +282,7 @@ export class Sidebar {
     const hIn = h('input', { type: 'number', min: 0, step: 10, value: nk.heightM }) as HTMLInputElement;
     const hField = field('Altura de detonación (m)', hVal, hIn);
     const chemTg = toggle('Explosivo químico (sin radiación ni lluvia)', !!nk.chemical, (v) => { nk.chemical = v; });
-    const burst = seg<BurstMode>([['surface', 'Superficie'], ['optimal', 'Aérea'], ['custom', 'Altura…'], ['underground', 'Bajo tierra'], ['underwater', 'Bajo el agua']], nk.burst, (v) => { nk.burst = v; updNuke(); });
+    const burst = seg<BurstMode>([['surface', 'Superficie'], ['optimal', 'Aérea óptima'], ['custom', 'Altura fija'], ['underground', 'Bajo tierra'], ['underwater', 'Bajo el agua']], nk.burst, (v) => { nk.burst = v; updNuke(); });
     const depVal = h('b');
     const dIn = h('input', { type: 'number', min: 0, max: 5000, step: 10, value: nk.depthM ?? 50 }) as HTMLInputElement;
     const sIn = h('input', { type: 'number', min: 1, max: 11000, step: 10, value: nk.seaDepthM ?? 100 }) as HTMLInputElement;
@@ -316,11 +315,11 @@ export class Sidebar {
       nk.depthM = Math.min(5000, Math.max(0, +dIn.value || 0));
       nk.seaDepthM = Math.max(nk.depthM + 1, Math.min(11000, +sIn.value || 100));
       const sd = nk.depthM / Math.cbrt(Math.max(1e-6, nk.yieldKt));
-      depVal.textContent = `${Math.round(sd)} m/kt^⅓`;
+      depVal.textContent = '';
       dNote.style.display = buried ? '' : 'none';
-      dNote.textContent = nk.burst === 'underground'
+      dNote.textContent = `Profundidad escalada: ${Math.round(sd)} m/kt^⅓. ` + (nk.burst === 'underground'
         ? (sd >= 120 ? 'Contenida: sin bola de fuego ni lluvia radiactiva apreciable; terremoto y cráter de subsidencia.' : sd > 25 ? 'Poco profunda: gran cráter de excavación y lluvia radiactiva muy intensa (como Sedan, 1962).' : 'Casi en superficie: cráter y lluvia radiactiva intensa.')
-        : (sd > 400 ? 'Profunda: sin columna; onda de choque en el agua y olas.' : 'Columna de agua, oleada de base radiactiva y olas (como Baker, 1946).');
+        : (sd > 400 ? 'Profunda: sin columna; onda de choque en el agua y olas.' : 'Columna de agua, oleada de base radiactiva y olas (como Baker, 1946).'));
       nk.heightM = Math.min(2e6, Math.max(0, +hIn.value || 0));
       hVal.textContent = nk.heightM >= 1000 ? `${(nk.heightM / 1000).toLocaleString('es-ES')} km` : `${nk.heightM} m`;
     };
@@ -638,7 +637,7 @@ export class Sidebar {
     this.fireBtn = h('button', { class: 'btn-fire', type: 'button', onclick: () => this.ev.onDetonate() }, 'DETONAR') as HTMLButtonElement;
     const foot = h('div', { class: 'sb-foot' }, this.fireBtn, h('button', { class: 'btn-ghost', type: 'button', title: 'Borrar efectos', onclick: () => this.ev.onClear() }, 'Limpiar'));
 
-    this.el.append(head, this.tabs, body, foot);
+    this.el.append(head, body, foot);
     this.setMode(S.mode);
   }
 

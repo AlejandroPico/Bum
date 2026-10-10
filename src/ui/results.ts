@@ -43,7 +43,13 @@ export class ResultsPanel {
     this.el = el;
     this.ev = ev;
     el.classList.add('glass');
-    this.makeDraggable();
+    // panel fijo a la derecha, como el izquierdo; avisa al resto de la interfaz cuando se abre o se pliega
+    const sync = () => {
+      document.body.classList.toggle('rp-open', !el.classList.contains('hidden'));
+      document.body.classList.toggle('rp-min', el.classList.contains('min'));
+    };
+    new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class'] });
+    sync();
   }
 
   hide() { this.el.classList.add('hidden'); cancelAnimationFrame(this.anim); }
@@ -331,14 +337,31 @@ export class ResultsPanel {
       body.append(h('div', { class: 'res-h3' }, fx.release ? 'Contaminación del suelo' : fx.volcano ? 'Caída de ceniza' : 'Lluvia radiactiva · tasa de dosis a H+1'));
       for (const f of [...fx.fallout].sort((a, b) => b.level - a.level)) {
         const desc = fx.release || fx.volcano ? f.label : f.level >= 1000 ? 'Dosis letal en pocas horas a la intemperie.' : f.level >= 100 ? 'Dosis letal en un día sin refugio.' : f.level >= 10 ? 'Enfermedad por radiación sin refugio adecuado.' : 'Riesgo sanitario: evacuar o refugiarse varios días.';
-        body.append(h('div', { class: 'eff' },
-          h('span', { class: 'dot', style: { color: f.color } }),
-          h('span', { class: 'name' }, f.label),
-          h('span', { class: 'r' }, `${fmtNum(f.maxDownwindKm)} km`),
-          h('div', { class: 'meta' }, `${desc} `, h('i', {}, `${fmtNum(f.areaKm2)} km² · alcance a sotavento`)),
-        ));
+        body.append(this.toggleRow(`fo:${f.level}`, f.color, f.label, `${fmtNum(f.maxDownwindKm)} km`, h('div', { class: 'meta' }, `${desc} `, h('i', {}, `${fmtNum(f.areaKm2)} km² · alcance a sotavento`))));
       }
     }
+    const extra: HTMLElement[] = [];
+    if (fx.tsunami || fx.rings.some((r) => r.group === 'tsunami')) {
+      extra.push(this.toggleRow('tsu-iso', '#7dd3fc', 'Llegada del tsunami (isócronas)', 'cada 1–2 h', h('div', { class: 'meta' }, 'Líneas azules: hasta dónde ha llegado la ola en cada hora, calculado sobre el fondo marino real. Aparecen cuando termina el cálculo.')));
+      extra.push(this.toggleRow('tsu-coast', '#facc15', 'Altura de la ola en la costa', '', h('div', { class: 'meta' }, 'Cada punto es un tramo de costa; su color indica la altura de la ola al llegar. Pasa el ratón por encima para ver la altura y la hora de llegada. ',
+        h('span', { class: 'tsu-legend' }, ...([['#7dd3fc', '< 1 m'], ['#38bdf8', '1–3 m'], ['#facc15', '3–10 m'], ['#fb923c', '10–30 m'], ['#ef4444', '> 30 m']] as const).map(([c, t]) => h('span', {}, h('b', { style: { background: c } }), t))))));
+    }
+    if (fx.fires && fx.fires.kind !== 'none') extra.push(this.toggleRow('burn', '#ff6a1a', fx.fires.kind === 'firestorm' ? 'Tormenta de fuego' : 'Incendios que avanzan con el viento', '', h('div', { class: 'meta' }, 'Superficie quemada en las horas siguientes a la explosión.')));
+    if (fx.emp && fx.emp.peakKVm >= 6) extra.push(this.toggleRow('emp', '#4cc9f0', 'Campo del pulso electromagnético', '', h('div', { class: 'meta' }, 'Zonas con más de 6, 12,5 y 25 kV/m (pulso E1 de gran altitud).')));
+    if (extra.length) body.append(h('div', { class: 'res-h3' }, 'Otras capas del mapa'), ...extra);
+  }
+
+  /** fila de la pestaña Efectos que se puede activar y desactivar en el mapa */
+  private toggleRow(id: string, color: string, name: string, right: string, meta: HTMLElement) {
+    const row = h('div', { class: 'eff' + (this.hidden.has(id) ? ' off' : ''), title: 'Clic: mostrar/ocultar en el mapa' },
+      h('span', { class: 'dot', style: { color } }), h('span', { class: 'name' }, name), h('span', { class: 'r' }, right), meta);
+    row.addEventListener('click', () => {
+      const vis = this.hidden.has(id);
+      if (vis) this.hidden.delete(id); else this.hidden.add(id);
+      row.classList.toggle('off', !vis);
+      this.ev.onToggle(id, vis);
+    });
+    return row;
   }
 
   private sections(body: HTMLElement, secs: StatSection[]) {

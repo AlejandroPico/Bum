@@ -33,6 +33,7 @@ export function fmtTime(s: number): string {
   const neg = s < 0;
   s = Math.abs(s);
   if (s < 60) return `${neg ? '−' : ''}${s.toFixed(s < 10 ? 2 : 1).replace('.', ',')} s`;
+  if (s >= 48 * 3600) { const d = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600); return `${neg ? '−' : ''}${d} d ${String(hh).padStart(2, '0')} h`; }
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
   const pad = (x: number) => String(x).padStart(2, '0');
   return `${neg ? '−' : ''}${h ? h + ':' : ''}${pad(m)}:${pad(sec)}`;

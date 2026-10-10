@@ -136,7 +136,6 @@ export function createMap(container: HTMLElement, center: [number, number]): MLM
     attributionControl: { compact: true },
     fadeDuration: 150,
   });
-  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
   return map;
 }

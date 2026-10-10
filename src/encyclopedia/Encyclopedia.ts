@@ -103,7 +103,9 @@ export class Encyclopedia {
     await this.load();
     if (this.byId.has(slug(name))) return this.open(slug(name));
     const q = name.toLowerCase();
-    const hit = this.articles.find((a) => a.title.toLowerCase() === q) ?? this.articles.find((a) => a.tags?.some((t) => t.toLowerCase() === q)) ?? this.articles.find((a) => a.title.toLowerCase().includes(q));
+    const base = q.split(/ · | \(| — /)[0].trim();
+    const hit = this.articles.find((a) => a.title.toLowerCase() === q) ?? this.articles.find((a) => a.tags?.some((t) => t.toLowerCase() === q)) ?? this.articles.find((a) => a.title.toLowerCase().includes(q))
+      ?? this.articles.find((a) => a.title.toLowerCase().startsWith(base)) ?? this.articles.find((a) => a.tags?.some((t) => t.toLowerCase() === base));
     return this.open(hit?.id ?? '');
   }
   close() {

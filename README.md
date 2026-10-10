@@ -49,7 +49,8 @@ Otros comandos:
 - **Otros escenarios** (pestaña *Otros*): accidentes nucleares (Chernóbil, Fukushima, Kyshtym, Windscale…) y bombas sucias (cesio, cobalto, americio) con pluma gaussiana, zonas de contaminación tipo Chernóbil, población a evacuar, dosis colectiva y cánceres estimados; y supervolcanes (Yellowstone, Toba, Campos Flégreos, Tambora, Krakatoa, Pinatubo, St. Helens) con columna eruptiva, flujos piroclásticos, caída de ceniza y enfriamiento global.
 - **Impacto cósmico**: 22 escenarios (de 2008 TC3 a Hale-Bopp) o diámetro, composición/densidad, velocidad,
   ángulo, dirección de llegada y terreno (sedimento, roca, hielo o agua con profundidad). Pestaña *Defensa*: desvío con impactadores cinéticos tipo DART según el tiempo de aviso. En el mar, el tsunami se propaga sobre la batimetría real (isócronas de llegada y altura de la ola en cada costa).
-- **Mapa**: plano 2D (por defecto) o **globo 3D** (botón del globo, arriba a la derecha, o en Visualización).
+- **Botones de arriba a la derecha**: mapa plano o globo 3D, enciclopedia, mapas y capas, **tema** (día, tarde, noche o automático según la hora y la fecha de tu equipo) y **Acerca de** (versión, instalación como aplicación y enlaces).
+- **Navegación**: arrastrar con el botón derecho para girar e inclinar; **doble clic derecho** para volver al norte con vista cenital; en pantallas táctiles, dos dedos para inclinar.
 - **Mapas y capas** (botón de capas, arriba a la derecha): satélite con relieve, satélite, Sentinel-2 (alternativa a Esri), político claro y oscuro, callejero de OpenStreetMap y topográfico; relieve 3D, edificios, nombres, luz de día fija y **opacidad de los efectos** (anillos, cúpulas y marcas).
 - **App instalable**: se puede instalar como aplicación (PWA) y guarda en caché la app, las teselas del mapa y los datos del tiempo para funcionar sin conexión.
 - **Terreno automático**: en impactos se detecta si el punto es tierra u océano y la profundidad del agua (batimetría de los datos de relieve).
@@ -74,7 +75,8 @@ Otros comandos:
 - **Línea de tiempo**: reproducir/pausar, rebobinar, velocidad ×0,25–×16. La escala es logarítmica: los
   primeros segundos se ven a cámara lenta.
 - Botón de cámara (línea de tiempo): plano cinematográfico del hongo completo con órbita lenta.
-- Atajos: `H` oculta la interfaz · `Espacio` pausa · `D` detona.
+- Atajos: `H` oculta la interfaz · `Espacio` pausa · `D` detona · `E` enciclopedia · doble clic derecho: norte arriba.
+- En la pestaña *Efectos* se puede mostrar u ocultar en el mapa cada anillo, cada nivel de lluvia radiactiva, ceniza o contaminación, las isócronas y los puntos de costa del tsunami, los incendios y el campo del pulso electromagnético. Al pasar el ratón por un punto de costa se ve la altura de la ola y la hora de llegada.
 - El enlace (botón compartir) guarda el escenario completo en la URL.
 
 ## Enciclopedia

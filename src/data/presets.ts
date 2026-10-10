@@ -10,13 +10,14 @@ const c = (name: string, yieldKt: number, note: string, heightM = 0): NukePreset
 /**
  * Rendimientos según fuentes públicas (Wikipedia, Nuclear Weapon Archive, FAS / Bulletin of
  * the Atomic Scientists). Las cifras de armas en servicio son estimaciones; donde hay rango se
- * usa el valor máximo publicado. Cada grupo está ordenado de mayor a menor potencia.
+ * usa el valor máximo publicado. Cada grupo se muestra ordenado de menor a mayor potencia.
  */
 const GROUPS: { group: string; items: NukePreset[] }[] = [
   {
     group: 'Pruebas y bombas históricas',
     items: [
-      n('Tsar Bomba (URSS, 1961)', 50000, 0.03, 'custom', 4000, 'La mayor explosión jamás provocada. Diseñada para 100 Mt; se probó a la mitad.'),
+      n('Tsar Bomba (URSS, 1961)', 50000, 0.03, 'custom', 4000, 'La mayor explosión jamás provocada: 50 Mt a 4 km de altura sobre Nueva Zembla. Se probó con la mitad de su potencia de diseño.'),
+      n('Tsar Bomba · diseño completo de 100 Mt', 100000, 0.5, 'custom', 4000, 'La potencia para la que se diseñó: con la tercera etapa de uranio en lugar de plomo. Nunca se detonó así; habría producido una enorme lluvia radiactiva.'),
       n('Prueba 219 (URSS, 1962)', 24200, 0.5, 'custom', 3750, 'Segunda mayor prueba de la historia, sobre Nueva Zembla.'),
       n('Castle Bravo (EE. UU., 1954)', 15000, 0.67, 'surface', 0, 'Mayor prueba de EE. UU.; grave contaminación en las Islas Marshall.'),
       n('Castle Yankee (EE. UU., 1954)', 13500, 0.5, 'surface', 0, 'Segunda mayor prueba estadounidense.'),
@@ -112,7 +113,8 @@ const GROUPS: { group: string; items: NukePreset[] }[] = [
   },
 ];
 
-export const NUKE_PRESETS = GROUPS.map((g) => ({ group: g.group, items: [...g.items].sort((a, b) => b.yieldKt - a.yieldKt) }));
+/** dentro de cada grupo, de menor a mayor potencia */
+export const NUKE_PRESETS = GROUPS.map((g) => ({ group: g.group, items: [...g.items].sort((a, b) => a.yieldKt - b.yieldKt) }));
 
 export const ASTEROID_PRESETS: (Omit<AsteroidInput, 'kind'> & { note: string; group?: 'sentry' })[] = [
   { name: '2008 TC3 (Sudán, 2008)', diameterM: 4, densityKgM3: 2600, velocityKms: 12.4, angleDeg: 20, target: 'sediment', waterDepthM: 0, note: 'Primer asteroide detectado antes de su impacto; estalló a 37 km de altura.' },
