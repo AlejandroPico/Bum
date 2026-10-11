@@ -7,11 +7,26 @@ const vec = (fromDeg: number, kmh: number): [number, number] => {
 };
 const unvec = (u: number, v: number) => ({ kmh: Math.hypot(u, v), fromDeg: ((Math.atan2(-u, -v) * 180) / Math.PI + 360) % 360 });
 
-/** viento interpolado a la altura z (m) */
-export function windAt(env: Environment, z: number): { kmh: number; fromDeg: number } {
-  const P = env.windProfile;
+/**
+ * Viento interpolado a la altura z (m) y, si hay previsión horaria, a las tH horas de la explosión
+ * (interpolación lineal entre la hora anterior y la siguiente; más allá de la previsión se usa la última).
+ */
+export function windAt(env: Environment, z: number, tH = 0): { kmh: number; fromDeg: number } {
+  const Hh = env.windHourly;
+  if (Hh && Hh.length > 1 && tH > 0) {
+    const f = Math.min(tH, Hh.length - 1);
+    const i = Math.floor(f), k = f - i;
+    const a = profileAt(Hh[i], z, env), b = profileAt(Hh[Math.min(i + 1, Hh.length - 1)], z, env);
+    if (k < 1e-6) return a;
+    const [ua, va] = vec(a.fromDeg, a.kmh), [ub, vb] = vec(b.fromDeg, b.kmh);
+    return unvec(ua + (ub - ua) * k, va + (vb - va) * k);
+  }
+  return profileAt(env.windProfile, z, env);
+}
+
+function profileAt(P: WindLevel[] | null | undefined, z: number, env: Environment): { kmh: number; fromDeg: number } {
   if (!P || P.length === 0) return { kmh: env.windKmh, fromDeg: env.windFromDeg };
-  const L = [...P].sort((a, b) => a.zM - b.zM);
+  const L = P.length > 1 && P[0].zM > P[1].zM ? [...P].sort((a, b) => a.zM - b.zM) : P;
   if (z <= L[0].zM) return { kmh: L[0].kmh, fromDeg: L[0].fromDeg };
   if (z >= L[L.length - 1].zM) { const t = L[L.length - 1]; return { kmh: t.kmh, fromDeg: t.fromDeg }; }
   let i = 1;

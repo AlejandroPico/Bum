@@ -145,7 +145,10 @@ export interface Atmosphere {
 }
 
 /** Ajusta cielo, luz y brillo de la imagen según la hora del día. */
-export function applyTimeOfDay(map: MLMap, hour: number) {
+/** tiempo que se ve en el cielo: nubes (0..1), visibilidad (km) y lluvia (mm/h) */
+export interface SkyWeather { cloud: number; visKm: number; rainMmH: number }
+
+export function applyTimeOfDay(map: MLMap, hour: number, wx?: SkyWeather | null) {
   const sunAlt = Math.sin((Math.PI * (hour - 6)) / 12); // -1..1
   const night = Math.min(1, Math.max(0, (0.15 - sunAlt) / 0.35));
   const dusk = Math.max(0, 1 - Math.abs(sunAlt) / 0.3) * (1 - night * 0.6);
@@ -154,21 +157,33 @@ export function applyTimeOfDay(map: MLMap, hour: number) {
     const c = (s: number) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
     return `#${((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0')}`;
   };
-  const sky = mix(mix('#4f8fd6', '#d8784a', dusk * 0.6), '#03060f', night);
-  const horizon = mix(mix('#cfe2f3', '#ffb07a', dusk), '#0b1428', night);
-  const fog = mix(mix('#c8d8e6', '#e8a27a', dusk * 0.7), '#070b16', night);
+  // cielo cubierto: más gris; con lluvia, más oscuro
+  const oc = wx ? Math.min(1, Math.max(0, (wx.cloud - 0.25) / 0.75)) : 0;
+  const wet = wx ? Math.min(1, wx.rainMmH / 6) : 0;
+  const grey = mix('#aab4bf', '#6f7986', wet);
+  let sky = mix(mix('#4f8fd6', '#d8784a', dusk * 0.6), grey, oc * 0.75);
+  let horizon = mix(mix('#cfe2f3', '#ffb07a', dusk), mix('#c4cbd2', '#8c96a1', wet), oc * 0.7);
+  let fog = mix(mix('#c8d8e6', '#e8a27a', dusk * 0.7), mix('#c9ced3', '#9aa2ab', wet), Math.max(oc * 0.6, wx && wx.visKm < 10 ? 0.7 : 0));
+  sky = mix(sky, '#03060f', night); horizon = mix(horizon, '#0b1428', night); fog = mix(fog, '#070b16', night);
+  // niebla: con poca visibilidad empieza más cerca de la cámara y cubre más el horizonte
+  const f = wx ? Math.max(0.08, Math.min(1, wx.visKm / 25)) : 1;
+  const blends = f >= 0.99 ? SKY_BLENDS : {
+    ...SKY_BLENDS,
+    'fog-ground-blend': ['interpolate', ['linear'], ['zoom'], 0, 0, 6, 0, 9, 0.7 * f, 13, 0.55 * f],
+    'horizon-fog-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.1, 6, 0.1 + 0.4 * (1 - f), 10, 0.6 + 0.35 * (1 - f)],
+  };
   map.setSky({
     'sky-color': sky,
     'horizon-color': horizon,
     'fog-color': fog,
-    ...SKY_BLENDS,
+    ...blends,
   });
   dimBase(map, night);
   map.setPaintProperty('city-lights', 'line-opacity', night * 0.9);
   map.setPaintProperty('city-lights-glow', 'line-opacity', night * 0.35);
-  if (map.getLayoutProperty('hillshade', 'visibility') !== 'none') map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0.35 * (1 - night * 0.7));
+  if (map.getLayoutProperty('hillshade', 'visibility') !== 'none') map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0.35 * (1 - night * 0.7) * (1 - 0.4 * oc));
   const az = 90 + ((hour - 6) / 12) * 180;
-  map.setLight({ anchor: 'map', position: [1.4, az, Math.max(10, 90 - Math.max(0, sunAlt) * 70)], color: mix('#ffffff', '#6a7fb0', night), intensity: 0.35 - night * 0.15 });
+  map.setLight({ anchor: 'map', position: [1.4, az, Math.max(10, 90 - Math.max(0, sunAlt) * 70)], color: mix(mix('#ffffff', '#dfe4ea', oc), '#6a7fb0', night), intensity: (0.35 - night * 0.15) * (1 - 0.35 * oc) });
   return { night, sunAlt, sunAz: az };
 }
 

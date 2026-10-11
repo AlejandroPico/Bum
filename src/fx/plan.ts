@@ -157,6 +157,23 @@ export class FxPlan {
     const t0 = this.tau * 1.2;
     if (t < t0) return [0, 0];
     const dt = t - t0;
+    if (this.env.windHourly && this.env.windHourly.length > 1) {
+      // previsión horaria: desplazamiento acumulado con el viento de cada hora (tabla precalculada)
+      const tb = this.driftTable();
+      const zi = Math.max(0, Math.min(tb.nz - 1, zFrac * (tb.nz - 1)));
+      const ti = Math.max(0, Math.min(tb.nt - 1, dt / tb.dt));
+      const z0 = Math.floor(zi), z1 = Math.min(tb.nz - 1, z0 + 1), kz = zi - z0;
+      const t0i = Math.floor(ti), t1i = Math.min(tb.nt - 1, t0i + 1), kt = ti - t0i;
+      const at = (zz: number, tt: number, c: 0 | 1) => tb.d[(zz * tb.nt + tt) * 2 + c];
+      const lerp = (c: 0 | 1) => {
+        const a0 = at(z0, t0i, c) + (at(z0, t1i, c) - at(z0, t0i, c)) * kt;
+        const a1 = at(z1, t0i, c) + (at(z1, t1i, c) - at(z1, t0i, c)) * kt;
+        return a0 + (a1 - a0) * kz;
+      };
+      // más allá de la tabla se prolonga con el último viento
+      const extra = Math.max(0, dt - (tb.nt - 1) * tb.dt);
+      return [lerp(0) + tb.last[z0 * 2] * extra, lerp(1) + tb.last[z0 * 2 + 1] * extra];
+    }
     if (this.env.windProfile?.length) {
       // perfil real: cada altura deriva con su propio viento
       const W = windAt(this.env, Math.max(10, zFrac * this.capTop));
@@ -165,6 +182,26 @@ export class FxPlan {
     }
     const shear = 0.5 + 1.2 * zFrac; // el viento es más fuerte en altura
     return [this.wind[0] * dt * shear, this.wind[1] * dt * shear];
+  }
+  private _drift: { nz: number; nt: number; dt: number; d: Float32Array; last: Float32Array } | null = null;
+  /** desplazamiento acumulado (m) por altura y tiempo con la previsión horaria, cada 10 min hasta 72 h */
+  private driftTable() {
+    if (this._drift) return this._drift;
+    const nz = 9, dt = 600, nt = Math.round((72 * 3600) / dt) + 1;
+    const d = new Float32Array(nz * nt * 2), last = new Float32Array(nz * 2);
+    const t0 = this.tau * 1.2;
+    for (let zi = 0; zi < nz; zi++) {
+      const z = Math.max(10, (zi / (nz - 1)) * this.capTop);
+      let e = 0, n = 0;
+      for (let ti = 0; ti < nt; ti++) {
+        d[(zi * nt + ti) * 2] = e; d[(zi * nt + ti) * 2 + 1] = n;
+        const W = windAt(this.env, z, (t0 + (ti + 0.5) * dt) / 3600);
+        const a = ((W.fromDeg + 180) * Math.PI) / 180, ms = W.kmh / 3.6;
+        e += Math.sin(a) * ms * dt; n += Math.cos(a) * ms * dt;
+        if (ti === nt - 1) { last[zi * 2] = Math.sin(a) * ms; last[zi * 2 + 1] = Math.cos(a) * ms; }
+      }
+    }
+    return (this._drift = { nz, nt, dt, d, last });
   }
   /** opacidad global de la nube (se disipa con las horas) */
   cloudFade(t: number): number {

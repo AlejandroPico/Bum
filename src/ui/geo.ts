@@ -54,6 +54,8 @@ export interface Weather {
   surfaceWindFromDeg: number;
   /** perfil vertical: 10 m, 850, 700, 500, 300, 250 y 200 hPa */
   profile: WindLevel[];
+  /** previsión: perfil de cada hora desde ahora (48 h) */
+  hourly?: WindLevel[][];
   humidity: number;
   visibilityKm: number;
   tempC: number;
@@ -82,15 +84,15 @@ function cacheSet(key: string, v: unknown) {
 }
 
 export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
-  const key = `bum:wx2:${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const key = `bum:wx3:${lat.toFixed(2)},${lon.toFixed(2)}`;
   const hit = cacheGet<Weather>(key, CACHE_MS);
   if (hit) return hit;
   const lv = LEVELS.map(([l]) => `wind_speed_${l},wind_direction_${l},geopotential_height_${l}`).join(',');
   const url = 'https://api.open-meteo.com/v1/forecast'
     + `?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
     + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation'
-    + `&hourly=visibility,${lv}`
-    + '&forecast_hours=1&wind_speed_unit=kmh&timezone=auto';
+    + `&hourly=visibility,wind_speed_10m,wind_direction_10m,${lv}`
+    + '&forecast_hours=48&wind_speed_unit=kmh&timezone=auto';
   const ctl = new AbortController();
   const to = setTimeout(() => ctl.abort(), 8000);
   try {
@@ -109,12 +111,28 @@ export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
       const z = (gh ?? zStd) - elev;
       if (z > 20) profile.push({ zM: z, kmh: sp, fromDeg: dir });
     }
+    // previsión horaria del perfil de viento
+    const hourly: WindLevel[][] = [];
+    const nH = Array.isArray(hr.time) ? hr.time.length : 0;
+    const at = (k: string, i: number): number | null => (Array.isArray(hr[k]) && hr[k][i] != null ? +hr[k][i] : null);
+    for (let i = 0; i < nH; i++) {
+      const p0: WindLevel[] = [{ zM: 10, kmh: at('wind_speed_10m', i) ?? sSp, fromDeg: at('wind_direction_10m', i) ?? sDir }];
+      for (const [l, zStd] of LEVELS) {
+        const sp = at(`wind_speed_${l}`, i), dir = at(`wind_direction_${l}`, i), gh = at(`geopotential_height_${l}`, i);
+        if (sp == null || dir == null) continue;
+        const z = (gh ?? zStd) - elev;
+        if (z > 20) p0.push({ zM: z, kmh: sp, fromDeg: dir });
+      }
+      hourly.push(p0);
+    }
+    // la hora 0 es la observación actual
+    if (hourly.length) hourly[0] = profile;
     const time: string = cur.time ?? '';
     const tm = time.match(/T(\d{2}):(\d{2})/);
     const hour = tm ? +tm[1] + +tm[2] / 60 : 12;
     const vis = first('visibility');
     const w: Weather = {
-      surfaceWindKmh: sSp, surfaceWindFromDeg: sDir, profile,
+      surfaceWindKmh: sSp, surfaceWindFromDeg: sDir, profile, hourly: hourly.length > 2 ? hourly : undefined,
       humidity: +(cur.relative_humidity_2m ?? 60),
       visibilityKm: vis != null ? vis / 1000 : 25,
       tempC: +(cur.temperature_2m ?? 15),

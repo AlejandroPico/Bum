@@ -9,9 +9,15 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <meta name="theme-color" content="#0b0e15" />
+    <!-- conexiones anticipadas a los servidores de teselas y de tipografías -->
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
+    <link rel="preconnect" href="https://elevation-tiles-prod.s3.amazonaws.com" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+    <!-- las tipografías no bloquean el primer dibujado -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" /></noscript>
   </head>
   <body>
     <div id="app">

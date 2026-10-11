@@ -26,6 +26,7 @@ Otros comandos:
 | `npm run build` | genera la web estática en `dist/` |
 | `npm run preview` | sirve `dist/` en local para probar el build |
 | `npm run typecheck` | comprobación de tipos TypeScript |
+| `npm test` | pruebas automáticas de los cálculos contra valores de referencia (Glasstone, Hiroshima, Sedan, Baker, Cheliábinsk, Tunguska, Chernóbil…) |
 | `npm run check:physics` | imprime los radios calculados para varios escenarios de referencia |
 
 ## Publicar en GitHub Pages
@@ -78,10 +79,20 @@ Otros comandos:
 - Atajos: `H` oculta la interfaz · `Espacio` pausa · `D` detona · `E` enciclopedia · doble clic derecho: norte arriba.
 - En la pestaña *Efectos* se puede mostrar u ocultar en el mapa cada anillo, cada nivel de lluvia radiactiva, ceniza o contaminación, las isócronas y los puntos de costa del tsunami, los incendios y el campo del pulso electromagnético. Al pasar el ratón por un punto de costa se ve la altura de la ola y la hora de llegada.
 - El enlace (botón compartir) guarda el escenario completo en la URL.
+- **¿Estoy a salvo?** (botón del escudo): tu ubicación o cualquier punto del mapa; qué efectos le llegarían, cuándo llegan la onda y la lluvia radiactiva, la dosis según el refugio, la probabilidad de morir o resultar herido y consejos de protección civil.
+- **Mapa partido** (pestaña *Comparar*): un segundo escenario en el mismo lugar con un divisor arrastrable.
+- **Trayectoria de misiles**: 19 bases de lanzamiento públicas, arco ortodrómico, tiempo de vuelo, apogeo y velocidad de reentrada, con animación del vuelo antes de la detonación.
+- **Viento hora a hora**: la previsión de las próximas 48 h por niveles mueve la nube y la lluvia radiactiva a medida que cambia el viento.
+- **Sombra del relieve** y **recuento de edificios** por nivel de daño (los del mapa a la vista y, en el servidor, los de cada zona en OpenStreetMap).
+- **Más catástrofes** en *Otros*: roturas de presas con la inundación siguiendo el relieve real, tormentas solares (de 1859 a 2024) con el óvalo auroral, guerras nucleares a gran escala con su invierno nuclear (Xia et al. 2022) y lluvia negra tras las tormentas de fuego.
+- **Mapas de calor** (*Mapas y capas* o pestaña *Población*): población, muertes inmediatas y muertes por la lluvia radiactiva sin refugio, con leyenda logarítmica y total.
+- **Recorrido cinematográfico** (botón de la cámara de cine en la línea de tiempo): repite la simulación con planos de cine (situación, testigo en la calle, onda, hongo, calor, lluvia radiactiva y balance), franjas negras y rótulos con las cifras. `Esc` o cualquier gesto lo detienen.
+- **Tiempo real en el mapa** (*Mapas y capas* → *Tiempo*): nubes reales de Open-Meteo, radar de precipitación (RainViewer, opcional), lluvia o nieve al acercarse al suelo y cielo cubierto o niebla según las nubes y la visibilidad.
+- **Accesibilidad**: «Reducir destellos» (se activa solo si el sistema pide reducir el movimiento) y aviso de fotosensibilidad; en móvil, los paneles son hojas inferiores.
 
 ## Enciclopedia
 
-Botón del libro (bajo el del globo, o tecla `E`): más de 170 artículos (fundamentos, tipos de armas, historia, efectos, accidentes, impactos cósmicos y una ficha por cada arma, explosión y asteroide del simulador), glosario de 130 términos, 16 esquemas animados y modelos 3D interactivos (Little Boy, Fat Man, el Gadget de Trinity, Ivy Mike y modelos genéricos de bombas, ojivas, misiles, torpedos y proyectiles) que se pueden girar, cortar, ver en rayos X, desmontar y animar paso a paso. Nivel divulgativo, de museo: sin información de fabricación.
+Botón del libro (bajo el del globo, o tecla `E`): más de 180 artículos (fundamentos, tipos de armas, historia, efectos, accidentes, impactos cósmicos y una ficha por cada arma, explosión y asteroide del simulador) con fotografías, vídeos y animaciones de Wikimedia Commons, fórmulas y fuentes; historias guiadas (Hiroshima, crisis de Cuba, Chernóbil), glosario de 130 términos, 16 esquemas animados y modelos 3D interactivos tipo atlas, por capas (Little Boy, Fat Man, el Gadget de Trinity, Ivy Mike y modelos genéricos de bombas, ojivas, misiles, torpedos y proyectiles) que se pueden girar, cortar, ver en rayos X, desmontar y animar paso a paso. Nivel divulgativo, de museo: sin información de fabricación.
 
 ## Modelos físicos
 

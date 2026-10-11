@@ -4,6 +4,7 @@
 import { blastRange, pressureAt, optimumHeight1kt, shockArrivalTable, PSI, peakWind, decibels } from './blast';
 import { atmosphericEntry, impactCrater, KT_J } from './asteroid';
 import { computeFallout, falloutModel } from './fallout';
+import { computeDam, computeSolar, computeWar } from './disasters';
 import { effectiveWind, windAt } from './wind';
 import { densityField, nearestCity } from '../data/cities';
 import { computeRelease, computeVolcano } from './other';
@@ -78,6 +79,9 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     return computeRelease(r, env, lat, lon, blast);
   }
   if (scIn.kind === 'volcano') return computeVolcano(scIn, env, lat, lon);
+  if (scIn.kind === 'dam') return computeDam(scIn, env, lat, lon);
+  if (scIn.kind === 'solar') return computeSolar(scIn, env, lat, lon);
+  if (scIn.kind === 'war') return computeWar(scIn, env, lat, lon);
   const sc = sanitizeScenario(scIn);
   const notes: string[] = [];
   let Y: number; // kt
@@ -410,7 +414,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   const wEff = effectiveWind(env, cloud.topM, cloud.capBottomM);
   const fp = {
     fissionKt, contact: buried && !buried.contained ? 1 : contact, cloudTopM: cloud.topM, capBottomM: cloud.capBottomM, capRadiusM: cloud.capRadiusM,
-    windAt: (z: number) => windAt(env, z), rainMmH: env.rainMmH ?? 0, localFrac, coreFrac,
+    windAt: (z: number, tH: number) => windAt(env, z, tH), rainMmH: env.rainMmH ?? 0, localFrac, coreFrac,
   };
   const fallout = sc.kind === 'nuclear' && !chem ? computeFallout(fp) : [];
   const fModel = fallout.length ? falloutModel(fp) : null;
@@ -478,11 +482,37 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     };
   }
 
+  // ---------- lluvia negra ----------
+  // Tras una gran tormenta de fuego, la columna de humo forma cumulonimbos que descargan una lluvia
+  // pegajosa de hollín y polvo radiactivo a sotavento (Hiroshima: zona intensa de unos 19 × 11 km,
+  // Uda 1953; zona leve hasta unos 29 × 15 km, Masuda 1989).
+  let blackRain: Effects['blackRain'];
+  if (fireInfo && (fireInfo.kind === 'firestorm' || (fireInfo.kind === 'conflagration' && env.humidity >= 60)) && !chem) {
+    const A = fireInfo.areaAt(fireInfo.kind === 'firestorm' ? 3 : 1.5);
+    const L = Math.min(120, 5.2 * Math.sqrt(A)) * 1000;
+    const W0 = windAt(env, 1500);
+    const to = ((W0.fromDeg + 180) * Math.PI) / 180, ue = Math.sin(to), un = Math.cos(to);
+    const ell = (len: number, wid: number, off: number): [number, number][] => Array.from({ length: 65 }, (_, i) => {
+      const a = (i / 64) * 2 * Math.PI, x = off + (Math.cos(a) * len) / 2, y = (Math.sin(a) * wid) / 2;
+      return [x * ue - y * un, x * un + y * ue] as [number, number];
+    });
+    blackRain = { heavy: ell(L, L * 0.58, L * 0.42), light: ell(L * 1.55, L * 0.8, L * 0.55), heavyKm2: (Math.PI * (L / 2) * (L * 0.29)) / 1e6, lightKm2: (Math.PI * (L * 0.775) * (L * 0.4)) / 1e6, startMin: 20 };
+    notes.push(`Lluvia negra: unos 20 minutos después, los cumulonimbos que forma el humo del incendio descargarían una lluvia oscura de hollín y polvo radiactivo en unos ${Math.round(blackRain.heavyKm2)} km² a sotavento (y más débil en ${Math.round(blackRain.lightKm2)} km²), como en Hiroshima.`);
+  }
+
   // ---------- efectos a largo plazo ----------
   let longTerm: Effects['longTerm'];
   if (sc.kind === 'nuclear' && !chem) {
     const prof0 = casualties.profile;
-    const survAt = (r: number) => { const p = interp1(prof0.r, prof0.pop, r), d = interp1(prof0.r, prof0.deaths, r); return p > 0 ? 1 - d / p : 1; };
+    // supervivencia local a la distancia r (en el anillo del perfil, no la media dentro del círculo)
+    const survAt = (r: number) => {
+      const R = prof0.r;
+      if (r >= R[R.length - 1]) return 1;
+      let i = 1;
+      while (i < R.length - 1 && R[i] < r) i++;
+      const dp = prof0.pop[i] - prof0.pop[i - 1], dd = prof0.deaths[i] - prof0.deaths[i - 1];
+      return dp > 0 ? Math.max(0, Math.min(1, 1 - dd / dp)) : 1;
+    };
     let collective = 0, fdNo = 0, fdSh = 0, popF = 0;
     if (fModel) {
       const field = densityField(lat, lon, Math.max(50, ...fallout.map((f) => f.maxDownwindKm)) + 50);
@@ -546,6 +576,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     falloutArrivalH,
     emp: empInfo,
     fires: fireInfo,
+    blackRain,
     longTerm,
     chemical: chem,
     outdoorPct: env.outdoorPct != null ? Math.max(0, Math.min(100, env.outdoorPct)) : env.hour >= 7 && env.hour <= 20 ? 25 : 8,
@@ -565,7 +596,7 @@ interface CasualtyCtx {
 }
 
 /** log-logística: 0 cuando x→0, 0,5 en x50 */
-const ll = (x: number, x50: number, k: number) => (x <= 0 ? 0 : 1 / (1 + Math.pow(x50 / x, k)));
+export const ll = (x: number, x50: number, k: number) => (x <= 0 ? 0 : 1 / (1 + Math.pow(x50 / x, k)));
 
 function estimateCasualties(lat: number, lon: number, rings: Ring[], c: CasualtyCtx): Casualties {
   const maxR = Math.max(...rings.filter((r) => r.group !== 'seismic' && r.group !== 'emp' && r.group !== 'tsunami').map((r) => r.radiusM), 500);

@@ -5,29 +5,32 @@ import { slug } from './encyclopedia/slug';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import maplibregl from 'maplibre-gl';
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import { createMap, applyTimeOfDay, setGlobe, SKY_BLENDS } from './map/map';
+import { NUKE_PRESETS, ASTEROID_PRESETS } from './data/presets';
 import { BASEMAPS, setBasemap, type BasemapId } from './map/basemaps';
-import { sampleElevation } from './map/elevation';
+import { sampleElevation, elevationSampler } from './map/elevation';
+import { computeTerrainShadow } from './physics/terrain';
+import { geomagLat } from './physics/disasters';
 import { Overlays, localToLngLat, destination } from './map/overlays';
 import { TestsLayer } from './map/tests-layer';
-import { FxLayer } from './fx/FxLayer';
+import type { FxLayer } from './fx/FxLayer';
 import { FxPlan } from './fx/plan';
-import { Fireball } from './fx/Fireball';
-import { Shock } from './fx/Shock';
-import { Rubble } from './fx/Rubble';
-import { Mushroom } from './fx/Mushroom';
-import { Domes } from './fx/Domes';
-import { Fires } from './fx/Fires';
-import { Bolide } from './fx/Bolide';
+import type { Domes } from './fx/Domes';
+import type { Fires } from './fx/Fires';
 import { Audio } from './fx/audio';
-import { createPuffAtlas, createCloudNoise3D } from './fx/textures';
-import { VolumeCloud } from './fx/VolumeCloud';
 import type { FrameCtx } from './fx/types';
 import { computeEffects, combinedCasualties } from './physics/effects';
+import { heatGrid, type HeatKind } from './physics/heat';
+import { HeatLayer } from './map/heat';
+import { Tour } from './tour';
+import { WeatherLayer } from './map/weather';
+import type { Weather } from './ui/geo';
+import { assessPoint, type SafetyReport } from './physics/safety';
 import { nearestCity, haversineKm, setRealPopulation } from './data/cities';
 import { loadRealPopulation } from './data/worldpop';
-import { fetchInfrastructure } from './data/osm';
+import { fetchInfrastructure, fetchBuildingCounts } from './data/osm';
+import { LAUNCH_SITES, greatCircleKm, greatCirclePath, ballistic } from './data/launch';
 import type { Effects, Scenario } from './physics/types';
 import type { FxModule } from './fx/types';
 import { Sidebar, defaultState, type AppState, type Strike } from './ui/sidebar';
@@ -43,11 +46,25 @@ readHash(state);
 
 const map = createMap(document.getElementById('map')!, [state.target.lon, state.target.lat]);
 const overlays = new Overlays(map);
-const fxLayer = new FxLayer();
+// tiempo real en el mapa (nubes, radar, lluvia en pantalla y niebla)
+const weatherLayer: WeatherLayer = new WeatherLayer(map, document.getElementById('app')!);
+weatherLayer.enabled = state.view.weather;
+weatherLayer.target = { lat: state.target.lat, lon: state.target.lon };
+weatherLayer.onUpdate = () => { if (mapLoaded) atmosphere = tod(); };
+// el motor 3D (three.js) se descarga en paralelo con el mapa y se instala al cargarse éste
+let FX!: typeof import('./fx/engine');
+let fxLayer!: FxLayer;
+const fxReady = import('./fx/engine').then((m) => {
+  FX = m;
+  fxLayer = new m.FxLayer();
+  fxLayer.onFrame = onFxFrame;
+  tmpColor = new m.Color();
+  m.createCloudNoise3D(64).then((t) => { cloudNoise = t; });
+  return m;
+});
 const audio = new Audio();
 let puffTex: THREE.Texture | null = null;
 let cloudNoise: THREE.Data3DTexture | null = null;
-createCloudNoise3D(64).then((t) => { cloudNoise = t; });
 
 interface Run {
   fx: Effects;
@@ -77,18 +94,37 @@ interface Run {
 let run: Run | null = null;
 let atmosphere = { night: 0, sunAlt: 1, sunAz: 180 };
 /** iluminación del mapa según el tema (día, tarde o noche); la hora del entorno sólo influye en los cálculos */
-function tod() { return applyTimeOfDay(map, THEME_HOUR[resolveTheme(state.view.theme)]); }
+function tod() {
+  const a = applyTimeOfDay(map, THEME_HOUR[resolveTheme(state.view.theme)], skyWeather());
+  weatherLayer?.setNight(a.night);
+  return a;
+}
+/** tiempo que se ve en el cielo (si está activado el tiempo en el mapa) */
+let lastWx: Weather | null = null;
+function skyWeather() {
+  if (!state.view.weather || !weatherLayer) return null;
+  const E = state.env;
+  const cloud = lastWx ? lastWx.cloudPct / 100 : weatherLayer.coverAt(state.target.lat, state.target.lon) ?? 0;
+  return { cloud, visKm: E.visibilityKm, rainMmH: E.rainMmH ?? 0 };
+}
+/** pasa a la capa del tiempo las condiciones del entorno (reales o manuales) */
+function syncLocalWeather() {
+  const E = state.env;
+  weatherLayer.setLocal({ rainMmH: E.rainMmH ?? 0, visibilityKm: E.visibilityKm, cloudPct: lastWx?.cloudPct ?? 0, tempC: lastWx?.tempC ?? null, windFromDeg: E.windFromDeg, windKmh: E.windKmh });
+}
 
 // preferencias de mapa guardadas en este navegador
 const PREF_KEY = 'bum:mapprefs';
 try {
   const pr = JSON.parse(localStorage.getItem(PREF_KEY) ?? '{}');
-  for (const k of ['basemap', 'fxOpacity', 'theme', 'terrain3d', 'buildings', 'mapLabels', 'tests', 'post', 'autoQ', 'quality', 'realPop'] as const) if (k in pr) (state.view as any)[k] = pr[k];
+  for (const k of ['basemap', 'fxOpacity', 'theme', 'terrain3d', 'buildings', 'mapLabels', 'tests', 'post', 'autoQ', 'quality', 'realPop', 'reduceFlash', 'weather', 'radar'] as const) if (k in pr) (state.view as any)[k] = pr[k];
+  // sin preferencia guardada, se respeta el ajuste del sistema «reducir movimiento»
+  if (!('reduceFlash' in pr)) state.view.reduceFlash = matchMedia('(prefers-reduced-motion: reduce)').matches;
 } catch { /* sin almacenamiento */ }
 if (!['day', 'evening', 'night', 'auto'].includes(state.view.theme)) state.view.theme = 'auto';
 function savePrefs() {
   const V = state.view;
-  try { localStorage.setItem(PREF_KEY, JSON.stringify({ basemap: V.basemap, fxOpacity: V.fxOpacity, theme: V.theme, terrain3d: V.terrain3d, buildings: V.buildings, mapLabels: V.mapLabels, tests: V.tests, post: V.post, autoQ: V.autoQ, quality: V.quality, realPop: V.realPop })); } catch { /* sin almacenamiento */ }
+  try { localStorage.setItem(PREF_KEY, JSON.stringify({ basemap: V.basemap, fxOpacity: V.fxOpacity, theme: V.theme, terrain3d: V.terrain3d, buildings: V.buildings, mapLabels: V.mapLabels, tests: V.tests, post: V.post, autoQ: V.autoQ, quality: V.quality, realPop: V.realPop, reduceFlash: V.reduceFlash, weather: V.weather, radar: V.radar })); } catch { /* sin almacenamiento */ }
 }
 
 
@@ -97,9 +133,10 @@ function savePrefs() {
 // ---------------------------------------------------------------------------
 const sidebar = new Sidebar(document.getElementById('sidebar')!, state, {
   onDetonate: () => detonate(),
-  onClear: () => clearRun(),
+  onClear: () => { clearRun(); void refreshHeat(); },
   onTarget: (lat, lon, label, fly) => setTarget(lat, lon, label, fly),
-  onEnv: () => { atmosphere = tod(); },
+  onEnv: () => { atmosphere = tod(); syncLocalWeather(); },
+  onWeather: (w) => { lastWx = w; syncLocalWeather(); atmosphere = tod(); },
   onView: () => applyView(),
   onCollapse: () => toggleUI(),
   onProjection: (g) => applyProjection(g),
@@ -115,6 +152,8 @@ const results = new ResultsPanel(document.getElementById('results')!, {
   onToggle: () => syncHidden(),
   onHover: (id) => { overlays.highlight = id; overlays.refresh(); if (run) run.domes.highlight = id; map.triggerRepaint(); },
   onShare: () => share(),
+  onCompare: () => openCompare(),
+  onHeat: (k) => setHeat(k),
   onFocus: (id) => {
     if (!run) return;
     const r = run.fx.rings.find((x) => x.id === id);
@@ -127,8 +166,9 @@ const timeline = new Timeline(document.getElementById('timeline')!, {
   onRestart: () => { if (run) { restartClock(); } },
   onSeek: (t) => { if (run) { run.t = t; run.lastOverlay = 0; run.boomDone = t > run.obsArrival; run.flashDone = t > 0.5; run.flashReal = t > 0.5 ? performance.now() - 1e5 : -1; map.triggerRepaint(); } },
   onSpeed: (s) => { if (run) run.speed = s; },
-  onGround: () => groundView(),
-  onCloud: () => { if (run) { run.userCam = false; run.beats = Math.max(run.beats, 2); cloudShot(3500, run.t > run.plan.tau * 0.8, true); } },
+  onGround: () => { tour.stop(); groundView(); },
+  onCloud: () => { if (run) { tour.stop(); run.userCam = false; run.beats = Math.max(run.beats, 2); cloudShot(3500, run.t > run.plan.tau * 0.8, true); } },
+  onTour: () => { if (tour.active) tour.stop(); else tour.start(); },
 });
 
 const showBtn = h('button', { id: 'ui-show', class: 'icon-btn glass', title: 'Mostrar panel (H)', html: ICONS.show, onclick: () => toggleUI() });
@@ -136,18 +176,25 @@ document.getElementById('app')!.append(showBtn);
 
 /** deja libre el espacio de los paneles para que la zona cero quede centrada en la parte visible */
 function updatePadding() {
-  const left = document.body.classList.contains('ui-collapsed') || window.innerWidth < 760 ? 0 : 340;
+  if (document.body.classList.contains('touring')) { map.setPadding({ left: 0, right: 0, top: 0, bottom: 0 }); return; }
+  const phone = window.innerWidth <= 760;
+  const collapsed = document.body.classList.contains('ui-collapsed');
+  const left = collapsed || phone ? 0 : 340;
   const rp = document.getElementById('results')!;
-  const right = run && !rp.classList.contains('hidden') && !rp.classList.contains('min') && window.innerWidth >= 760 ? 392 : 0;
-  map.setPadding({ left, right, top: 0, bottom: 0 });
+  const rpOpen = !!run && !rp.classList.contains('hidden') && !rp.classList.contains('min');
+  const right = rpOpen && !phone ? 392 : 0;
+  // en el móvil los paneles son hojas inferiores: el centro del mapa sube por encima de ellas
+  const bottom = !phone ? 0 : rpOpen ? rp.offsetHeight + 64 : collapsed ? 0 : document.getElementById('sidebar')!.offsetHeight;
+  map.setPadding({ left, right, top: 0, bottom: Math.min(bottom, window.innerHeight * 0.7) });
 }
+window.addEventListener('resize', () => updatePadding());
 
 let globeBtn: HTMLButtonElement | null = null;
 function applyProjection(globe: boolean) {
   state.view.globe = globe;
   setGlobe(map, globe);
   // el objeto de transformación cambia con la proyección: reinstala el ajuste del plano lejano
-  setTimeout(() => fxLayer.patchFarPlane(), 0);
+  setTimeout(() => fxLayer?.patchFarPlane(), 0);
   sidebar.projSeg?.set(globe ? 'globe' : 'flat');
   if (globeBtn) globeBtn.classList.toggle('on', globe);
   map.triggerRepaint();
@@ -201,10 +248,14 @@ function syncStrikeMarkers() {
 function setTarget(lat: number, lon: number, label: string, fly: boolean) {
   state.target = { lat, lon, label };
   sidebar.setTarget(lat, lon, label);
+  sidebar.updLaunch();
   detectSurface(lat, lon);
   marker.setLngLat([lon, lat]);
   markerEl.style.display = '';
   if (state.live) sidebar.loadWeather(true);
+  else lastWx = null;
+  if (state.view.weather) void weatherLayer.load(lat, lon); else weatherLayer.target = { lat, lon };
+  syncLocalWeather();
   if (fly) map.flyTo({ center: [lon, lat], zoom: 12.8, pitch: 62, duration: 2800, essential: true });
 }
 
@@ -215,6 +266,12 @@ function setTarget(lat: number, lon: number, label: string, fly: boolean) {
 const LAYERS_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="miter"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>';
 const layersPanel = h('div', { id: 'layers-panel', class: 'glass hidden' });
 document.getElementById('app')!.append(layersPanel);
+function wxSummary() {
+  const E = state.env, g = weatherLayer.grid;
+  const cloud = lastWx ? lastWx.cloudPct : g ? Math.round((weatherLayer.coverAt(state.target.lat, state.target.lon) ?? 0) * 100) : null;
+  const parts = [lastWx ? `${Math.round(lastWx.tempC)} °C` : '', cloud != null ? `nubes ${Math.round(cloud)} %` : '', (E.rainMmH ?? 0) > 0 ? `lluvia ${String(E.rainMmH).replace('.', ',')} mm/h` : 'sin lluvia', `visibilidad ${Math.round(E.visibilityKm)} km`].filter(Boolean);
+  return `En el objetivo: ${parts.join(' · ')}. Nubes de Open-Meteo en unos 1.200 km a la redonda; la lluvia se ve al acercarte al suelo.`;
+}
 function buildLayersPanel() {
   const V = state.view;
   layersPanel.innerHTML = '';
@@ -224,11 +281,30 @@ function buildLayersPanel() {
       h('b', {}, b.name), h('span', {}, b.desc));
     layersPanel.append(row);
   }
-  layersPanel.append(h('div', { class: 'lp-h' }, 'Opciones'));
-  const tg = (label: string, key: 'terrain3d' | 'buildings' | 'mapLabels' | 'forceDay' | 'tests') => {
+  layersPanel.append(h('div', { class: 'lp-h' }, 'Tiempo'));
+  const wtg = (label: string, key: 'weather' | 'radar') => {
     const inp = h('input', { type: 'checkbox' }) as HTMLInputElement;
     inp.checked = V[key];
-    inp.addEventListener('change', () => { V[key] = inp.checked; applyMapPrefs(); });
+    inp.addEventListener('change', () => {
+      V[key] = inp.checked; savePrefs();
+      if (key === 'weather') { weatherLayer.setEnabled(V.weather); atmosphere = tod(); } else void weatherLayer.setRadar(V.radar);
+      buildLayersPanel();
+    });
+    return h('label', { class: 'toggle' }, inp, h('span', { class: 'sw' }), label);
+  };
+  layersPanel.append(h('div', { class: 'toggles one lp-tg' }, wtg('Tiempo real en el mapa (nubes, lluvia y niebla)', 'weather'), wtg('Radar de lluvia (RainViewer)', 'radar')));
+  if (V.weather) layersPanel.append(h('div', { class: 'lp-note' }, wxSummary()));
+  layersPanel.append(h('div', { class: 'lp-h' }, 'Mapa de calor'));
+  const hs = h('div', { class: 'seg lp-heat' });
+  for (const [k, l] of [['off', 'Ninguno'], ['pop', 'Población'], ['deaths', 'Víctimas'], ['fallout', 'Lluvia rad.']] as const) {
+    hs.append(h('button', { type: 'button', class: V.heat === k ? 'on' : '', title: HEAT_TITLES[k], onclick: () => { setHeat(k); buildLayersPanel(); } }, l));
+  }
+  layersPanel.append(hs);
+  layersPanel.append(h('div', { class: 'lp-h' }, 'Opciones'));
+  const tg = (label: string, key: 'terrain3d' | 'buildings' | 'mapLabels' | 'forceDay' | 'tests' | 'reduceFlash') => {
+    const inp = h('input', { type: 'checkbox' }) as HTMLInputElement;
+    inp.checked = V[key];
+    inp.addEventListener('change', () => { V[key] = inp.checked; if (key === 'reduceFlash') { applyReduceFlash(); savePrefs(); } else applyMapPrefs(); });
     return h('label', { class: 'toggle' }, inp, h('span', { class: 'sw' }), label);
   };
   layersPanel.append(h('div', { class: 'toggles one lp-tg' }, tg('Relieve 3D', 'terrain3d'), tg('Edificios 3D', 'buildings'), tg('Nombres de lugares', 'mapLabels'), tg('Pruebas nucleares (1945–2017)', 'tests')));
@@ -236,8 +312,54 @@ function buildLayersPanel() {
   const r = h('input', { type: 'range', min: 0, max: 100, step: 1, value: Math.round(V.fxOpacity * 100) }) as HTMLInputElement;
   setRangeFill(r);
   r.addEventListener('input', () => { V.fxOpacity = +r.value / 100; val.textContent = `${r.value} %`; setRangeFill(r); applyFxOpacity(); savePrefs(); });
-  layersPanel.append(h('div', { class: 'lp-h' }, 'Efectos'), h('label', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Opacidad de anillos, cúpulas y marcas'), val), r));
+  layersPanel.append(h('div', { class: 'lp-h' }, 'Efectos'), h('label', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Opacidad de anillos, cúpulas y marcas'), val), r),
+    h('div', { class: 'toggles one lp-tg' }, tg('Reducir destellos (fotosensibilidad)', 'reduceFlash')));
 }
+// ---------------------------------------------------------------- mapa de calor
+const HEAT_TITLES: Record<'off' | HeatKind, string> = {
+  off: 'Sin mapa de calor',
+  pop: 'Densidad de población (WorldPop o modelo urbano)',
+  deaths: 'Muertes inmediatas por la onda, el calor y la radiación inicial',
+  fallout: 'Muertes por la lluvia radiactiva de la primera semana, sin refugio',
+};
+const heatLayer = new HeatLayer(map, document.getElementById('app')!);
+heatLayer.onClose = () => setHeat('off');
+let heatToken = 0;
+/** cambia el mapa de calor visible */
+function setHeat(k: 'off' | HeatKind) {
+  state.view.heat = k;
+  results.setHeat(k);
+  void refreshHeat(true);
+}
+/** recalcula el mapa de calor con la simulación actual (o la vista, para la población) */
+async function refreshHeat(explicit = false) {
+  const k = state.view.heat;
+  const token = ++heatToken;
+  if (k === 'off' || !mapLoaded) { heatLayer.set(null); return; }
+  const strikes = run ? [{ fx: run.fx, lat: run.lat, lon: run.lon }, ...run.extras.map((x) => ({ fx: x.fx, lat: x.lat, lon: x.lon }))] : [];
+  let area: { lat: number; lon: number; radiusKm: number } | undefined;
+  const nuclear = strikes.some((s) => !s.fx.release && !s.fx.volcano && !s.fx.dam && !s.fx.solar && !s.fx.war);
+  if (k === 'pop' && !nuclear) {
+    // sin explosión: la población de la zona que se ve en el mapa
+    const b = map.getBounds(), c = map.getCenter();
+    const rKm = Math.min(300, Math.max(3, haversineKm(c.lat, c.lng, b.getNorth(), b.getEast()) * 0.85));
+    area = { lat: c.lat, lon: c.lng, radiusKm: rKm };
+    if (state.view.realPop) { setRealPopulation(true); await loadRealPopulation(c.lat, c.lng, rKm).catch(() => null); }
+    if (token !== heatToken) return;
+  }
+  await new Promise((r) => setTimeout(r, 0));
+  const g = heatGrid(k, nuclear ? strikes : [], area);
+  if (token !== heatToken) return;
+  if (!g || g.max <= 0) {
+    heatLayer.set(null);
+    if (explicit) toast(k === 'pop' ? 'Sin datos de población en esta zona' : run ? 'Este escenario no tiene ese mapa de calor' : 'Lanza primero una simulación para ver las víctimas', 3000);
+    return;
+  }
+  heatLayer.set(g);
+}
+// la población sin simulación se recalcula al mover el mapa
+map.on('moveend', () => { if (state.view.heat === 'pop' && !run) void refreshHeat(); });
+
 // ---------------------------------------------------------------- barra de botones (arriba a la derecha)
 const GLOBE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7h14M5 17h14"/></svg>';
 const INFO_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 10.5V17M12 7v.5" stroke-width="2"/></svg>';
@@ -270,6 +392,318 @@ tbBtn('book-btn', 'Enciclopedia (E)', BOOK_ICON, () => enc.toggle());
 const layersBtn = tbBtn('layers-btn', 'Mapas y capas', LAYERS_ICON, (e) => { e.stopPropagation(); togglePopover(layersPanel, layersBtn, buildLayersPanel); });
 popovers.push({ el: layersPanel, btn: layersBtn });
 
+// edificios visibles: recuento uno a uno por sobrepresión con las teselas ya cargadas
+function countVisibleBuildings() {
+  if (!run || run.fx.release || run.fx.volcano || !map.getLayer('buildings') || map.getZoom() < 13 || !state.view.buildings) { results.setViewBuildings(null); return; }
+  const fx = run.fx, lat = run.lat, lon = run.lon;
+  const feats = map.querySourceFeatures('omt', { sourceLayer: 'building' });
+  const seen = new Set<string>();
+  const c = { destroyed: 0, severe: 0, moderate: 0, light: 0, intact: 0 };
+  const cos = Math.cos((lat * Math.PI) / 180);
+  for (const f of feats) {
+    const g = f.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon;
+    const ring = g.type === 'Polygon' ? g.coordinates[0] : g.type === 'MultiPolygon' ? g.coordinates[0]?.[0] : null;
+    if (!ring?.length) continue;
+    let x = 0, y = 0;
+    for (const p of ring) { x += p[0]; y += p[1]; }
+    x /= ring.length; y /= ring.length;
+    const key = f.id != null ? String(f.id) : `${x.toFixed(6)},${y.toFixed(6)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const d = Math.hypot((y - lat) * 110570, (x - lon) * 111320 * cos);
+    const psi = fx.pressurePsiAt(d);
+    if (psi >= 20) c.destroyed++; else if (psi >= 5) c.severe++; else if (psi >= 2) c.moderate++; else if (psi >= 1) c.light++; else c.intact++;
+  }
+  results.setViewBuildings(seen.size ? { ...c, total: seen.size } : null);
+}
+map.on('idle', () => { if (run && !run.playing) countVisibleBuildings(); });
+map.on('moveend', () => { if (run) setTimeout(countVisibleBuildings, 300); });
+
+// comparación de dos escenarios: segundo mapa sincronizado con un divisor arrastrable
+let split: { map: maplibregl.Map; el: HTMLElement; bar: HTMLElement; tags: HTMLElement; sync: () => void; x: number } | null = null;
+function closeSplit() {
+  if (!split) return;
+  map.off('move', split.sync);
+  split.map.remove();
+  split.el.remove(); split.bar.remove(); split.tags.remove();
+  split = null;
+}
+function openCompare() {
+  if (!run) return;
+  document.getElementById('cmp-panel')?.remove();
+  const sel = h('select') as HTMLSelectElement;
+  NUKE_PRESETS.forEach((g, gi) => { const og = h('optgroup', { label: g.group }); g.items.forEach((it, ii) => og.append(h('option', { value: `n:${gi}:${ii}` }, it.name))); sel.append(og); });
+  const oa = h('optgroup', { label: 'Asteroides y cometas' });
+  ASTEROID_PRESETS.forEach((a, i) => oa.append(h('option', { value: `a:${i}` }, a.name)));
+  sel.append(oa);
+  const cur = run.fx.scenario.name;
+  const firstOther = [...sel.options].find((o) => o.textContent !== cur && /Little Boy|Hiroshima/.test(o.textContent ?? ''));
+  if (firstOther) sel.value = firstOther.value;
+  const panel = h('div', { id: 'cmp-panel', class: 'glass' },
+    h('div', { class: 'sp-h' }, 'Comparar en el mapa partido'),
+    h('p', { class: 'sp-note' }, `A la izquierda, «${cur}». Elige qué se ve a la derecha, en el mismo lugar. Arrastra la línea central para mover la división.`),
+    h('label', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Escenario B')), sel),
+    h('div', { class: 'sp-btns' },
+      h('button', { type: 'button', class: 'btn-line', onclick: () => { startSplit(sel.value); panel.remove(); } }, 'Ver mapa partido'),
+      h('button', { type: 'button', class: 'btn-ghost', onclick: () => panel.remove() }, 'Cancelar')));
+  document.getElementById('app')!.append(panel);
+}
+function startSplit(val: string) {
+  if (!run) return;
+  closeSplit();
+  const [k, a, b] = val.split(':');
+  let sc: Scenario;
+  if (k === 'n') { const it = NUKE_PRESETS[+a].items[+b]; const { note: _n, ...rest } = it; void _n; sc = { kind: 'nuclear', ...rest } as Scenario; }
+  else { const it = ASTEROID_PRESETS[+a]; const { note: _n, group: _g, ...rest } = it; void _n; void _g; sc = { kind: 'asteroid', ...rest } as Scenario; }
+  const fxB = computeEffects(sc, { ...state.env }, run.lat, run.lon);
+  const el = h('div', { id: 'map2' });
+  document.getElementById('map')!.after(el);
+  const m2 = createMap(el, [map.getCenter().lng, map.getCenter().lat]);
+  const sync = () => m2.jumpTo({ center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), padding: map.getPadding() });
+  const bar = h('div', { id: 'split-bar', title: 'Arrastra para mover la división' }, h('span', {}, '⟷'));
+  const tags = h('div', { id: 'split-tags' }, h('b', { class: 'a' }, `A · ${run.fx.scenario.name || fmtEnergyShort(run.fx.energyKt)}`), h('b', { class: 'b' }, `B · ${sc.name}`), h('button', { type: 'button', title: 'Cerrar la comparación', onclick: () => closeSplit() }, '✕'));
+  document.getElementById('app')!.append(bar, tags);
+  const mapRect = () => document.getElementById('map')!.getBoundingClientRect();
+  const setX = (x: number) => {
+    const r = mapRect();
+    const cx = Math.max(r.left + 40, Math.min(r.right - 40, x));
+    split!.x = cx;
+    el.style.clipPath = `inset(0 0 0 ${cx - r.left}px)`;
+    bar.style.left = `${cx}px`;
+  };
+  split = { map: m2, el, bar, tags, sync, x: 0 };
+  // la división pasa por la zona cero: cada mitad muestra medio escenario, uno junto al otro
+  const r0 = mapRect();
+  setX(r0.left + map.project([run.lon, run.lat]).x);
+  let drag = false;
+  bar.addEventListener('pointerdown', (e) => { drag = true; bar.setPointerCapture(e.pointerId); });
+  bar.addEventListener('pointermove', (e) => { if (drag) setX(e.clientX); });
+  bar.addEventListener('pointerup', () => { drag = false; });
+  map.on('move', sync);
+  m2.on('load', () => {
+    const ov = new Overlays(m2);
+    ov.install();
+    ov.set(fxB, run!.lat, run!.lon, fxB.windKmh);
+    applyBasemapTo(m2);
+    sync();
+  });
+  sync();
+  toast(`B: ${sc.name}`, 2500);
+}
+const fmtEnergyShort = (kt: number) => (kt >= 1000 ? `${(kt / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} Mt` : `${kt.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kt`);
+function applyBasemapTo(m: maplibregl.Map) {
+  const V = state.view;
+  try { setBasemap(m, (BASEMAPS.some((b) => b.id === V.basemap) ? V.basemap : 'relieve') as BasemapId); } catch { /* sin mapa base */ }
+  if (m.getLayer('buildings')) m.setLayoutProperty('buildings', 'visibility', 'none');
+}
+
+// guerra a gran escala: círculos de daño en cada objetivo representativo
+function setWarLayer(fx: Effects | null) {
+  const W = fx?.war;
+  const feats: GeoJSON.Feature[] = [];
+  if (W) {
+    const one = computeEffects({ kind: 'nuclear', name: 'ojiva', yieldKt: W.yieldKt, fission: 0.5, burst: 'optimal', heightM: 0 }, state.env, W.targets[0][0], W.targets[0][1]);
+    const rr = (id: string) => one.rings.find((r) => r.id === id)?.radiusM ?? 0;
+    const zones: [number, string][] = [[rr('psi1'), '#facc15'], [rr('burn3'), '#f97316'], [rr('psi5'), '#ef4444']];
+    for (const [la, lo, name] of W.targets) {
+      for (const [r, c] of zones) {
+        if (r <= 0) continue;
+        const ring: [number, number][] = [];
+        for (let i = 0; i <= 48; i++) ring.push(destination(la, lo, r, (i / 48) * 360) as [number, number]);
+        feats.push({ type: 'Feature', properties: { c }, geometry: { type: 'Polygon', coordinates: [ring] } });
+      }
+      feats.push({ type: 'Feature', properties: { name }, geometry: { type: 'Point', coordinates: [lo, la] } });
+    }
+  }
+  const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: feats };
+  const src = map.getSource('fx-war') as maplibregl.GeoJSONSource | undefined;
+  if (src) { src.setData(fc); return; }
+  if (!W) return;
+  map.addSource('fx-war', { type: 'geojson', data: fc });
+  map.addLayer({ id: 'fx-war', type: 'fill', source: 'fx-war', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['get', 'c'], 'fill-opacity': 0.28 } });
+  map.addLayer({ id: 'fx-war-pt', type: 'circle', source: 'fx-war', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 3.5, 'circle-color': '#fff3d6', 'circle-stroke-color': '#ff3b1a', 'circle-stroke-width': 2, 'circle-blur': 0.2 } });
+  map.addLayer({ id: 'fx-war-lbl', type: 'symbol', source: 'fx-war', filter: ['==', ['geometry-type'], 'Point'], minzoom: 3.5, layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-font': ['Noto Sans Regular'] }, paint: { 'text-color': '#ffd28a', 'text-halo-color': '#000', 'text-halo-width': 1.2 } });
+}
+
+// tormenta solar: bandas de latitud geomagnética y óvalo auroral
+function setSolarLayer(fx: Effects | null) {
+  const S = fx?.solar;
+  const lineAt = (m: number): [number, number][] => {
+    const out: [number, number][] = [];
+    for (let lo = -180; lo <= 180; lo += 3) {
+      // latitud geográfica cuya latitud geomagnética es m en este meridiano (bisección)
+      let a = m > 0 ? -10 : -85, b = m > 0 ? 85 : 10;
+      for (let i = 0; i < 40; i++) { const c = (a + b) / 2; if (geomagLat(c, lo) < m) a = c; else b = c; }
+      out.push([lo, Math.max(-84, Math.min(84, (a + b) / 2))]);
+    }
+    return out;
+  };
+  const band = (m1: number, m2: number): GeoJSON.Polygon => {
+    const A = m2 >= 89 ? lineAt(m1).map(([x]) => [x, 84] as [number, number]) : lineAt(m2), B = lineAt(m1);
+    return { type: 'Polygon', coordinates: [[...B, ...A.reverse(), B[0]]] };
+  };
+  const feats: GeoJSON.Feature[] = [];
+  if (S) {
+    const Am = S.auroraMlat;
+    const zones: [number, number, string][] = [[Am, 90, '#ef4444'], [Am - 8, Am, '#f97316'], [Am - 18, Am - 8, '#facc15']];
+    for (const [m1, m2, c] of zones) {
+      if (m2 <= 0) continue;
+      const lo1 = Math.max(0.5, m1);
+      feats.push({ type: 'Feature', properties: { c }, geometry: band(lo1, m2) });
+      const s = band(-Math.min(89.9, m2), -lo1); // hemisferio sur
+      feats.push({ type: 'Feature', properties: { c }, geometry: m2 >= 89 ? { type: 'Polygon', coordinates: [[...lineAt(-lo1).map(([x]) => [x, -84]), ...lineAt(-lo1).reverse()]] } : s });
+    }
+    feats.push({ type: 'Feature', properties: { aur: 1 }, geometry: { type: 'LineString', coordinates: lineAt(Am) } });
+    feats.push({ type: 'Feature', properties: { aur: 1 }, geometry: { type: 'LineString', coordinates: lineAt(-Am) } });
+  }
+  const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: feats };
+  const src = map.getSource('fx-solar') as maplibregl.GeoJSONSource | undefined;
+  if (src) { src.setData(fc); return; }
+  if (!S) return;
+  map.addSource('fx-solar', { type: 'geojson', data: fc });
+  map.addLayer({ id: 'fx-solar', type: 'fill', source: 'fx-solar', filter: ['!', ['has', 'aur']], paint: { 'fill-color': ['get', 'c'], 'fill-opacity': 0.2 } });
+  map.addLayer({ id: 'fx-solar-aur', type: 'line', source: 'fx-solar', filter: ['has', 'aur'], paint: { 'line-color': '#4ade80', 'line-width': 3, 'line-blur': 2, 'line-opacity': 0.9 } });
+}
+
+// lluvia negra (aparece en el mapa a los ~20 min de la explosión)
+function setBlackRainLayer(br: Effects['blackRain'] | undefined, lat: number, lon: number) {
+  const cos = Math.cos((lat * Math.PI) / 180);
+  const toLL = ([e, n]: [number, number]) => [lon + e / (111320 * cos), lat + n / 110570];
+  const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: br ? [
+    { type: 'Feature', properties: { k: 'light' }, geometry: { type: 'Polygon', coordinates: [br.light.map(toLL)] } },
+    { type: 'Feature', properties: { k: 'heavy' }, geometry: { type: 'Polygon', coordinates: [br.heavy.map(toLL)] } },
+  ] : [] };
+  const src = map.getSource('fx-blackrain') as maplibregl.GeoJSONSource | undefined;
+  if (src) { src.setData(fc); }
+  else if (br) {
+    map.addSource('fx-blackrain', { type: 'geojson', data: fc });
+    const before = map.getLayer('fx-labels') ? 'fx-labels' : undefined;
+    map.addLayer({ id: 'fx-blackrain', type: 'fill', source: 'fx-blackrain', layout: { visibility: 'none' }, paint: { 'fill-color': ['match', ['get', 'k'], 'heavy', '#0b0b0f', '#2b2b33'], 'fill-opacity': ['match', ['get', 'k'], 'heavy', 0.45, 0.25] } }, before);
+    map.addLayer({ id: 'fx-blackrain-line', type: 'line', source: 'fx-blackrain', layout: { visibility: 'none' }, paint: { 'line-color': '#9ca3af', 'line-width': 1, 'line-dasharray': [1, 2], 'line-opacity': 0.7 } }, before);
+  }
+}
+function showBlackRain(on: boolean) {
+  // con un mapa de calor a la vista, la lluvia negra lo taparía
+  if (state.view.heat !== 'off') on = false;
+  for (const id of ['fx-blackrain', 'fx-blackrain-line']) if (map.getLayer(id) && (map.getLayoutProperty(id, 'visibility') === 'visible') !== on) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+}
+
+// zonas a la sombra del relieve
+function setShadowLayer(polys: [number, number][][][] | null, lat: number, lon: number) {
+  const cos = Math.cos((lat * Math.PI) / 180);
+  const toLL = ([e, n]: [number, number]) => [lon + e / (111320 * cos), lat + n / 110570];
+  const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: (polys ?? []).map((p) => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: p.map((ring) => ring.map(toLL)) } })) };
+  const src = map.getSource('fx-shadow') as maplibregl.GeoJSONSource | undefined;
+  if (src) { src.setData(fc); return; }
+  if (!polys) return;
+  map.addSource('fx-shadow', { type: 'geojson', data: fc });
+  map.addLayer({ id: 'fx-shadow', type: 'fill', source: 'fx-shadow', paint: { 'fill-color': '#1e3a5f', 'fill-opacity': 0.38 } }, map.getLayer('fx-labels') ? 'fx-labels' : undefined);
+  map.addLayer({ id: 'fx-shadow-line', type: 'line', source: 'fx-shadow', paint: { 'line-color': '#7dd3fc', 'line-width': 1, 'line-opacity': 0.6, 'line-dasharray': [2, 2] } }, map.getLayer('fx-labels') ? 'fx-labels' : undefined);
+}
+
+// trayectoria del misil sobre el mapa
+function setMissilePath(path: [number, number][] | null, dot?: [number, number]) {
+  const line: GeoJSON.Feature = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: path ?? [] } };
+  const pt: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: dot ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: dot } }] : [] };
+  if (!map.getSource('fx-missile')) {
+    if (!path) return;
+    map.addSource('fx-missile', { type: 'geojson', data: line });
+    map.addSource('fx-missile-dot', { type: 'geojson', data: pt });
+    map.addLayer({ id: 'fx-missile-glow', type: 'line', source: 'fx-missile', paint: { 'line-color': '#ff6a1a', 'line-width': 7, 'line-opacity': 0.18, 'line-blur': 4 } });
+    map.addLayer({ id: 'fx-missile-line', type: 'line', source: 'fx-missile', paint: { 'line-color': '#ffb020', 'line-width': 1.8, 'line-dasharray': [3, 2], 'line-opacity': 0.9 } });
+    map.addLayer({ id: 'fx-missile-dot', type: 'circle', source: 'fx-missile-dot', paint: { 'circle-radius': 6, 'circle-color': '#fff3d6', 'circle-stroke-color': '#ff6a1a', 'circle-stroke-width': 3, 'circle-blur': 0.15 } });
+    return;
+  }
+  (map.getSource('fx-missile') as maplibregl.GeoJSONSource).setData(line);
+  (map.getSource('fx-missile-dot') as maplibregl.GeoJSONSource).setData(pt);
+}
+let missileLabel: maplibregl.Marker | null = null;
+/** encuadra el arco completo y anima el vuelo (unos segundos que representan el tiempo real de vuelo) */
+async function missileIntro(la0: number, lo0: number, la1: number, lo1: number, flightMin: number, apogeeKm: number) {
+  const path = greatCirclePath(la0, lo0, la1, lo1, 200);
+  setMissilePath(path, path[0]);
+  let minX = 999, maxX = -999, minY = 90, maxY = -90;
+  for (const [x, y] of path) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+  map.fitBounds([[minX, minY], [maxX, maxY]], { padding: { top: 90, bottom: 120, left: 60, right: 60 }, pitch: 30, bearing: 0, duration: 1800, maxZoom: 7 });
+  await waitIdle(4000);
+  const el = h('div', { class: 'missile-lbl' });
+  missileLabel?.remove();
+  missileLabel = new maplibregl.Marker({ element: el, anchor: 'left', offset: [12, 0] }).setLngLat(path[0]).addTo(map);
+  const dur = Math.min(7000, 3000 + flightMin * 120);
+  const t0 = performance.now();
+  await new Promise<void>((done) => {
+    const step = () => {
+      const f = Math.min(1, (performance.now() - t0) / dur);
+      const k = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+      const i = Math.min(path.length - 1, Math.round(k * (path.length - 1)));
+      setMissilePath(path.slice(0, i + 1), path[i]);
+      missileLabel!.setLngLat(path[i]);
+      const left = flightMin * (1 - k);
+      el.innerHTML = `<b>T−${left >= 1 ? Math.ceil(left) + ' min' : Math.ceil(left * 60) + ' s'}</b><span>${Math.round(apogeeKm * Math.sin(Math.PI * k)).toLocaleString('es-ES')} km de altura</span>`;
+      if (f < 1) requestAnimationFrame(step); else done();
+    };
+    requestAnimationFrame(step);
+  });
+  missileLabel.remove(); missileLabel = null;
+  setMissilePath(path);
+}
+
+// ¿Estoy a salvo? — efectos en un punto concreto (tu ubicación o uno elegido en el mapa)
+const SAFE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>';
+const safePop = h('div', { id: 'safe-pop', class: 'glass hidden' });
+document.getElementById('app')!.append(safePop);
+let safePoint: { lat: number; lon: number; label: string } | null = null;
+let safePick = false;
+let safeMarker: maplibregl.Marker | null = null;
+const safeBtn = tbBtn('safe-btn', '¿Estoy a salvo?', SAFE_ICON, (e) => { e.stopPropagation(); togglePopover(safePop, safeBtn, buildSafePop); });
+popovers.push({ el: safePop, btn: safeBtn });
+function openSafe() { if (safePop.classList.contains('hidden')) togglePopover(safePop, safeBtn, buildSafePop); else buildSafePop(); }
+function setSafePoint(lat: number, lon: number, label: string) {
+  safePoint = { lat, lon, label };
+  if (!safeMarker) {
+    const el = h('div', { class: 'safe-marker', title: 'Tu punto' });
+    safeMarker = new maplibregl.Marker({ element: el, anchor: 'bottom' });
+  }
+  safeMarker.setLngLat([lon, lat]).addTo(map);
+  // tras el clic en el mapa (el mismo clic llega después al documento y cerraría el menú)
+  setTimeout(openSafe, 30);
+}
+function buildSafePop() {
+  safePop.innerHTML = '';
+  safePop.append(h('div', { class: 'sp-h' }, '¿Estoy a salvo?'));
+  const locBtn = h('button', { type: 'button', class: 'btn-line', onclick: (ev: MouseEvent) => {
+    ev.stopPropagation();
+    if (!navigator.geolocation) { toast('Este navegador no permite conocer tu ubicación'); return; }
+    locBtn.textContent = 'Buscando tu ubicación…';
+    navigator.geolocation.getCurrentPosition((p) => setSafePoint(p.coords.latitude, p.coords.longitude, 'Tu ubicación'),
+      () => { toast('No se pudo obtener tu ubicación: elige el punto en el mapa'); buildSafePop(); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
+  } }, 'Usar mi ubicación');
+  const pickBtn = h('button', { type: 'button', class: 'btn-ghost', onclick: (ev: MouseEvent) => {
+    ev.stopPropagation(); safePick = true; safePop.classList.add('hidden'); safeBtn.classList.remove('on');
+    toast('Toca el mapa en el punto que quieres comprobar', 4000);
+  } }, 'Elegir en el mapa');
+  safePop.append(h('div', { class: 'sp-btns' }, locBtn, pickBtn));
+  if (!run) { safePop.append(h('p', { class: 'sp-note' }, 'Lanza primero una simulación. Después podrás ver qué efectos llegarían a tu casa, tu trabajo o cualquier otro punto, cuándo llegarían y qué convendría hacer.')); return; }
+  if (!safePoint) { safePop.append(h('p', { class: 'sp-note' }, 'Elige un punto: se calcularán la onda expansiva, el calor, la radiación y la lluvia radiactiva que le llegarían, con la hora de llegada y consejos de protección civil.')); return; }
+  // detonación más cercana (en un ataque múltiple)
+  const all = [{ fx: run.fx, lat: run.lat, lon: run.lon }, ...run.extras];
+  const order = ['fuera', 'bajo', 'riesgo', 'grave', 'extremo'];
+  let rep: SafetyReport | null = null;
+  for (const s of all) { const r = assessPoint(s.fx, s.lat, s.lon, safePoint.lat, safePoint.lon); if (!rep || order.indexOf(r.level) > order.indexOf(rep.level) || (r.level === rep.level && r.distanceKm < rep.distanceKm)) rep = r; }
+  const R = rep!;
+  const dir = ['norte', 'noreste', 'este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste'][Math.round(R.bearingDeg / 45) % 8];
+  const pct = (x: number) => (x < 0.005 ? '< 1 %' : `${Math.round(x * 100)} %`);
+  safePop.append(
+    h('div', { class: `sp-verdict lv-${R.level}` }, h('b', {}, R.headline), h('span', {}, `${safePoint.label} · a ${R.distanceKm < 10 ? R.distanceKm.toFixed(1).replace('.', ',') : Math.round(R.distanceKm)} km al ${dir} de la zona cero`)),
+  );
+  if (!run.fx.release && !run.fx.volcano && !run.fx.dam && !run.fx.solar && !run.fx.war) safePop.append(h('div', { class: 'sp-prob' }, h('span', {}, 'Probabilidad de morir ', h('b', {}, pct(R.pDeath))), h('span', {}, 'de resultar herido ', h('b', {}, pct(R.pInjury)))));
+  const list = h('div', { class: 'sp-items' });
+  for (const it of R.items) list.append(h('div', { class: `sp-it lv-${it.level}` }, h('div', {}, h('b', {}, it.label), h('span', {}, it.value)), h('p', {}, it.detail)));
+  if (!R.items.length) list.append(h('p', { class: 'sp-note' }, 'Ningún efecto calculado llega a este punto.'));
+  safePop.append(list, h('div', { class: 'sp-h2' }, 'Qué hacer'), h('ul', { class: 'sp-adv' }, ...R.advice.map((a) => h('li', {}, a))),
+    h('p', { class: 'sp-note' }, 'Estimación orientativa con los mismos modelos del simulador. En una emergencia real, sigue siempre las instrucciones de las autoridades.'));
+}
+
 // tema: día, tarde, noche o automático
 const themePop = h('div', { id: 'theme-pop', class: 'glass hidden' });
 document.getElementById('app')!.append(themePop);
@@ -300,7 +734,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.4';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -333,9 +767,11 @@ function openAbout() {
       h('ul', { class: 'about-feat' },
         feat('Armas nucleares y explosivos.', 'Más de 70 armas reales, de las bombas de Hiroshima y Nagasaki a la Bomba del Zar y los arsenales actuales, o una potencia a tu medida; en superficie, en el aire, en el espacio, bajo tierra o bajo el agua, y ataques con varias detonaciones a la vez.'),
         feat('Asteroides y cometas.', 'Impactos históricos e hipotéticos y los objetos reales que vigila la NASA, con su cráter, el terremoto, el tsunami que recorre los océanos y la posibilidad de desviarlos a tiempo.'),
-        feat('Otras catástrofes.', 'Accidentes nucleares como Chernóbil o Fukushima, bombas sucias y erupciones de supervolcanes como Yellowstone.'),
+        feat('Otras catástrofes.', 'Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala con su invierno nuclear.'),
+        feat('¿Estoy a salvo?', 'Elige tu casa o cualquier punto y verás qué te llegaría, cuándo, y qué hacer para protegerte; también puedes comparar dos escenarios en un mapa partido o seguir el vuelo del misil desde su base.'),
         feat('Efectos y víctimas.', 'Bola de fuego, onda expansiva, quemaduras, radiación, lluvia radiactiva, incendios, pulso electromagnético, ceniza y contaminación, con la población real de la zona, los hospitales y servicios afectados y cuánto protege cada tipo de refugio.'),
-        feat('Tiempo real.', 'El viento, la lluvia y la hora del lugar cambian el resultado; una línea de tiempo deja ver la explosión a cámara lenta o el avance de la nube durante días.'),
+        feat('Tiempo real.', 'El viento de las próximas horas, la lluvia, el relieve y la hora del lugar cambian el resultado, y el mapa muestra las nubes, la lluvia, la niebla y el radar de precipitación de ahora mismo; una línea de tiempo deja ver la explosión a cámara lenta o el avance de la nube durante días.'),
+        feat('Mapas de calor y recorrido de cine.', 'Mapas de calor de la población, de las víctimas y de las muertes por la lluvia radiactiva, y un recorrido automático con planos de cine y rótulos que cuenta la catástrofe de principio a fin.'),
         feat('Enciclopedia.', 'Cientos de artículos sobre la historia, la ciencia y los efectos de estas armas y catástrofes, con esquemas animados y modelos 3D que se pueden desmontar.'),
       ),
       h('p', { class: 'about-note' }, 'Herramienta divulgativa y educativa: las cifras son estimaciones a partir de modelos científicos públicos y no sustituyen a los planes oficiales de protección civil.'),
@@ -401,22 +837,28 @@ testsLayer.onSimulate = (t) => {
   setTimeout(() => detonate(), 3200);
 };
 
-map.on('load', () => {
+let mapLoaded = false;
+map.on('load', async () => {
+  mapLoaded = true;
   overlays.install();
   testsLayer.install();
   installTsunamiHover();
   applyMapPrefs();
-  map.addLayer(fxLayer, 'fx-labels');
   atmosphere = tod();
-  puffTex = createPuffAtlas(1024);
+  await fxReady;
+  map.addLayer(fxLayer, 'fx-labels');
+  puffTex = FX.createPuffAtlas(1024);
   if (state.view.globe) applyProjection(true);
   detectSurface(state.target.lat, state.target.lon);
   if (state.live) sidebar.loadWeather(true);
+  syncLocalWeather();
+  if (state.view.weather) { void weatherLayer.load(state.target.lat, state.target.lon); if (state.view.radar) void weatherLayer.setRadar(true); }
   document.getElementById('loading')!.classList.add('done');
   if (location.hash.length > 3) setTimeout(() => detonate(), 1200);
 });
 
 map.on('click', (e) => {
+  if (safePick) { safePick = false; const c = nearestCity(e.lngLat.lat, e.lngLat.lng); setSafePoint(e.lngLat.lat, e.lngLat.lng, c.km < 15 ? `Cerca de ${c.city.name}` : 'Punto elegido'); return; }
   if (testsLayer.handleClick(e)) return;
   const c = nearestCity(e.lngLat.lat, e.lngLat.lng);
   const label = c.km < 25 ? c.city.name : '';
@@ -446,10 +888,31 @@ map.on('click', (e) => {
       map.easeTo({ bearing: 0, pitch: 0, duration: 900, essential: true });
     } else lastCtx = now;
   });
+  // en pantallas táctiles, el equivalente es un doble toque con dos dedos
+  const cc = map.getCanvasContainer();
+  let t2: { t: number; x: number; y: number } | null = null, last2 = 0, moved = false;
+  cc.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) { const [a, b] = [e.touches[0], e.touches[1]]; t2 = { t: performance.now(), x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 }; moved = false; }
+  }, { passive: true });
+  cc.addEventListener('touchmove', (e) => {
+    if (t2 && e.touches.length === 2) { const [a, b] = [e.touches[0], e.touches[1]]; if (Math.hypot((a.clientX + b.clientX) / 2 - t2.x, (a.clientY + b.clientY) / 2 - t2.y) > 12) moved = true; }
+  }, { passive: true });
+  cc.addEventListener('touchend', (e) => {
+    if (!t2 || e.touches.length > 0) return;
+    const now = performance.now(), quick = now - t2.t < 300 && !moved;
+    t2 = null;
+    if (!quick) { last2 = 0; return; }
+    if (now - last2 < 500) {
+      last2 = 0;
+      if (run) { run.userCam = true; run.orbit = null; }
+      resetFov();
+      map.easeTo({ bearing: 0, pitch: 0, duration: 900, essential: true });
+    } else last2 = now;
+  }, { passive: true });
 }
 
 for (const ev of ['dragstart', 'rotatestart', 'pitchstart', 'wheel'] as const) {
-  map.on(ev, (e: any) => { if (run && e.originalEvent) { run.userCam = true; run.orbit = null; } });
+  map.on(ev, (e: any) => { if (run && e.originalEvent) { run.userCam = true; run.orbit = null; tour.stop(); } });
 }
 
 function applyView() {
@@ -465,7 +928,7 @@ function applyView() {
   if (run) {
     run.domes.enabled = V.domes;
     for (const x of run.extras) { x.domes.enabled = V.domes; x.fires.object.visible = V.fires; }
-    for (const m of fxLayer.modules) if (m instanceof Fires) m.object.visible = V.fires;
+    if (fxLayer) for (const m of fxLayer.modules) if (m instanceof FX.Fires) m.object.visible = V.fires;
   }
   map.triggerRepaint();
 }
@@ -481,7 +944,7 @@ function zoomForRadius(r: number, lat: number) {
   const pad = map.getPadding();
   const minDim = Math.min(el.clientWidth - (pad.left ?? 0) - (pad.right ?? 0), el.clientHeight);
   const mpp = (2 * r) / (Math.max(320, minDim) * 0.85);
-  return Math.max(1.5, Math.min(16.5, Math.log2((40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * mpp))));
+  return Math.max(0.5, Math.min(16.5, Math.log2((40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * mpp))));
 }
 
 function frame(r: number, duration = 3500, pitch?: number, bearingDelta = 0) {
@@ -570,13 +1033,38 @@ function cloudShot(duration = 6500, final = true, orbit = true) {
   run.orbit = orbit ? { bearing: b, final } : null;
 }
 
+// recorrido cinematográfico automático
+const tour = new Tour({
+  map,
+  run: () => run,
+  place: () => { if (!run) return ''; const c = nearestCity(run.lat, run.lon); return state.target.label || (c.km < 25 ? c.city.name : `${run.lat.toFixed(3)}, ${run.lon.toFixed(3)}`); },
+  restart: () => restartClock(),
+  seek: (t) => { if (run) { run.t = t; run.lastOverlay = 0; run.boomDone = t > run.obsArrival; run.flashDone = t > 0.5; run.flashReal = t > 0.5 ? performance.now() - 1e5 : -1; map.triggerRepaint(); } },
+  zoomForRadius,
+  cloudCamera: (b, f) => cloudCamera(b, f) as never,
+  destination: (la, lo, d, b) => destination(la, lo, d, b) as [number, number],
+  setWideFov: (on) => { if (on) { map.setVerticalFieldOfView(62); groundFov = true; } else resetFov(); },
+  heat: (k) => { const prev = state.view.heat; if (prev !== k) setHeat(k); return prev; },
+  layout: () => updatePadding(),
+  repaint: () => map.triggerRepaint(),
+}, document.getElementById('app')!);
+
 // ---------------------------------------------------------------------------
 // simulación
 // ---------------------------------------------------------------------------
 function clearRun() {
+  tour.stop(true);
   resetFov();
-  fxLayer.clear();
-  fxLayer.animating = false;
+  setMissilePath(null);
+  setShadowLayer(null, 0, 0);
+  setBlackRainLayer(undefined, 0, 0); showBlackRain(false);
+  setSolarLayer(null);
+  setWarLayer(null);
+  heatLayer.set(null);
+  closeSplit();
+  document.getElementById('cmp-panel')?.remove();
+  fxLayer?.clear();
+  if (fxLayer) fxLayer.animating = false;
   run = null;
   overlays.extras = [];
   tsuWorker?.terminate(); tsuWorker = null;
@@ -609,6 +1097,13 @@ const fmtDistShort = (m: number) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1
 /** completa un escenario (detección automática del terreno en impactos) */
 async function prepScenario(sc0: Scenario, lat: number, lon: number): Promise<Scenario> {
   const sc = { ...sc0 } as Scenario;
+  if (sc.kind === 'dam') {
+    const V = Math.max(0.01, sc.volumeHm3) * 1e6, Ld = 12000 * Math.pow(V / 1e9, 0.35) + 3000;
+    const R = Math.min(250e3, Math.max(15e3, Ld * 6));
+    const tt = setTimeout(() => toast('Cargando el relieve del valle…', 3000), 400);
+    sc.dem = await elevationSampler(lat, lon, R).catch(() => null);
+    clearTimeout(tt);
+  }
   if (sc.kind === 'asteroid' && state.ast.surface === 'auto') {
     const info = surfaceInfo && surfaceInfo.lat === lat && surfaceInfo.lon === lon ? surfaceInfo : await detectSurface(lat, lon);
     const elev = info?.elev ?? 0;
@@ -619,11 +1114,18 @@ async function prepScenario(sc0: Scenario, lat: number, lon: number): Promise<Sc
 }
 
 async function detonate() {
-  if (!puffTex) { map.once('load', () => setTimeout(() => detonate(), 300)); return; } // aún cargando: se lanza al terminar
+  if (!puffTex) { // aún cargando el mapa o el motor 3D: se lanza al terminar
+    const go = () => setTimeout(() => detonate(), 300);
+    if (mapLoaded) fxReady.then(() => setTimeout(go, 200)); else map.once('load', () => fxReady.then(() => setTimeout(go, 200)));
+    return;
+  }
   if (busy) return;
   busy = true;
   try {
     audio.unlock();
+    if (state.mode !== 'other') photoWarning();
+    // en móviles y tabletas se pliega el panel de ajustes para dejar ver la explosión y los resultados
+    if (window.innerWidth <= 1180 && !document.body.classList.contains('ui-collapsed')) toggleUI();
     const multi = state.multi.on && state.multi.strikes.length > 0 && state.mode !== 'other';
     const list: Strike[] = multi ? state.multi.strikes.slice(0, 24) : [{ lat: state.target.lat, lon: state.target.lon, label: state.target.label, sc: sidebar.currentScenario(), azimuth: state.ast.azimuth }];
     const env = { ...state.env };
@@ -649,6 +1151,14 @@ async function detonate() {
     const sc = fx.scenario;
     clearRun();
     syncStrikeMarkers();
+    // trayectoria del misil: arco desde la base de lanzamiento y animación del vuelo
+    const site = sc.kind === 'nuclear' && !comp[1] ? LAUNCH_SITES.find((s) => s.id === state.launch) : undefined;
+    if (site) {
+      const rangeKm = greatCircleKm(site.lat, site.lon, lat, lon);
+      const b = ballistic(rangeKm);
+      fx.missile = { site: site.name, country: site.country, rangeKm, ...b };
+      await missileIntro(site.lat, site.lon, lat, lon, fx.missile.flightMin, fx.missile.apogeeKm);
+    }
     const plan = new FxPlan(fx, env);
     if (sc.kind === 'asteroid') plan.entryAzimuth = list[0].azimuth ?? state.ast.azimuth;
 
@@ -664,6 +1174,17 @@ async function detonate() {
     let r0 = Math.max(plan.psi5R * 1.6, plan.fireballR * 7, plan.capTop * 0.5, 1500) + spread;
     if (fx.volcano) r0 = Math.max(plan.capR * 1.25, fx.volcano.pdcR * 1.6) + spread;
     else if (fx.release) r0 = Math.max(plan.capTop * 2.5, 2500) + spread;
+    else if (fx.dam) r0 = Math.max(8000, (fx.dam.reachKm * 1000) * 0.7);
+    else if (fx.solar) { r0 = 7e6; if (!state.view.globe) applyProjection(true); setSolarLayer(fx); }
+    else if (fx.war) {
+      if (!state.view.globe) applyProjection(true);
+      setWarLayer(fx);
+      // encuadre: centro y extensión de los objetivos (los dos bandos a la vista)
+      const T = fx.war.targets;
+      const x = T.reduce((s, p) => s + Math.cos((p[1] * Math.PI) / 180) * Math.cos((p[0] * Math.PI) / 180), 0), y = T.reduce((s, p) => s + Math.sin((p[1] * Math.PI) / 180) * Math.cos((p[0] * Math.PI) / 180), 0), z = T.reduce((s, p) => s + Math.sin((p[0] * Math.PI) / 180), 0);
+      cLat = (Math.atan2(z, Math.hypot(x, y)) * 180) / Math.PI; cLon = (Math.atan2(y, x) * 180) / Math.PI;
+      r0 = Math.max(...T.map((p) => haversineKm(cLat, cLon, p[0], p[1]) * 1000)) * 1.15;
+    }
     let bearing = map.getBearing();
     if (plan.isAsteroid) {
       // vista lateral de la trayectoria para ver llegar el bólido
@@ -673,7 +1194,7 @@ async function detonate() {
     }
     const z0 = zoomForRadius(r0, cLat);
     if (far || Math.abs(map.getZoom() - z0) > 1.2 || plan.isAsteroid || comp.length > 1) {
-      map.easeTo({ center: [cLon, cLat], zoom: z0, pitch: plan.isAsteroid ? 55 : 66, bearing, duration: far ? 2600 : 1600, essential: true });
+      map.easeTo({ center: [cLon, cLat], zoom: z0, pitch: fx.war || fx.solar ? 0 : plan.isAsteroid ? 55 : 66, bearing: fx.war || fx.solar ? 0 : bearing, duration: far ? 2600 : 1600, essential: true });
       await waitIdle(far ? 6000 : 3500);
     }
     const elev = map.queryTerrainElevation([lon, lat]) ?? 0;
@@ -696,22 +1217,24 @@ async function detonate() {
         return v === null || v === undefined ? 0 : v - elev - el;
       };
       const mods: FxModule[] = [];
-      const domes = new Domes(pl);
+      const domes = new FX.Domes(pl);
       domes.enabled = state.view.domes;
       domes.opacity = state.view.fxOpacity;
       domes.hidden = new Set(results.hidden);
       mods.push(domes);
-      if (primary && pl.isAsteroid) mods.push(new Bolide(pl, puffTex!));
-      const fires = new Fires(pl, puffTex!, elevAt, primary ? q : q * 0.5);
+      if (primary && pl.isAsteroid) mods.push(new FX.Bolide(pl, puffTex!));
+      const fires = new FX.Fires(pl, puffTex!, elevAt, primary ? q : q * 0.5);
       fires.object.visible = state.view.fires;
       mods.push(fires);
-      if (cloudNoise) mods.push(new VolumeCloud(pl, cloudNoise, primary ? q : Math.min(q, 0.6)));
-      mods.push(new Mushroom(pl, puffTex!, primary ? q : q * 0.5, !!cloudNoise));
-      mods.push(new Shock(pl));
-      if (Rubble.wanted(pl)) mods.push(new Rubble(pl, primary ? q : q * 0.5));
-      mods.push(new Fireball(pl));
+      // presas y tormentas solares no tienen nube, onda ni bola de fuego
+      if (!fxi.dam && !fxi.solar && !fxi.war) {
+        if (cloudNoise) mods.push(new FX.VolumeCloud(pl, cloudNoise, primary ? q : Math.min(q, 0.6)));
+        mods.push(new FX.Mushroom(pl, puffTex!, primary ? q : q * 0.5, !!cloudNoise));
+        mods.push(new FX.Shock(pl));
+        if (FX.Rubble.wanted(pl)) mods.push(new FX.Rubble(pl, primary ? q : q * 0.5));
+        mods.push(new FX.Fireball(pl));
+      }
       for (const m of mods) { fxLayer.add(m); m.object.position.set(e, el, -n); m.object.updateMatrixWorld(); }
-      void fxi;
       return { domes, fires };
     };
     const main = build(fx, plan, lat, lon, true);
@@ -740,6 +1263,7 @@ async function detonate() {
       multiInfo = { deaths: tot.deaths, injuries: tot.injuries, exposed: tot.exposed, items: comp.map((x) => ({ name: x.fx.scenario.name, place: x.st.label || nearestCity(x.st.lat, x.st.lon).city.name, energyKt: x.fx.energyKt, deaths: x.fx.casualties.deaths })) };
     }
     results.setInfra(null);
+    results.setBuildings(null);
     results.render(fx, `${place}`, multiInfo);
     // infraestructuras reales por zona (OpenStreetMap), en segundo plano
     if (!fx.release && !fx.volcano) {
@@ -750,13 +1274,38 @@ async function detonate() {
         results.setInfra('loading');
         fetchInfrastructure(lat, lon, zs).then((r) => { if (token === infraToken) results.setInfra(r ?? 'error'); }, () => { if (token === infraToken) results.setInfra('error'); });
       }
+      setBlackRainLayer(fx.blackRain, lat, lon);
+      // sombra del relieve sobre el destello (líneas de visión con el modelo del terreno)
+      const burnR = Math.min(40000, fx.rings.find((r) => r.id === 'burn2')?.radiusM ?? fx.rings.find((r) => r.id === 'burn1')?.radiusM ?? 0);
+      results.setShadow(null);
+      setShadowLayer(null, lat, lon);
+      if (burnR > 300 && !fx.buried && !fx.chemical && fx.fireball.visible) {
+        const tokenS = infraToken;
+        results.setShadow('loading');
+        elevationSampler(lat, lon, burnR).then((smp) => {
+          if (tokenS !== infraToken) return;
+          if (!smp) { results.setShadow(null); return; }
+          const s = computeTerrainShadow(smp, lat, lon, fx.burstHeightM, burnR);
+          results.setShadow(s);
+          setShadowLayer(s?.polygons.length ? s.polygons : null, lat, lon);
+        }, () => results.setShadow(null));
+      }
+      // edificios por zona de daño (recuento en el servidor)
+      const bz = ['psi20', 'psi5', 'psi1'].map((id) => fx.rings.find((r) => r.id === id)).filter((r): r is NonNullable<typeof r> => !!r && !r.global && r.radiusM > 30).map((r) => ({ id: r.id, radiusM: r.radiusM }));
+      if (bz.length) {
+        const tokenB = infraToken;
+        results.setBuildings('loading');
+        fetchBuildingCounts(lat, lon, bz).then((r) => { if (tokenB === infraToken) results.setBuildings(r ?? 'error'); }, () => { if (tokenB === infraToken) results.setBuildings('error'); });
+      }
     }
     updatePadding();
+    // el cambio de márgenes interrumpe el encuadre: en guerras y tormentas solares se repite
+    if (fx.war || fx.solar) map.easeTo({ center: [cLon, cLat], zoom: z0, pitch: 0, bearing: 0, duration: 1400, essential: true });
 
     run = {
       fx, plan, lat, lon, t: plan.isAsteroid ? -plan.entryDuration : 0, playing: true, speed: 1, lastReal: performance.now(),
       boomDone: false, flashDone: false, obsArrival: plan.shockTime(Math.hypot(dObs, plan.h)), obsPsi: fx.pressurePsiAt(dObs),
-      domes: main.domes, beats: 0, userCam: !state.view.cinematic || comp.length > 1, lastOverlay: 0, skyFlash: false, rate: 1, orbit: null, flashReal: -1, wideDone: false,
+      domes: main.domes, beats: 0, userCam: !state.view.cinematic || comp.length > 1 || !!fx.dam || !!fx.solar || !!fx.war, lastOverlay: 0, skyFlash: false, rate: 1, orbit: null, flashReal: -1, wideDone: false,
       extras,
     };
     const ev: { t: number; label: string }[] = [{ t: plan.tMax, label: 'Destello' }];
@@ -766,6 +1315,7 @@ async function detonate() {
     if (fx.fallout.length) ev.push({ t: 3600, label: 'H+1' });
     if (plan.isAsteroid) ev.push({ t: -plan.entryDuration * 0.98, label: 'Entrada' });
     timeline.configure(plan.isAsteroid ? -plan.entryDuration : 0, Math.max(plan.tEnd, ...extras.map((x) => x.plan.tEnd)), ev);
+    timeline.setTour(Tour.available(fx));
     document.body.classList.add('detonated');
     syncStrikeMarkers();
     markerEl.style.display = 'none';
@@ -776,6 +1326,7 @@ async function detonate() {
     fxLayer.animating = true;
     map.triggerRepaint();
     startTsunami(fx, lat, lon);
+    if (state.view.heat !== 'off') void refreshHeat();
   } finally {
     busy = false;
   }
@@ -831,6 +1382,23 @@ function rateAt(t: number, speed: number) {
 
 const flashEl = document.getElementById('flash')!;
 const gradeEl = document.getElementById('grade')!;
+/** atenuación de destellos: 1 normal, menor si el usuario pidió reducirlos */
+const flashMul = (normal = 1, reduced = 0.15) => (state.view.reduceFlash ? reduced : normal);
+function applyReduceFlash() { document.body.classList.toggle('reduce-flash', state.view.reduceFlash); }
+applyReduceFlash();
+/** aviso de fotosensibilidad la primera vez que se lanza una simulación con destello */
+function photoWarning() {
+  try { if (localStorage.getItem('bum:photowarn')) return; localStorage.setItem('bum:photowarn', '1'); } catch { return; }
+  if (state.view.reduceFlash) return;
+  const box = h('div', { id: 'photowarn', role: 'alertdialog', 'aria-label': 'Aviso de fotosensibilidad' },
+    h('b', {}, 'Aviso de fotosensibilidad'),
+    h('p', {}, 'La simulación muestra destellos intensos y cambios bruscos de luz. Si eres sensible a ellos, puedes reducirlos ahora o más tarde en Mapas y capas → Efectos.'),
+    h('div', {},
+      h('button', { type: 'button', class: 'btn-line', onclick: () => { state.view.reduceFlash = true; applyReduceFlash(); savePrefs(); box.remove(); toast('Destellos reducidos'); } }, 'Reducir destellos'),
+      h('button', { type: 'button', class: 'btn-ghost', onclick: () => box.remove() }, 'Entendido')));
+  document.getElementById('app')!.append(box);
+  setTimeout(() => box.remove(), 30000);
+}
 function setFlash(a: number, g: number) {
   flashEl.style.opacity = String(a);
   gradeEl.style.opacity = String(g);
@@ -839,8 +1407,8 @@ function setFlash(a: number, g: number) {
 let shakeT = 0, shakeI = 0;
 const mapEl = document.getElementById('map')!;
 
-const tmpColor = new THREE.Color();
-fxLayer.onFrame = (ctx: FrameCtx) => {
+let tmpColor!: THREE.Color;
+function onFxFrame(ctx: FrameCtx) {
   const now = performance.now();
   ctx.real = now / 1000;
   if (!run) return;
@@ -890,7 +1458,9 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
     const envFlash = Math.exp(-since / 1600);
     const envGrade = 0.25 + 0.75 * Math.exp(-since / 5000);
     const a = Math.min(1, Math.max(0, (heat - 0.55) / 0.55)) ** 1.6 * near * envFlash;
-    setFlash(a * 0.95, Math.min(0.6, heat * 0.5) * envGrade);
+    // con destellos reducidos, el brillo sube despacio (≥ 0,6 s) y se queda en un resplandor suave
+    const ramp = state.view.reduceFlash ? Math.min(1, since / 600) : 1;
+    setFlash(a * 0.95 * flashMul(1, 0.12) * ramp, Math.min(0.6, heat * 0.5) * envGrade * flashMul(1, 0.5));
     ctx.glare = envGrade;
     if (!R.flashDone && t > 0) { R.flashDone = true; audio.flash(Math.min(1, near)); }
   } else {
@@ -901,8 +1471,8 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
   if (now - R.lastOverlay > 120) {
     R.lastOverlay = now;
     if (heat > 0.03 && t > 0) {
-      const k = Math.min(1, heat) * 0.85 * (R.flashReal < 0 ? 1 : 0.2 + 0.8 * Math.exp(-(now - R.flashReal) / 5000));
-      const mix = (a: string, b: string, x: number) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), x).getHexString();
+      const k = Math.min(1, heat) * 0.85 * (R.flashReal < 0 ? 1 : 0.2 + 0.8 * Math.exp(-(now - R.flashReal) / 5000)) * flashMul(1, 0.3);
+      const mix = (a: string, b: string, x: number) => '#' + new FX.Color(a).lerp(new FX.Color(b), x).getHexString();
       map.setSky({ ...SKY_BLENDS, 'sky-color': mix(n > 0.5 ? '#03060f' : '#4f8fd6', '#ffe1b0', k), 'horizon-color': mix(n > 0.5 ? '#0b1428' : '#cfe2f3', '#ffb46b', k), 'fog-color': mix(n > 0.5 ? '#070b16' : '#c8d8e6', '#ff9a50', k * 0.9) });
       map.setLight({ anchor: 'map', position: [1.4, atmosphere.sunAz, 40], color: mix('#ffffff', '#ffb070', k), intensity: 0.35 + 0.55 * k });
       R.skyFlash = true;
@@ -910,6 +1480,7 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
       R.skyFlash = false;
       atmosphere = tod();
     }
+    if (R.fx.blackRain) showBlackRain(t >= R.fx.blackRain.startMin * 60 && state.view.fallout);
     const g = P.shockGroundR(t);
     overlays.setReveal(t <= 0 ? 0 : t > P.shockTime(P.psi1R * 3 + P.h) ? Infinity : Math.max(g, t > P.tMax * 3 ? Math.max(P.burnR, P.fireballR) : 0), t / 3600, t);
     overlays.updateBuildings(t <= 0 ? 0 : g);
@@ -921,7 +1492,7 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
     R.boomDone = true;
     const I = Math.min(1, Math.max(0.15, R.obsPsi / 1.5));
     audio.boom(I);
-    shakeT = now; shakeI = I;
+    shakeT = now; shakeI = I * flashMul(1, 0.25);
   }
   const st = (now - shakeT) / 1000;
   if (shakeI > 0 && st < 3) {
@@ -975,9 +1546,9 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
     pp.fb.set(0, P.capZ(t), 0);
     pp.fbR = Math.max(P.fireballRadius(t), 1);
     const hk = Math.min(1.2, heat);
-    pp.flare = hk * 0.9 * (0.5 + 0.5 * ctx.glare);
-    pp.haze = P.flashK > 0 ? Math.min(1, hk * 1.2 + 0.55 * Math.exp(-t / (P.tau * 0.7 + 1))) * P.flashK : 0;
-    pp.bloom = hk > 0.05 ? Math.min(0.6, 0.45 * Math.min(1, hk * 1.4)) : 0;
+    pp.flare = hk * 0.9 * (0.5 + 0.5 * ctx.glare) * flashMul(1, 0.25);
+    pp.haze = P.flashK > 0 ? Math.min(1, hk * 1.2 + 0.55 * Math.exp(-t / (P.tau * 0.7 + 1))) * P.flashK * flashMul(1, 0.4) : 0;
+    pp.bloom = hk > 0.05 ? Math.min(0.6, 0.45 * Math.min(1, hk * 1.4)) * flashMul(1, 0.3) : 0;
     pp.threshold = 0.85;
     const gR = P.shockGroundR(t), lim = P.psi1R * 1.3;
     pp.shockR = gR;
@@ -985,7 +1556,7 @@ fxLayer.onFrame = (ctx: FrameCtx) => {
   } else { pp.flare = 0; pp.haze = 0; pp.bloom = 0; pp.shockK = 0; }
 
   fxLayer.animating = true;
-};
+}
 
 // ---------------------------------------------------------------------------
 // enlaces compartibles
@@ -1028,7 +1599,7 @@ function readHash(s: AppState) {
   } else if (p.get('m') === 'o') {
     s.mode = 'other';
     const ot = p.get('ot');
-    s.other.type = ot === 'volcano' || ot === 'dirtybomb' ? ot : 'reactor';
+    s.other.type = ot === 'volcano' || ot === 'dirtybomb' || ot === 'dam' || ot === 'solar' ? ot : 'reactor';
     if (s.other.type === 'volcano') Object.assign(s.other.volcano, { vei: Math.max(4, Math.min(8, num('vei', 8))), volumeMul: num('vm', 1), name: p.get('nm') || 'Volcán' });
     else Object.assign(s.other.release, { source: s.other.type, isotope: (['Cs-137','I-131','Co-60','Sr-90','Am-241'].includes(p.get('iso') ?? '') ? p.get('iso') : 'Cs-137') as any, activityTBq: num('act', 85000), heightM: num('hg', 1000), durationH: num('du', 240), explosiveKg: p.has('kg') ? num('kg', 50) : undefined, name: p.get('nm') || 'Emisión' });
   } else {
@@ -1049,7 +1620,7 @@ function share() {
 }
 
 // depuración / pruebas automáticas
-(window as any).__an = { map, state, detonate, enc, cloudShot, groundView, testsLayer, fxLayer, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.lastOverlay = 0; run.playing = false; map.triggerRepaint(); } }, fmtTime };
+(window as any).__an = { map, state, detonate, enc, cloudShot, groundView, testsLayer, setHeat, tour, weatherLayer, heatLayer, get fxLayer() { return fxLayer; }, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.lastOverlay = 0; run.playing = false; map.triggerRepaint(); } }, fmtTime };
 
 // ---------------------------------------------------------------- app instalable (PWA)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

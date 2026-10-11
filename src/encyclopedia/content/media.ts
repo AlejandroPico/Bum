@@ -12,9 +12,9 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "Niels Bohr - LOC - ggbain - 35303.jpg", "caption": "Niels Bohr, autor del modelo atómico de capas (1913).", "credit": "Bain News Service, publisher Restored by: Bammesk", "license": "Public domain"},
   ],
   "isotopos": [
-    {"file": "Uranium ore and \"yellowcake\" uranium concentrate at the Greifswald Nuclear Power Plant information center.jpg", "caption": "Mineral de uranio y concentrado «yellowcake» en la exposición de la central de Greifswald (Alemania).", "credit": "Siarhei Besarab</", "license": "CC BY-SA 4.0"},
+    {"file": "Uranium ore and \"yellowcake\" uranium concentrate at the Greifswald Nuclear Power Plant information center.jpg", "caption": "Mineral de uranio y concentrado «yellowcake» en la exposición de la central de Greifswald (Alemania).", "credit": "Siarhei Besarab", "license": "CC BY-SA 4.0"},
     {"file": "\" The Calutron Girls\" Y-12 Oak Ridge 1944 Large Format (32093954911) (2).jpg", "caption": "Las «chicas del calutrón» de Oak Ridge (1944) separaban isótopos de uranio con espectrómetros de masas gigantes.", "credit": "doe-oakridge", "license": "Public domain"},
-    {"file": "Pitchblende371.JPG", "caption": "Pechblenda, el mineral del que los Curie aislaron el radio.", "credit": "Geomartin (<a href=\"//commons.wikimedia.or", "license": "Public domain"},
+    {"file": "Pitchblende371.JPG", "caption": "Pechblenda, el mineral del que los Curie aislaron el radio.", "credit": "Geomartin (", "license": "Public domain"},
   ],
   "radiactividad": [
     {"file": "Marie Curie in her Paris Laboratory, 1912.jpg", "caption": "Marie Curie en su laboratorio de París, 1912.", "credit": "unattributed", "license": "Public domain"},
@@ -49,24 +49,24 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "Minor Scale Blast.jpg", "caption": "Prueba de explosivos convencionales Minor Scale (1985), unas 4 800 t de ANFO.", "credit": "U.S. Army", "license": "Public domain"},
   ],
   "uranio": [
-    {"file": "Uranium ore and \"yellowcake\" uranium concentrate at the Greifswald Nuclear Power Plant information center.jpg", "caption": "Mineral de uranio y «yellowcake» (concentrado de óxido de uranio).", "credit": "Siarhei Besarab</", "license": "CC BY-SA 4.0"},
+    {"file": "Uranium ore and \"yellowcake\" uranium concentrate at the Greifswald Nuclear Power Plant information center.jpg", "caption": "Mineral de uranio y «yellowcake» (concentrado de óxido de uranio).", "credit": "Siarhei Besarab", "license": "CC BY-SA 4.0"},
     {"file": "Yellowcake.jpg", "caption": "Yellowcake, el polvo amarillo que se obtiene al procesar el mineral.", "license": "Public domain"},
     {"file": "Ames Process uranium biscuit.jpg", "caption": "Lingote («biscuit») de uranio metálico del proceso Ames, Proyecto Manhattan.", "credit": "Autor desconocido", "license": "Public domain"},
     {"file": "World Uranium Mining Production 2021.png", "caption": "Producción mundial de uranio por países (2021).", "credit": "Liberum scientia", "license": "CC BY-SA 4.0"},
   ],
   "plutonio": [
-    {"file": "Plutonium-238 pellet.jpg", "caption": "Pastilla de plutonio-238 incandescente por su propio calor de desintegración (para generadores espaciales).", "credit": "Plutonium_pellet.jpg: DOE Photo derivative work: <a href=\"//commons.wikimedia.or", "license": "Public domain"},
+    {"file": "Plutonium-238 pellet.jpg", "caption": "Pastilla de plutonio-238 incandescente por su propio calor de desintegración (para generadores espaciales).", "credit": "Plutonium_pellet.jpg: DOE Photo derivative work", "license": "Public domain"},
     {"file": "Worker holding a plutonium button.jpg", "caption": "Trabajador sosteniendo un «botón» de plutonio metálico.", "credit": "Federal government of the United States", "license": "Public domain"},
     {"file": "Hanford B Reactor.jpg", "caption": "El reactor B de Hanford, primer reactor de producción de plutonio del mundo (1944).", "credit": "Autor desconocido", "license": "Public domain"},
     {"file": "Hanford B-Reactor Area 1944.jpg", "caption": "Zona del reactor B de Hanford en 1944.", "credit": "US Army Corps of Engineers", "license": "Public domain"},
   ],
   "combustibles-de-fusion": [
     {"file": "Lithium paraffin.jpg", "caption": "Litio metálico conservado en parafina.", "credit": "Tomihahndorf at Ge", "license": "Public domain"},
-    {"file": "Deuterium oxide Norsk.jpg", "caption": "Agua pesada (óxido de deuterio).", "credit": "Alchemist-hp (<span", "license": "FAL"},
+    {"file": "Deuterium oxide Norsk.jpg", "caption": "Agua pesada (óxido de deuterio).", "credit": "Alchemist-hp (", "license": "FAL"},
     {"file": "Arak heavy water reactor2.JPG", "caption": "Reactor de agua pesada de Arak (Irán).", "credit": "Nanking2010", "license": "Public domain"},
   ],
   "unidades-de-radiacion": [
-    {"file": "Pocket Dosimeters, extracted from Radiac instruments and film badges used at atmospheric nuclear tests (1985).png", "caption": "Dosímetros de bolsillo usados en los años cincuenta.", "credit": "Washington, D.C. : Defense Nuclear Agency, [1985]", "license": "Public domain"},
+    {"file": "Pocket Dosimeters, extracted from Radiac instruments and film badges used at atmospheric nuclear tests (1985).png", "caption": "Dosímetros de bolsillo usados en los años cincuenta.", "credit": "Washington, D.C. : Defense Nuclear Agency", "license": "Public domain"},
     {"file": "Radiation Film Badge, extracted from Introduction to industrial hygiene engineering and control (552) - nonionizing and ionizing radiation (1978).png", "caption": "Placa dosimétrica de película fotográfica.", "credit": "McClintock, James C., Hritz, Ronald J., Byers, Bruce B. National Institute for O", "license": "Public domain"},
     {"file": "Portable Geiger counter Berthold LB122-02.jpg", "caption": "Contador Geiger portátil Berthold.", "credit": "Lilly_M", "license": "CC BY-SA 3.0"},
     {"file": "Geiger counter measuring tree at Chernobyl.jpg", "caption": "Midiendo la radiactividad de un árbol en Chernóbil con un contador Geiger.", "credit": "ArticCynda", "license": "CC BY-SA 4.0"},
@@ -161,7 +161,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "Trident II missile image.jpg", "caption": "Misil Trident II saliendo del agua.", "credit": "Autor desconocido", "license": "Public domain"},
   ],
   "descubrimiento-de-la-fision": [
-    {"file": "Versuchsaufbau Hahn Deutsches Museum-2.jpg", "caption": "Mesa de trabajo de Hahn y Strassmann (Deutsches Museum).", "credit": "Versuchsaufbau_Hahn_Deutsches_Museum.jpg: <a href", "license": "CC BY-SA 3.0"},
+    {"file": "Versuchsaufbau Hahn Deutsches Museum-2.jpg", "caption": "Mesa de trabajo de Hahn y Strassmann (Deutsches Museum).", "credit": "Versuchsaufbau_Hahn_Deutsches_Museum.jpg", "license": "CC BY-SA 3.0"},
     {"file": "Otto Hahn's notebook 1938 - Deutsches Museum - Munich.jpg", "caption": "Cuaderno de Otto Hahn de 1938.", "credit": "J Brew", "license": "CC BY-SA 2.0"},
     {"file": "Dahlem Thielallee Hahn-Meitner-Bau-1.JPG", "caption": "El edificio Hahn-Meitner en Berlín-Dahlem, antiguo Instituto Kaiser Wilhelm de Química.", "credit": "Fridolin freudenfett (Peter Kuley)", "license": "CC BY-SA 3.0"},
     {"file": "Otto Hahn - Taschenkalender von 1938.jpg", "caption": "Agenda de bolsillo de Otto Hahn de 1938.", "license": "CC BY-SA 3.0"},
@@ -206,12 +206,12 @@ export const IMAGES: Record<string, ImgRef[]> = {
   ],
   "nagasaki": [
     {"file": "Nagasakibomb.jpg", "caption": "La nube sobre Nagasaki, 9 de agosto de 1945.", "credit": "Charles Levy", "license": "Public domain"},
-    {"file": "Atomic cloud over Nagasaki from Koyagi-jima.jpeg", "caption": "La nube vista desde Koyagi-jima, a 10 km.", "credit": "Hiromichi Matsuda (松田 弘道, 1900-1969)[2]", "license": "Public domain"},
+    {"file": "Atomic cloud over Nagasaki from Koyagi-jima.jpeg", "caption": "La nube vista desde Koyagi-jima, a 10 km.", "credit": "Hiromichi Matsuda (松田 弘道, 1900-1969)", "license": "Public domain"},
     {"file": "Atomic Cloud Rises Over Nagasaki, Japan - NARA - 535795.tif", "caption": "La nube ascendiendo sobre Nagasaki (NARA).", "credit": "Charles Levy", "license": "Public domain"},
   ],
   "fin-de-la-guerra": [
     {"file": "Surrender of Japan - USS Missouri (restored).jpg", "caption": "Firma de la rendición de Japón a bordo del USS Missouri, 2 de septiembre de 1945.", "credit": "Army Signal Corps", "license": "Public domain"},
-    {"file": "Instrument of surrender Japan2.jpg", "caption": "El instrumento de rendición de Japón.", "credit": "United States War Department[2]<a rel=\"nofollow\" class=\"external autonumber\" hre", "license": "Public domain"},
+    {"file": "Instrument of surrender Japan2.jpg", "caption": "El instrumento de rendición de Japón.", "credit": "United States War Department", "license": "Public domain"},
     {"file": "Imperial Rescript on the Termination of the War2.jpg", "caption": "El edicto imperial que puso fin a la guerra.", "credit": "大日本帝國", "license": "Public domain"},
   ],
   "hibakusha": [
@@ -221,7 +221,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "Origami (AM 1996.22.1-2).jpg", "caption": "Grullas de papel de origami, símbolo de los hibakusha.", "credit": "Autor desconocido", "license": "CC BY 4.0"},
   ],
   "operacion-crossroads": [
-    {"file": "Operation Crossroads Baker Edit.jpg", "caption": "La prueba submarina Baker (julio de 1946), con la columna de agua y la «ola base».", "credit": "Original: United States Department of Defense</", "license": "Public domain"},
+    {"file": "Operation Crossroads Baker Edit.jpg", "caption": "La prueba submarina Baker (julio de 1946), con la columna de agua y la «ola base».", "credit": "Original: United States Department of Defense", "license": "Public domain"},
     {"file": "Crossroads Able 004.jpg", "caption": "La prueba aérea Able.", "credit": "Federal government of the United States", "license": "Public domain"},
     {"file": "Bikini Atoll, Marshall Islands (35055478541).jpg", "caption": "El atolón de Bikini hoy.", "credit": "O.V.E.R.V.I.E.W.", "license": "CC BY 2.0"},
   ],
@@ -266,7 +266,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "LAUNCH CONTROL SUPPORT BUILDING. 'MISSILE ART' MURAL PAINTED ON INTERIOR WALL OF ELEVATOR SHAFT. VIEW TO EAST. - Minuteman III ICBM Launch Control Facility November-1, 1.5 HAER COLO,62-NERAY.V,1-18.tif", "caption": "Mural en un centro de control de lanzamiento.", "license": "Public domain"},
   ],
   "crisis-de-los-misiles": [
-    {"file": "Cuban missiles.jpg", "caption": "Foto de reconocimiento de un U-2 sobre una base de misiles en Cuba (octubre de 1962).", "credit": "see above", "license": "Public domain"},
+    {"file": "Cuban missiles.jpg", "caption": "Foto de reconocimiento de un U-2 sobre una base de misiles en Cuba (octubre de 1962).", "license": "Public domain"},
     {"file": "U-2 photo during Cuban Missile Crisis.jpg", "caption": "Otra foto del U-2 durante la crisis.", "credit": "USAF", "license": "Public domain"},
     {"file": "President Kennedy with advisors after EXCOMM meeting, 29 October 1962.jpg", "caption": "Kennedy con sus asesores tras una reunión del ExComm, 29 de octubre de 1962.", "credit": "Cecil Stoughton", "license": "Public domain"},
     {"file": "Poltava 1962.jpg", "caption": "El carguero soviético Poltava, que transportaba misiles a Cuba.", "credit": "USAF", "license": "Public domain"},
@@ -274,7 +274,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
   "tratados": [
     {"file": "Reagan and Gorbachev signing.jpg", "caption": "Reagan y Gorbachov firman el Tratado INF (1987).", "credit": "White House Photographic Office", "license": "Public domain"},
     {"file": "President Kennedy signs Nuclear Test Ban Treaty, 07 October 1963.jpg", "caption": "Kennedy firma el Tratado de Prohibición Parcial de Ensayos (7 de octubre de 1963).", "credit": "Robert LeRoy Knudsen", "license": "Public domain"},
-    {"file": "The Soviet Union 1963 CPA 2943 stamp (Treaty Banning Nuclear Weapon Tests in the Atmosphere, in Outer Space and Under Water, Moscow. Treaty name, Spasskaya Tower and globe).jpg", "caption": "Sello soviético de 1963 dedicado al tratado.", "credit": "Post of the Soviet Union (Рис.: И. Л. Левин. Арх.: <a href=\"https://ru.wikipedia", "license": "Public domain"},
+    {"file": "The Soviet Union 1963 CPA 2943 stamp (Treaty Banning Nuclear Weapon Tests in the Atmosphere, in Outer Space and Under Water, Moscow. Treaty name, Spasskaya Tower and globe).jpg", "caption": "Sello soviético de 1963 dedicado al tratado.", "credit": "Post of the Soviet Union (Рис.: И. Л. Левин. Арх.", "license": "Public domain"},
   ],
   "pruebas-nucleares": [
     {"file": "Sedan Plowshare Crater.jpg", "caption": "El cráter Sedan (Nevada, 1962): 390 m de diámetro, abierto por una explosión subterránea de 104 kt.", "credit": "Federal Government of the United States", "license": "Public domain"},
@@ -298,7 +298,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "Trinity Test Fireball 16ms.jpg", "caption": "La bola de fuego de Trinity a 16 ms.", "credit": "Berlyn Brixner / Los Alamos National Laboratory", "license": "Public domain"},
   ],
   "nube-de-hongo": [
-    {"file": "Operation Crossroads Baker Edit.jpg", "caption": "La nube de la prueba submarina Baker (Crossroads, 1946), con la columna de agua y el anillo de condensación.", "credit": "Original: United States Department of Defense</", "license": "Public domain"},
+    {"file": "Operation Crossroads Baker Edit.jpg", "caption": "La nube de la prueba submarina Baker (Crossroads, 1946), con la columna de agua y el anillo de condensación.", "credit": "Original: United States Department of Defense", "license": "Public domain"},
     {"file": "Castle Romeo.jpg", "caption": "Castle Romeo (1954, 11 Mt) sobre el atolón de Bikini.", "credit": "United States Department of Energy", "license": "Public domain"},
     {"file": "Upshot-Knothole Annie 001.jpg", "caption": "La nube de Annie (Upshot-Knothole, 1953) en Nevada.", "credit": "Federal Government of the United States", "license": "Public domain"},
     {"file": "Upshot-Knothole Nancy 001.jpg", "caption": "Nancy (Upshot-Knothole, 1953).", "credit": "Federal government of the United States", "license": "Public domain"},
@@ -314,7 +314,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "Human Shadow Etched Position - 2up.jpg", "caption": "La escalera de la sombra, conservada en el Museo de la Paz de Hiroshima.", "credit": "US military", "license": "Public domain"},
   ],
   "radiacion-inicial": [
-    {"file": "Pocket Dosimeters, extracted from Radiac instruments and film badges used at atmospheric nuclear tests (1985).png", "caption": "Dosímetros de bolsillo de la época de las pruebas atmosféricas.", "credit": "Washington, D.C. : Defense Nuclear Agency, [1985]", "license": "Public domain"},
+    {"file": "Pocket Dosimeters, extracted from Radiac instruments and film badges used at atmospheric nuclear tests (1985).png", "caption": "Dosímetros de bolsillo de la época de las pruebas atmosféricas.", "credit": "Washington, D.C. : Defense Nuclear Agency", "license": "Public domain"},
     {"file": "Fast Neutron Film Badge, extracted from A simplified film dosimeter for fission neutrons (1958).jpg", "caption": "Placa dosimétrica para neutrones rápidos.", "credit": "Ross, S. W.", "license": "Public domain"},
     {"file": "National Bonsai and Penjing Museum - Hiroshima survivor.jpg", "caption": "Pino blanco japonés que sobrevivió a 3 km del hipocentro de Hiroshima, hoy en el Museo Nacional del Bonsái de Washington.", "credit": "APK", "license": "CC BY-SA 4.0"},
   ],
@@ -337,8 +337,8 @@ export const IMAGES: Record<string, ImgRef[]> = {
   ],
   "efectos-en-la-salud": [
     {"file": "Radiation Effects Research Foundation Hiroshima.jpg", "caption": "Sede de la Radiation Effects Research Foundation en Hiroshima, que estudia a los supervivientes desde 1947.", "credit": "Taisyo", "license": "CC BY 3.0"},
-    {"file": "RERF cancer ERR.jpg", "caption": "Riesgo relativo adicional de cáncer según dosis en los supervivientes (RERF).", "credit": "Dale L. Preston, Donald A. Pierce, Yukiko Shimizu, Harry M. Cullings, Shoichiro ", "license": "Public domain"},
-    {"file": "RERF leukemia excess.jpg", "caption": "Exceso de leucemias en los supervivientes (RERF).", "credit": "Dale L. Preston, Donald A. Pierce, Yukiko Shimizu, Harry M. Cullings, Shoichiro ", "license": "Public domain"},
+    {"file": "RERF cancer ERR.jpg", "caption": "Riesgo relativo adicional de cáncer según dosis en los supervivientes (RERF).", "credit": "Dale L. Preston, Donald A. Pierce, Yukiko Shimizu, Harry M. Cullings, Shoichiro", "license": "Public domain"},
+    {"file": "RERF leukemia excess.jpg", "caption": "Exceso de leucemias en los supervivientes (RERF).", "credit": "Dale L. Preston, Donald A. Pierce, Yukiko Shimizu, Harry M. Cullings, Shoichiro", "license": "Public domain"},
   ],
   "proteccion-civil": [
     {"file": "P.S. 58 - Carroll & Smith Sts. Bklyn. hold a take cover drill 01489v.jpg", "caption": "Simulacro escolar «agacharse y cubrirse» en Brooklyn durante la Guerra Fría.", "credit": "Walter Albertin", "license": "Public domain"},
@@ -376,7 +376,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "Tokai village hall.JPG", "caption": "Ayuntamiento de Tōkai (Japón), localidad del accidente de 1999.", "credit": "アラツク", "license": "CC BY-SA 4.0"},
   ],
   "kyshtym": [
-    {"file": "Map of the East Urals Radioactive Trace.png", "caption": "Mapa de la «traza radiactiva de los Urales Orientales» tras la explosión de Kyshtym (1957).", "credit": "Goran tek-en (following request by <a href=\"//commons.wikimedia.org/wiki/User:Ki", "license": "CC BY-SA 4.0"},
+    {"file": "Map of the East Urals Radioactive Trace.png", "caption": "Mapa de la «traza radiactiva de los Urales Orientales» tras la explosión de Kyshtym (1957).", "credit": "Goran tek-en (following request by", "license": "CC BY-SA 4.0"},
     {"file": "Mayak-FMSF-Cetac-37.jpg", "caption": "Centro de ventilación del almacén de material fisible de Mayak, el complejo donde ocurrió el accidente.", "credit": "Carl Anderson, US Army Corps of Engineers", "license": "Public domain"},
     {"file": "Ozersk Broadway.jpg", "caption": "Ozersk, la ciudad cerrada junto a Mayak.", "credit": "Sergey Nemanov", "license": "CC BY-SA 3.0"},
   ],
@@ -392,7 +392,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "IAEA 02790015 (5613115146).jpg", "caption": "Expertos del OIEA en la zona.", "credit": "IAEA Imagebank", "license": "CC BY-SA 2.0"},
   ],
   "fukushima": [
-    {"file": "Fukushima Daiichi Nuclear Power Plant seen from the sea.jpg", "caption": "La central de Fukushima Daiichi vista desde el mar.", "credit": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:%E3%83%96%E3%83%AB%E3%83", "license": "CC BY 4.0"},
+    {"file": "Fukushima Daiichi Nuclear Power Plant seen from the sea.jpg", "caption": "La central de Fukushima Daiichi vista desde el mar.", "license": "CC BY 4.0"},
     {"file": "Fukushima I by Digital Globe crop.jpg", "caption": "Imagen de satélite tras las explosiones de 2011.", "credit": "Digital Globe", "license": "CC BY-SA 3.0"},
     {"file": "IAEA Experts at Fukushima (02813336).jpg", "caption": "Expertos del OIEA en Fukushima.", "credit": "IAEA Imagebank", "license": "CC BY-SA 2.0"},
     {"file": "Aerial photo of Fukushima Daiichi Nuclear Power Plant 2021.jpg", "caption": "Vista aérea de la central en 2021.", "credit": "資源エネルギー庁", "license": "CC BY 4.0"},
@@ -420,11 +420,11 @@ export const IMAGES: Record<string, ImgRef[]> = {
   ],
   "chicxulub": [
     {"file": "Chicxulub Free-Air Gravity anomaly.png", "caption": "Anomalía gravitatoria del cráter de Chicxulub (península de Yucatán).", "credit": "J. Klokočník, J. Kostelecký, I. Pešek, P. Novák, C. A. Wagner, and J. Sebera", "license": "CC BY 3.0"},
-    {"file": "KT boundary 054.jpg", "caption": "El límite K-Pg: la capa de arcilla del impacto que acabó con los dinosaurios no avianos.", "credit": "Original uploader was Glenlarson at <a class=\"external text\" data-mw-original-hr", "license": "Public domain"},
+    {"file": "KT boundary 054.jpg", "caption": "El límite K-Pg: la capa de arcilla del impacto que acabó con los dinosaurios no avianos.", "credit": "Original uploader was Glenlarson at", "license": "Public domain"},
     {"file": "Thin white line = KT (now K-Pg) boundary (5090097984).jpg", "caption": "La fina línea blanca del límite K-Pg en un afloramiento.", "credit": "Mike Beauregard from Nunavut, Canada", "license": "CC BY 2.0"},
   ],
   "shoemaker-levy-9": [
-    {"file": "Hubble's Panoramic Picture of Comet P-Shoemaker-Levy 9 (opo9426c).jpg", "caption": "Panorámica del Hubble del cometa Shoemaker-Levy 9 fragmentado en 21 trozos (1994).", "credit": "HA. Weaver, T. ESmith ( Space Telescope Science Institute), and <a rel=\"nofollow", "license": "Public domain"},
+    {"file": "Hubble's Panoramic Picture of Comet P-Shoemaker-Levy 9 (opo9426c).jpg", "caption": "Panorámica del Hubble del cometa Shoemaker-Levy 9 fragmentado en 21 trozos (1994).", "credit": "HA. Weaver, T. ESmith ( Space Telescope Science Institute), and", "license": "Public domain"},
     {"file": "Comet Shoemaker-Levy 9 Impact Sites on Jupiter (1994-44-210).jpg", "caption": "Cicatrices de los impactos en Júpiter.", "license": "Public domain"},
     {"file": "Shoemaker-Levy 9 Fragment G Scar (39755495252).png", "caption": "La cicatriz del fragmento G, mayor que la Tierra.", "credit": "geckzilla", "license": "CC BY 2.0"},
   ],
@@ -511,7 +511,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
     {"file": "Trinity Test Fireball 16ms.jpg", "caption": "La bola de fuego a 16 ms.", "credit": "Berlyn Brixner / Los Alamos National Laboratory", "license": "Public domain"},
     {"file": "Trinity Detonation T&B.jpg", "caption": "Trinity unos segundos después.", "credit": "United States Department of Energy", "license": "Public domain"},
     {"file": "Trinity tower.jpg", "caption": "La torre de Trinity.", "credit": "Federal government of the United States", "license": "Public domain"},
-    {"file": "Trinity crater (annotated) 2.jpg", "caption": "El cráter de Trinity visto desde el aire.", "credit": "Trinity_crater.jpg: Federal government of the United States derivative work: <a ", "license": "Public domain"},
+    {"file": "Trinity crater (annotated) 2.jpg", "caption": "El cráter de Trinity visto desde el aire.", "credit": "Trinity_crater.jpg: Federal government of the United States derivative work", "license": "Public domain"},
   ],
   "cat-rds-1-urss-1949": [
     {"file": "Polytechnical Museum - Mock-up of RDS-1 - 2025-05.jpg", "caption": "Maqueta de la RDS-1 en el Museo Politécnico de Moscú.", "credit": "Александр Сигачёв", "license": "CC0"},
@@ -710,7 +710,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
   "cat-oppau-alemania-1921": [
     {"file": "Oppau Explosion 1921.JPG", "caption": "El cráter de la explosión de Oppau (BASF, 21 de septiembre de 1921).", "credit": "Autor desconocido", "license": "Public domain"},
     {"file": "Oppau zerstoerte Gebaeude 1921.jpg", "caption": "Edificios destruidos en Oppau.", "credit": "BASF", "license": "CC BY-SA 3.0"},
-    {"file": "Ludwigshafen-Oppau Gedenkstein 1921.jpg", "caption": "Piedra conmemorativa en Ludwigshafen-Oppau.", "credit": "--Immanuel Giel 08:12, 18 October 2005 (UTC)", "license": "CC BY-SA 3.0"},
+    {"file": "Ludwigshafen-Oppau Gedenkstein 1921.jpg", "caption": "Piedra conmemorativa en Ludwigshafen-Oppau.", "credit": "Immanuel Giel 08:12, 18 October 2005 (UTC)", "license": "CC BY-SA 3.0"},
   ],
   "cat-beirut-libano-2020": [
     {"file": "Damages after 2020 Beirut explosions 1.jpg", "caption": "Daños tras la explosión del puerto de Beirut (4 de agosto de 2020).", "credit": "Mahdi Shojaeian", "license": "CC BY 4.0"},
@@ -731,7 +731,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
   ],
   "cat-gbu-43-b-moab-madre-de-todas-las-bombas-ee-uu": [
     {"file": "MOAB bomb.jpg", "caption": "La GBU-43/B MOAB.", "credit": "U.S. Department of Defense photograph", "license": "Public domain"},
-    {"file": "MOABAFAM.JPG", "caption": "MOAB en el Museo de Armamento de la Fuerza Aérea.", "credit": "Fl295 at English Wikipedia</", "license": "Public domain"},
+    {"file": "MOABAFAM.JPG", "caption": "MOAB en el Museo de Armamento de la Fuerza Aérea.", "credit": "Fl295 at English Wikipedia", "license": "Public domain"},
   ],
   "cat-blu-82-daisy-cutter-ee-uu": [
     {"file": "BLU-82 bomb at National Museum of the USAF (090122-F-1234P-004).jpg", "caption": "BLU-82 en el Museo Nacional de la Fuerza Aérea de EE. UU.", "credit": "U.S. Air Force", "license": "Public domain"},
@@ -765,7 +765,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
   "cat-cheliabinsk-rusia-2013": [
     {"file": "2013 Chelyabinsk meteor trace.jpg", "caption": "La estela del meteoro.", "credit": "Alex Alishevskikh", "license": "CC BY-SA 2.0"},
     {"file": "Ekaterinburg view of 2013 meteor event.jpg", "caption": "El meteoro visto desde Ekaterimburgo.", "credit": "Svetlana Korzhova", "license": "CC BY-SA 3.0"},
-    {"file": "Chabarkul Lake.jpg", "caption": "El lago Chebarkul, donde cayó el mayor fragmento.", "credit": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:%D0%9D%D0%B5_%D0%B1%D0%B", "license": "CC0"},
+    {"file": "Chabarkul Lake.jpg", "caption": "El lago Chebarkul, donde cayó el mayor fragmento.", "license": "CC0"},
   ],
   "cat-crater-barringer-50-000-a-c": [
     {"file": "Meteor Crater - Arizona.jpg", "caption": "Meteor Crater.", "credit": "National Map Seamless Server", "license": "Public domain"},
@@ -787,7 +787,7 @@ export const IMAGES: Record<string, ImgRef[]> = {
   ],
   "cat-oumuamua-hipotetico": [
     {"file": "Artist impression of interstellar asteroid ʻOumuamua (eso1737e).tiff", "caption": "Recreación artística de ʻOumuamua, el primer objeto interestelar conocido (ESO).", "credit": "ESO/M. Kornmesser", "license": "CC BY 4.0"},
-    {"file": "A2017U1 5gsmoothWHT enhanced.jpg", "caption": "ʻOumuamua visto por los telescopios: apenas un punto.", "credit": "Alan Fitzsimmons (Astrophysics Research Centre, <a href=\"https://en.wikipedia.or", "license": "Public domain"},
+    {"file": "A2017U1 5gsmoothWHT enhanced.jpg", "caption": "ʻOumuamua visto por los telescopios: apenas un punto.", "credit": "Alan Fitzsimmons (Astrophysics Research Centre", "license": "Public domain"},
   ],
   "cat-itokawa-hipotetico": [
     {"file": "Itokawa06 hayabusa.jpg", "caption": "Itokawa fotografiado por la sonda japonesa Hayabusa.", "credit": "ISAS, JAXA", "license": "CC BY 4.0"},

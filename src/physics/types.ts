@@ -55,7 +55,35 @@ export interface VolcanoInput {
   volumeMul?: number;
 }
 
-export type Scenario = NuclearInput | AsteroidInput | ReleaseInput | VolcanoInput;
+/** rotura de una presa */
+export interface DamInput {
+  kind: 'dam';
+  name: string;
+  /** volumen embalsado (hm³) */
+  volumeHm3: number;
+  /** altura de la presa (m) */
+  heightM: number;
+  /** muestreador del terreno (se añade al preparar el escenario; no se guarda) */
+  dem?: ((lat: number, lon: number) => number | null) | null;
+}
+
+/** tormenta geomagnética extrema (tipo Carrington) */
+export interface SolarInput {
+  kind: 'solar';
+  name: string;
+  /** índice Dst mínimo (nT, negativo) */
+  dstNt: number;
+}
+
+/** guerra nuclear a gran escala */
+export interface WarInput {
+  kind: 'war';
+  name: string;
+  /** escenario de WAR_PRESETS */
+  preset: string;
+}
+
+export type Scenario = NuclearInput | AsteroidInput | ReleaseInput | VolcanoInput | DamInput | SolarInput | WarInput;
 
 export interface Environment {
   /** dirección DESDE la que sopla el viento, grados (0 = norte) */
@@ -73,6 +101,8 @@ export interface Environment {
   rainMmH?: number;
   /** perfil vertical de viento (tiempo real); si falta, el viento es uniforme en altura */
   windProfile?: WindLevel[] | null;
+  /** previsión: perfil de viento para cada hora a partir de la explosión (índice 0 = ahora) */
+  windHourly?: WindLevel[][] | null;
 }
 
 export interface WindLevel {
@@ -178,6 +208,16 @@ export interface Effects {
   volcano?: { vei: number; volumeKm3: number; columnM: number; pdcR: number; coolingC: number; ashAt: (eM: number, nM: number) => number; T0: number };
   /** fuente de los datos de población (si se usó población real) */
   popSource?: string;
+  /** lluvia negra: hollín y polvo radiactivo arrastrados por la lluvia tras una gran tormenta de fuego */
+  blackRain?: { heavy: [number, number][]; light: [number, number][]; heavyKm2: number; lightKm2: number; startMin: number };
+  /** rotura de presa */
+  dam?: { volumeHm3: number; heightM: number; peakM3s: number; floodKm2: number; reachKm: number; popFlooded: number; arrivalAt: (eM: number, nM: number) => number | null; depthAt: (eM: number, nM: number) => number; demOk: boolean };
+  /** tormenta solar */
+  solar?: { dstNt: number; auroraMlat: number; bands: { mlat: number; label: string; color: string; risk: string }[]; popHighRisk: number; costUSDtn: [number, number]; mlatAt: (lat: number, lon: number) => number };
+  /** guerra a gran escala e invierno nuclear */
+  war?: { preset: string; sides: [string, string]; warheads: number; yieldKt: number; sootTg: number; directDeathsM: number; famineDeathsM: number; coolingC: number; precipPct: number; caloriesPct: number; targets: [number, number, string][]; series: { t: number; dT: number; dP: number }[] };
+  /** trayectoria del misil (si se eligió una base de lanzamiento) */
+  missile?: { site: string; country: string; rangeKm: number; flightMin: number; apogeeKm: number; reentryKms: number; warningMin: number; boostMin: number };
   /** hora de llegada (h) de la lluvia radiactiva a un punto */
   falloutArrivalH?: (eM: number, nM: number) => number;
 }

@@ -1,15 +1,16 @@
 /* Service worker de Bum: la app funciona sin conexión y guarda en caché teselas y datos. */
-const VERSION = 'bum-v1.0';
+const VERSION = 'bum-v1.4';
 const SHELL = `${VERSION}-shell`;
-const TILES = `${VERSION}-tiles`;
-const DATA = `${VERSION}-data`;
+// teselas y datos se conservan entre versiones: sólo se renueva la propia aplicación
+const TILES = 'bum-tiles';
+const DATA = 'bum-data';
 const MAX_TILES = 4000;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['./', './index.html', './favicon.svg', './manifest.webmanifest'])).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => !k.startsWith(VERSION) && k !== TILES && k !== DATA).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 const TILE_HOSTS = ['server.arcgisonline.com', 'tiles.openfreemap.org', 'elevation-tiles-prod', 's3.amazonaws.com', 'tile.openstreetmap.org', 'tiles.maps.eox.at'];

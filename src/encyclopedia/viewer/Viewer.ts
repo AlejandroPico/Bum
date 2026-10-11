@@ -25,7 +25,17 @@ export function buildModel(id: ModelId, p?: ModelParams): BuiltModel {
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
 
-interface PartState { base: THREE.Vector3; mats: THREE.MeshStandardMaterial[]; baseOpacity: number[]; }
+interface PartState { base: THREE.Vector3; mats: THREE.MeshStandardMaterial[]; baseOpacity: number[]; hidden: boolean; alpha: number; center: THREE.Vector3; label?: HTMLElement; row?: HTMLElement }
+
+/** capas del atlas, de fuera hacia dentro */
+const LAYERS = [
+  { id: 'shell', name: 'Envoltura' },
+  { id: 'body', name: 'Estructura y componentes' },
+  { id: 'inner', name: 'Interior' },
+  { id: 'minor', name: 'Detalles' },
+] as const;
+type LayerId = typeof LAYERS[number]['id'];
+const layerOf = (p: Part): LayerId => (p.shell ? 'shell' : p.inner ? 'inner' : p.minor ? 'minor' : 'body');
 
 /**
  * Visor 3D interactivo de la enciclopedia: órbita, desmontaje, corte, rayos X, selección de
@@ -64,6 +74,12 @@ export class ModelViewer {
   private canvasWrap!: HTMLElement;
   private disposed = false;
   private fitR = 1;
+  private labels = false;
+  private labelsEl!: HTMLElement;
+  private layersEl!: HTMLElement;
+  private explodeIn!: HTMLInputElement;
+  private explodeBtn!: HTMLButtonElement;
+  private tmpV = new THREE.Vector3();
 
   constructor(host: HTMLElement, id: ModelId, params?: ModelParams) {
     this.model = buildModel(id, params);
@@ -125,8 +141,11 @@ export class ModelViewer {
         mats.push(mm);
         m.userData.part = p;
       });
-      this.state.set(p, { base: p.obj.position.clone(), mats, baseOpacity: mats.map((x) => x.opacity) });
+      const wb = new THREE.Box3().setFromObject(p.obj);
+      const center = wb.isEmpty() ? new THREE.Vector3() : p.obj.worldToLocal(wb.getCenter(new THREE.Vector3()));
+      this.state.set(p, { base: p.obj.position.clone(), mats, baseOpacity: mats.map((x) => x.opacity), hidden: false, alpha: 1, center });
     }
+    this.buildAtlas();
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(this.canvasWrap);
@@ -148,9 +167,11 @@ export class ModelViewer {
     head.append(h('div', 'mv-title', `${M.title}<small>${M.sub}${M.dims ? ' · ' + M.dims : ''}</small>`));
     const tools = h('div', 'mv-tools');
     const mk = (label: string, title: string, on: (b: HTMLButtonElement) => void) => { const b = h('button', '', label) as HTMLButtonElement; b.type = 'button'; b.title = title; b.onclick = () => on(b); tools.append(b); return b; };
-    mk('Desmontar', 'Separar las piezas', (b) => { this.explodeTarget = this.explodeTarget > 0.5 ? 0 : 1; b.classList.toggle('on', this.explodeTarget > 0.5); });
+    this.explodeBtn = mk('Desmontar', 'Separar las piezas', () => this.setExplode(this.explodeTarget > 0.5 ? 0 : 1));
     mk('Corte', 'Cortar por la mitad para ver el interior', (b) => { this.cut = !this.cut; b.classList.toggle('on', this.cut); this.applyModes(); });
     mk('Rayos X', 'Carcasa transparente', (b) => { this.xray = !this.xray; b.classList.toggle('on', this.xray); this.applyModes(); });
+    mk('Capas', 'Atlas por capas: mostrar, ocultar y atenuar cada pieza', (b) => { const on = !this.layersEl.classList.contains('on'); this.layersEl.classList.toggle('on', on); b.classList.toggle('on', on); });
+    mk('Etiquetas', 'Rotular las piezas', (b) => { this.labels = !this.labels; b.classList.toggle('on', this.labels); this.labelsEl.style.display = this.labels ? '' : 'none'; });
     mk('Encuadrar', 'Volver a la vista inicial', () => this.resetView());
     head.append(tools);
 
@@ -158,7 +179,10 @@ export class ModelViewer {
     this.tip = h('div', 'mv-tip');
     this.flashEl = h('div', 'mv-flash');
     this.info = h('div', 'mv-info');
-    this.canvasWrap.append(this.flashEl, this.tip, this.info);
+    this.labelsEl = h('div', 'mv-labels');
+    this.labelsEl.style.display = 'none';
+    this.layersEl = h('div', 'mv-layers');
+    this.canvasWrap.append(this.flashEl, this.labelsEl, this.tip, this.info, this.layersEl);
 
     // pasos de la animación
     const anim = h('div', 'mv-anim');
@@ -190,6 +214,87 @@ export class ModelViewer {
     const foot = h('div', 'mv-note', M.note ?? '');
     this.el.append(head, this.canvasWrap, anim, this.capEl, this.listEl, foot);
   }
+
+  private setExplode(v: number) {
+    this.explodeTarget = v;
+    this.explodeBtn.classList.toggle('on', v > 0.05);
+    if (this.explodeIn) this.explodeIn.value = String(v);
+  }
+
+  /** panel del atlas: capas con casillas, opacidad por pieza, pelar capa a capa y despiece gradual */
+  private buildAtlas() {
+    const L = this.layersEl;
+    L.innerHTML = '';
+    const top = h('div', 'mvl-top');
+    const peel = h('button', '', 'Quitar capa') as HTMLButtonElement;
+    const add = h('button', '', 'Poner capa') as HTMLButtonElement;
+    const all = h('button', '', 'Todo') as HTMLButtonElement;
+    peel.type = add.type = all.type = 'button';
+    peel.title = 'Ocultar la capa visible más exterior';
+    add.title = 'Volver a mostrar la última capa ocultada';
+    peel.onclick = () => { const ly = LAYERS.find((l) => this.partsIn(l.id).some((p) => !this.state.get(p)!.hidden)); if (ly && ly.id !== 'inner') this.setLayer(ly.id, false); };
+    add.onclick = () => { const ly = [...LAYERS].reverse().find((l) => this.partsIn(l.id).length && this.partsIn(l.id).every((p) => this.state.get(p)!.hidden)); if (ly) this.setLayer(ly.id, true); };
+    all.onclick = () => { for (const p of this.model.parts) { const st = this.state.get(p)!; st.hidden = false; st.alpha = 1; } this.syncAtlas(); };
+    top.append(peel, add, all);
+    const ex = h('label', 'mvl-ex', '<span>Despiece</span>');
+    this.explodeIn = h('input') as HTMLInputElement;
+    Object.assign(this.explodeIn, { type: 'range', min: '0', max: '1.6', step: '0.01', value: '0' });
+    this.explodeIn.oninput = () => this.setExplode(+this.explodeIn.value);
+    ex.append(this.explodeIn);
+    L.append(top, ex);
+    for (const ly of LAYERS) {
+      const parts = this.partsIn(ly.id);
+      if (!parts.length) continue;
+      const g = h('div', 'mvl-g');
+      const gh = h('label', 'mvl-gh');
+      const gc = h('input') as HTMLInputElement; gc.type = 'checkbox'; gc.checked = true; gc.dataset.layer = ly.id;
+      gc.onchange = () => this.setLayer(ly.id, gc.checked);
+      gh.append(gc, h('span', '', `${ly.name} <i>${parts.length}</i>`));
+      g.append(gh);
+      for (const p of parts) {
+        const st = this.state.get(p)!;
+        const row = h('div', 'mvl-r');
+        const c = h('input') as HTMLInputElement; c.type = 'checkbox'; c.checked = true;
+        c.onchange = () => { st.hidden = !c.checked; this.syncAtlas(); };
+        const nm = h('button', '', p.name) as HTMLButtonElement; nm.type = 'button';
+        nm.onclick = () => this.select(this.selected === p ? null : p);
+        nm.onmouseenter = () => { this.hover = p; }; nm.onmouseleave = () => { this.hover = null; };
+        nm.ondblclick = () => { for (const q of this.model.parts) this.state.get(q)!.hidden = q !== p; this.syncAtlas(); };
+        const op = h('input') as HTMLInputElement;
+        Object.assign(op, { type: 'range', min: '0.1', max: '1', step: '0.05', value: '1', title: 'Opacidad' });
+        op.oninput = () => { st.alpha = +op.value; };
+        row.append(c, nm, op);
+        st.row = row;
+        g.append(row);
+      }
+      L.append(g);
+    }
+    L.append(h('div', 'mvl-hint', 'Doble clic en un nombre para aislar la pieza. Al quitar la envoltura aparece el interior, como en un atlas de anatomía.'));
+    // etiquetas
+    for (const p of this.model.parts) {
+      if (p.minor) continue;
+      const lb = h('div', 'mv-lb', `<i></i><span>${p.name}</span>`);
+      this.labelsEl.append(lb);
+      this.state.get(p)!.label = lb;
+    }
+  }
+  private partsIn(id: LayerId) { return this.model.parts.filter((p) => layerOf(p) === id); }
+  private setLayer(id: LayerId, on: boolean) { for (const p of this.partsIn(id)) this.state.get(p)!.hidden = !on; this.syncAtlas(); }
+  private syncAtlas() {
+    for (const p of this.model.parts) {
+      const st = this.state.get(p)!;
+      const c = st.row?.querySelector('input[type=checkbox]') as HTMLInputElement | null;
+      if (c) c.checked = !st.hidden;
+      st.row?.classList.toggle('off', st.hidden);
+    }
+    this.layersEl.querySelectorAll<HTMLInputElement>('input[data-layer]').forEach((gc) => {
+      const ps = this.partsIn(gc.dataset.layer as LayerId);
+      const vis = ps.filter((p) => !this.state.get(p)!.hidden).length;
+      gc.checked = vis > 0; gc.indeterminate = vis > 0 && vis < ps.length;
+    });
+  }
+  /** la envoltura se ha retirado o atenuado: el interior debe verse */
+  private shellOpen() { return this.model.parts.some((p) => p.shell && (this.state.get(p)!.hidden || this.state.get(p)!.alpha < 0.95)); }
 
   private goStep(i: number) {
     this.stepIdx = i;
@@ -283,14 +388,22 @@ export class ModelViewer {
     const M = this.model;
 
     // estado base
+    const shellOpen = this.shellOpen();
     const glows = new Map<Part, { v: number; c?: number }>();
     for (const p of M.parts) {
       const st = this.state.get(p)!;
       p.obj.position.copy(st.base).addScaledVector(p.explode, this.explode);
       p.obj.scale.setScalar(1);
-      const hideInner = !!p.inner && !this.cut && !this.xray && this.explode < 0.05;
-      p.obj.visible = !hideInner;
-      st.mats.forEach((m, i) => { if (!(this.xray && p.shell)) m.opacity = st.baseOpacity[i]; });
+      const hideInner = !!p.inner && !this.cut && !this.xray && this.explode < 0.05 && !shellOpen;
+      p.obj.visible = !hideInner && !st.hidden;
+      st.mats.forEach((m, i) => {
+        if (this.xray && p.shell) return;
+        const a = st.baseOpacity[i] * st.alpha;
+        m.opacity = a;
+        const tr = a < 0.999;
+        if (m.transparent !== tr) { m.transparent = tr; m.needsUpdate = true; }
+        m.depthWrite = !tr || st.alpha >= 0.999;
+      });
     }
     for (const f of Object.values(M.fx)) f.visible = false;
     this.flashV = 0;
@@ -330,9 +443,46 @@ export class ModelViewer {
       const col = g ? new THREE.Color(g.c ?? 0xffb020) : new THREE.Color(isSel || isHov ? 0xff7a2a : 0xffb020);
       for (const m of st.mats) { m.emissive.copy(col).multiplyScalar(e); }
     }
-    this.flashEl.style.opacity = String(this.flashV * 0.85);
+    this.flashEl.style.opacity = String(this.flashV * (document.body.classList.contains('reduce-flash') ? 0.12 : 0.85));
+    if (this.labels) this.placeLabels();
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** rótulos proyectados sobre la pantalla con una línea guía hacia el borde más cercano */
+  private placeLabels() {
+    const w = this.canvasWrap.clientWidth, hh = this.canvasWrap.clientHeight;
+    this.scene.updateMatrixWorld();
+    const used: number[][] = [[], []];
+    const items: { lb: HTMLElement; x: number; y: number }[] = [];
+    for (const p of this.model.parts) {
+      const st = this.state.get(p)!;
+      if (!st.label) continue;
+      if (!p.obj.visible) { st.label.style.display = 'none'; continue; }
+      const v = p.obj.localToWorld(this.tmpV.copy(st.center)).project(this.camera);
+      if (v.z > 1) { st.label.style.display = 'none'; continue; }
+      items.push({ lb: st.label, x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * hh });
+    }
+    items.sort((a, b) => a.y - b.y);
+    for (const it of items) {
+      const side = this.layersEl.classList.contains('on') || it.x < w / 2 ? 0 : 1;
+      let y = it.y;
+      for (const u of used[side]) if (Math.abs(u - y) < 20) y = u + 20;
+      used[side].push(y);
+      const lb = it.lb;
+      lb.style.display = '';
+      lb.classList.toggle('r', side === 1);
+      lb.style.top = `${y}px`;
+      lb.style.left = side === 0 ? '14px' : '';
+      lb.style.right = side === 1 ? '14px' : '';
+      const bw = lb.offsetWidth;
+      const ax = side === 0 ? 14 + bw : w - 14 - bw;
+      const line = lb.firstElementChild as HTMLElement;
+      const dx = side === 0 ? it.x - ax : ax - it.x;
+      const len = Math.hypot(dx, it.y - y), ang = Math.atan2(it.y - y, dx) * 180 / Math.PI;
+      line.style.width = `${dx > 4 ? len : 0}px`;
+      line.style.transform = `rotate(${side === 0 ? ang : -ang}deg)`;
+    }
   }
 
   destroy() {

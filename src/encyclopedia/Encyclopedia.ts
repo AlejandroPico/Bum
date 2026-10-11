@@ -1,7 +1,7 @@
 import type { Article, Block, CatId, GlossaryTerm, ImgRef } from './types';
 import { CATEGORIES } from './types';
-import { mountDiagram } from './diagrams';
 import { slug } from './slug';
+import type { VidRef } from './content/videos';
 
 /**
  * Enciclopedia de Bum: panel a pantalla completa con índice por categorías, buscador,
@@ -35,6 +35,7 @@ export class Encyclopedia {
   private byId = new Map<string, Article>();
   private glossary: GlossaryTerm[] = [];
   private images: Record<string, ImgRef[]> = {};
+  private videos: Record<string, VidRef[]> = {};
   private math: Record<string, Block[]> = {};
   private sources: { byId: Record<string, string[]>; byCat: Partial<Record<CatId, string[]>> } = { byId: {}, byCat: {} };
   private loaded: Promise<void> | null = null;
@@ -55,7 +56,7 @@ export class Encyclopedia {
     this.el.innerHTML = `
       <aside class="enc-side">
         <div class="enc-brand"><span class="enc-book"></span><div><b>Enciclopedia</b><small>Armas nucleares, efectos e impactos</small></div></div>
-        <div class="enc-search"><input type="search" placeholder="Buscar en la enciclopedia…" spellcheck="false" /></div>
+        <div class="enc-search"><input type="search" placeholder="Buscar en la enciclopedia…" spellcheck="false" /><button type="button" class="enc-navbtn" aria-expanded="false">Índice</button></div>
         <nav class="enc-nav"></nav>
       </aside>
       <main class="enc-main"></main>
@@ -68,6 +69,10 @@ export class Encyclopedia {
     this.el.querySelector('.enc-back')!.addEventListener('click', () => this.back());
     this.search.addEventListener('input', () => { const q = this.search.value.trim(); if (q.length >= 2) this.show(`buscar:${q}`, false); else if (!q && this.current.startsWith('buscar:')) this.back(); });
     this.main.addEventListener('click', (e) => this.onClick(e));
+    const navBtn = this.el.querySelector('.enc-navbtn') as HTMLButtonElement;
+    navBtn.addEventListener('click', () => { const on = this.el.classList.toggle('nav-open'); navBtn.setAttribute('aria-expanded', String(on)); });
+    // en el móvil, el índice se pliega al abrir un artículo
+    this.nav.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('[data-go]')) { this.el.classList.remove('nav-open'); navBtn.setAttribute('aria-expanded', 'false'); } });
     this.nav.addEventListener('click', (e) => this.onClick(e));
     // Imagen que no carga (Commons caído, límite de peticiones…): un reintento a otro tamaño y, si
     // vuelve a fallar, se retira la figura para no dejar huecos.
@@ -95,6 +100,7 @@ export class Encyclopedia {
         this.articles = m.ALL_ARTICLES;
         this.glossary = m.GLOSSARY;
         this.images = m.IMAGES;
+        this.videos = m.VIDEOS;
         this.math = m.MATH;
         this.sources = m.SOURCES;
         for (const a of this.articles) this.byId.set(a.id, a);
@@ -280,6 +286,9 @@ export class Encyclopedia {
     const facts = fi >= 0 ? a.blocks[fi] as Extract<Block, { t: 'facts' }> : null;
     const body = a.blocks.filter((_, i) => i !== fi);
     const imgs = this.images[a.id] ?? [];
+    const vids = [...(this.videos[a.id] ?? [])];
+    // el primer vídeo va en mitad del texto; el resto, en su sección
+    const midVid = body.length > 8 ? vids.shift() : undefined;
     const math = this.math[a.id] ?? [];
     const src = [...(a.sources ?? []), ...(this.sources.byId[a.id] ?? []), ...(this.sources.byCat[a.cat] ?? [])];
     // índice de secciones
@@ -295,9 +304,11 @@ export class Encyclopedia {
       blocks.push(this.block(b, i));
       // segunda foto tras el segundo párrafo, para airear el texto
       if (i === 2 && imgs[1]) blocks.push(this.figure(imgs[1], false));
+      if (i === 6 && midVid) blocks.push(this.media(midVid));
     });
     flushStory();
     if (math.length) { toc.push(`<a data-anchor="s-math">Las matemáticas</a>`); blocks.push(`<h2 id="s-math">Las matemáticas</h2>`, ...math.map((b, i) => this.block(b, 1000 + i))); }
+    if (vids.length) { toc.push(`<a data-anchor="s-vid">En movimiento</a>`); blocks.push(`<h2 id="s-vid">En movimiento</h2>`, ...vids.map((v) => this.media(v))); }
     const rest = imgs.slice(2);
     if (rest.length) { toc.push(`<a data-anchor="s-img">Imágenes</a>`); blocks.push(`<h2 id="s-img">Imágenes</h2>`, this.gallery(rest)); }
     if (src.length) { toc.push(`<a data-anchor="s-src">Fuentes</a>`); blocks.push(`<h2 id="s-src">Fuentes y lecturas</h2>`, this.block({ t: 'sources', items: src }, 2000)); }
@@ -312,7 +323,7 @@ export class Encyclopedia {
         <h1>${esc(a.title)}</h1>
         <p class="enc-lead">${this.md(a.summary)}</p>
       </header>
-      <div class="enc-grid">
+      <div class="enc-grid${!facts && toc.length <= 1 ? ' solo' : ''}">
         <div class="enc-body">
           ${hero}
           ${blocks.join('')}
@@ -339,6 +350,15 @@ export class Encyclopedia {
   }
   private gallery(items: ImgRef[]) {
     return `<div class="enc-gal">${items.map((r) => `<figure><button type="button" class="enc-zoom" data-zoom="${esc(r.file)}" data-cap="${esc(r.caption)}" aria-label="Ampliar"><img loading="lazy" decoding="async" src="${this.imgUrl(r.file, 700)}" alt="${esc(r.caption)}" /></button><figcaption>${this.md(r.caption)} ${this.credit(r)}</figcaption></figure>`).join('')}</div>`;
+  }
+  /** vídeo (webm/ogv) o animación GIF de Commons */
+  private media(v: VidRef) {
+    const raw = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(v.file.replace(/ /g, '_'))}`;
+    const ratio = v.w && v.h ? ` style="aspect-ratio:${v.w}/${v.h}"` : '';
+    const inner = v.kind === 'gif'
+      ? `<img loading="lazy" decoding="async" src="${raw}" alt="${esc(v.caption)}"${ratio} />`
+      : `<video controls preload="none" playsinline poster="${this.imgUrl(v.file, 960)}" src="${raw}"${ratio}></video>`;
+    return `<figure class="enc-photo enc-media enc-${v.kind}">${inner}<figcaption>${v.kind === 'video' ? '<b class="enc-badge">Vídeo</b> ' : '<b class="enc-badge">Animación</b> '}${this.md(v.caption)} ${this.credit({ file: v.file, caption: v.caption, credit: v.credit, license: v.license })}</figcaption></figure>`;
   }
   /** relato por pasos con navegación */
   private storyHtml(steps: Extract<Block, { t: 'step' }>[]) {
@@ -375,8 +395,8 @@ export class Encyclopedia {
 
   /** fórmulas: a^{2}, x_{0}, \frac{a}{b}, \sqrt{x} y letras griegas con \alpha, \Delta… */
   tex(s: string): string {
-    const G: Record<string, string> = { alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', epsilon: 'ε', eta: 'η', theta: 'θ', lambda: 'λ', mu: 'μ', nu: 'ν', pi: 'π', rho: 'ρ', sigma: 'σ', Sigma: 'Σ', tau: 'τ', phi: 'φ', omega: 'ω', Omega: 'Ω', approx: '≈', int: '∫', times: '×', cdot: '·', propto: '∝', infty: '∞', le: '≤', ge: '≥', to: '→', pm: '±' };
-    let h = esc(s);
+    const G: Record<string, string> = { alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', epsilon: 'ε', eta: 'η', theta: 'θ', lambda: 'λ', mu: 'μ', nu: 'ν', pi: 'π', rho: 'ρ', sigma: 'σ', Sigma: 'Σ', tau: 'τ', phi: 'φ', omega: 'ω', Omega: 'Ω', approx: '≈', int: '∫', times: '×', cdot: '·', propto: '∝', infty: '∞', le: '≤', ge: '≥', to: '→', pm: '±', log: 'log', ln: 'ln', exp: 'exp', sim: '∼', cdots: '⋯' };
+    let h = esc(s).replace(/\\[,;]/g, '\u2009');
     for (let k = 0; k < 4; k++) {
       h = h.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '<span class="fr"><span>$1</span><span>$2</span></span>')
         .replace(/\\sqrt\{([^{}]*)\}/g, '<span class="sq">√<span>$1</span></span>')
@@ -421,10 +441,16 @@ export class Encyclopedia {
               this.mounted.push(m);
             });
           } else if (fig.dataset.diagram) {
-            slot.innerHTML = '';
-            const m = mountDiagram(fig.dataset.diagram as never, slot);
-            (fig as unknown as { _m?: Mounted })._m = m;
-            this.mounted.push(m);
+            if ((fig as unknown as { _l?: boolean })._l) continue;
+            (fig as unknown as { _l?: boolean })._l = true;
+            import('./diagrams').then(({ mountDiagram }) => {
+              (fig as unknown as { _l?: boolean })._l = false;
+              if ((fig as unknown as { _m?: Mounted })._m || !fig.isConnected) return;
+              slot.innerHTML = '';
+              const m = mountDiagram(fig.dataset.diagram as never, slot);
+              (fig as unknown as { _m?: Mounted })._m = m;
+              this.mounted.push(m);
+            });
           } else if (fig.dataset.model) {
             slot.classList.add('busy');
             import('./viewer/Viewer').then(({ ModelViewer }) => {

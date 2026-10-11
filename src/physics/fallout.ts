@@ -29,8 +29,8 @@ export interface FalloutParams {
   capRadiusM: number;
   /** pie del sombrero (m); por defecto la mitad de la cima */
   capBottomM?: number;
-  /** viento a la altura z (m): km/h y dirección DESDE la que sopla */
-  windAt: (zM: number) => { kmh: number; fromDeg: number };
+  /** viento a la altura z (m) y a las tH horas de la explosión: km/h y dirección DESDE la que sopla */
+  windAt: (zM: number, tH: number) => { kmh: number; fromDeg: number };
   /** precipitación (mm/h) en el momento de la explosión */
   rainMmH?: number;
   /** fracción de la actividad que cae localmente (por defecto 0,6) */
@@ -86,12 +86,13 @@ export function falloutModel(p: FalloutParams) {
       const tFall = tTop * (0.55 + 0.45 * (z0 / Htop)); // las capas bajas tardan algo menos
       const split: [number, number][] = rain > 0 && tFall > T_RAIN ? [[tFall, 1 - fRain], [T_RAIN, fRain]] : [[tFall, 1]];
       for (const [tf, wf] of split) {
-        // integración de la caída por el perfil de viento (descenso lineal)
-        const steps = 12;
+        // integración de la caída por el perfil de viento (descenso lineal); con previsión horaria
+        // la partícula encuentra el viento de cada hora mientras baja
+        const steps = Math.min(48, Math.max(12, Math.ceil(tf * 2)));
         let e = 0, n = 0;
         for (let s = 0; s < steps; s++) {
           const z = z0 * (1 - (s + 0.5) / steps);
-          const [u, v] = vec(p.windAt(z));
+          const [u, v] = vec(p.windAt(z, ((s + 0.5) / steps) * tf));
           e += (u * tf) / steps; n += (v * tf) / steps;
         }
         // el borde a barlovento del sombrero también deposita: origen repartido en el sombrero

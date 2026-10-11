@@ -28,6 +28,70 @@ function emptyEffects(env: Environment): Pick<Effects, 'thermalFluenceAt' | 'pre
   };
 }
 
+// ======================================================================== liberación con viento horario
+/**
+ * Con previsión horaria la emisión se divide en «bocanadas» que viajan con el viento de cada hora
+ * (modelo lagrangiano). Cada hora una pequeña fracción de cada bocanada se deposita en el suelo como
+ * una mancha gaussiana que se ensancha con la edad. Así la contaminación sigue el cambio de viento.
+ */
+function releaseTrajectories(Q: number, H: number, durH: number, vd: number, env: Environment) {
+  const Hmix = 1000;
+  const nE = Math.max(1, Math.min(60, Math.ceil(durH / 2)));
+  const AGE = 96, SUB = 2; // horas de viaje y subpasos por hora
+  const zT = Math.min(1500, Math.max(300, H));
+  type K = { e: number; n: number; s: number; a: number };
+  const ks: K[] = [];
+  let minE = -20, maxE = 20, minN = -20, maxN = 20, sumE = 0, sumN = 0, sumA = 0, sumT = 0;
+  for (let i = 0; i < nE; i++) {
+    const te = ((i + 0.5) / nE) * durH; // hora de emisión
+    let A = Q / nE, e = 0, n = 0;
+    for (let s = 0; s < AGE * SUB; s++) {
+      const age = (s + 0.5) / SUB, dtH = 1 / SUB;
+      const W = windAt(env, zT, te + age);
+      const to = ((W.fromDeg + 180) * Math.PI) / 180;
+      e += Math.sin(to) * W.kmh * dtH; n += Math.cos(to) * W.kmh * dtH;
+      const sig = 1 + 2.5 * Math.pow(age, 0.85); // km
+      const f = 1 - Math.exp((-vd * 3600 * dtH) / Hmix);
+      const dA = A * f; A -= dA;
+      ks.push({ e, n, s: sig, a: dA });
+      sumE += e * dA; sumN += n * dA; sumA += dA; sumT += age * dA;
+      if (Math.hypot(e, n) > 3000) break;
+      minE = Math.min(minE, e - 2.5 * sig); maxE = Math.max(maxE, e + 2.5 * sig);
+      minN = Math.min(minN, n - 2.5 * sig); maxN = Math.max(maxN, n + 2.5 * sig);
+    }
+  }
+  const N = 300;
+  const span = Math.max(maxE - minE, maxN - minN);
+  const cell = span / (N - 1);
+  const nx = Math.max(40, Math.ceil((maxE - minE) / cell) + 1), ny = Math.max(40, Math.ceil((maxN - minN) / cell) + 1);
+  const grid = new Float64Array(nx * ny); // Bq/m²
+  for (const k of ks) {
+    const s = Math.max(k.s, cell * 0.6), r = Math.ceil((3 * s) / cell);
+    const ci = Math.round((k.e - minE) / cell), cj = Math.round((k.n - minN) / cell);
+    const norm = k.a / (2 * Math.PI * s * s * 1e6);
+    for (let j = Math.max(0, cj - r); j <= Math.min(ny - 1, cj + r); j++) {
+      const dn = minN + j * cell - k.n;
+      for (let i = Math.max(0, ci - r); i <= Math.min(nx - 1, ci + r); i++) {
+        const de = minE + i * cell - k.e;
+        grid[j * nx + i] += norm * Math.exp(-(de * de + dn * dn) / (2 * s * s));
+      }
+    }
+  }
+  const at = (eKm: number, nKm: number) => {
+    const fi = (eKm - minE) / cell, fj = (nKm - minN) / cell;
+    if (fi < 0 || fj < 0 || fi > nx - 1 || fj > ny - 1) return 0;
+    const i = Math.min(nx - 2, Math.floor(fi)), j = Math.min(ny - 2, Math.floor(fj)), u = fi - i, v = fj - j;
+    const g = (a: number, b: number) => grid[b * nx + a];
+    return (g(i, j) * (1 - u) + g(i + 1, j) * u) * (1 - v) + (g(i, j + 1) * (1 - u) + g(i + 1, j + 1) * u) * v;
+  };
+  const ce = sumE / Math.max(1e-9, sumA), cn = sumN / Math.max(1e-9, sumA), ct = sumT / Math.max(1e-9, sumA);
+  return {
+    grid, nx, ny, cell, minE, minN, at,
+    axisFromDeg: ((Math.atan2(-ce, -cn) * 180) / Math.PI + 360) % 360,
+    axisKmh: Math.hypot(ce, cn) / Math.max(0.5, ct),
+  };
+}
+
 // ======================================================================== liberación radiactiva
 /**
  * Pluma gaussiana (dispersión de Briggs, atmósfera neutra) con depósito seco. Para liberaciones
@@ -91,11 +155,42 @@ export function computeRelease(sc: ReleaseInput, env: Environment, lat: number, 
   }
   fallout.sort((a, b) => a.level - b.level);
 
+  // con previsión horaria se sustituye la pluma recta por las trayectorias hora a hora
+  const hourly = sc.source === 'reactor' && durH > 1 && (env.windHourly?.length ?? 0) > 2;
+  const traj = hourly ? releaseTrajectories(Q, H, durH, iso.vd, env) : null;
+  if (traj) {
+    fallout.length = 0;
+    const T = traj, kGrid = Array.from(T.grid, (v) => v / 1000);
+    const cs2 = contours().size([T.nx, T.ny]).thresholds(levels)(kGrid);
+    for (const c of cs2) {
+      const zi = levels.indexOf(c.value);
+      if (!c.coordinates.length) continue;
+      let cells = 0, maxD = 0;
+      for (let k = 0; k < kGrid.length; k++) if (kGrid[k] >= c.value) { cells++; const gi = k % T.nx, gj = (k - gi) / T.nx; maxD = Math.max(maxD, Math.hypot(T.minE + gi * T.cell, T.minN + gj * T.cell)); }
+      const polys = c.coordinates.map((poly) => poly.map((ring) => ring.map(([gi, gj]) => [(T.minE + (gi - 0.5) * T.cell) * 1000, (T.minN + (gj - 0.5) * T.cell) * 1000] as [number, number])));
+      fallout.push({ level: c.value, label: iso.zones[zi][1], color: ZONE_COLORS[zi], polygons: polys, areaKm2: cells * T.cell * T.cell, maxDownwindKm: maxD });
+    }
+    fallout.sort((a, b) => a.level - b.level);
+  }
+
   // población afectada y dosis colectiva del primer año (exposición externa, ocupación 0,3)
   const field = densityField(lat, lon, 600);
   let popZone = 0, popAny = 0, collective = 0;
   const low = levels[levels.length - 1], high = levels[Math.min(1, levels.length - 1)]; // evacuación: zona de reasentamiento
-  for (let j = 0; j < nyy - 1; j += 2) for (let i = 0; i < nx - 1; i += 2) {
+  const yearFrac = iso.halfLifeY < 1 ? (iso.halfLifeY / Math.LN2) * (1 - Math.exp((-Math.LN2 * 1) / iso.halfLifeY)) : 1;
+  if (traj) {
+    const T = traj;
+    for (let j = 0; j < T.ny; j += 2) for (let i = 0; i < T.nx; i += 2) {
+      const kBq = T.grid[j * T.nx + i] / 1000;
+      if (kBq < low) continue;
+      const aKm2 = 4 * T.cell * T.cell;
+      const pop = field.at(T.minE + i * T.cell, T.minN + j * T.cell) * aKm2;
+      popAny += pop;
+      if (kBq >= high) popZone += pop;
+      collective += pop * kBq * iso.nSvhPerkBq * 1e-9 * 8760 * 0.3 * yearFrac;
+    }
+  }
+  for (let j = 0; j < nyy - 1 && !traj; j += 2) for (let i = 0; i < nx - 1; i += 2) {
     const kBq = grid[j * nx + i];
     if (kBq < low) continue;
     const x0 = xs(i), x1 = xs(i + 2);
@@ -106,16 +201,16 @@ export function computeRelease(sc: ReleaseInput, env: Environment, lat: number, 
     const pop = field.at(e, n) * aKm2;
     popAny += pop;
     if (kBq >= high) popZone += pop;
-    const yearFrac = iso.halfLifeY < 1 ? (iso.halfLifeY / Math.LN2) * (1 - Math.exp((-Math.LN2 * 1) / iso.halfLifeY)) : 1;
     collective += pop * kBq * iso.nSvhPerkBq * 1e-9 * 8760 * 0.3 * yearFrac; // Sv
   }
+  const depAt = (e: number, n: number) => (traj ? traj.at(e / 1000, n / 1000) : depLocal(e, n));
   const name = sc.source === 'dirtybomb' ? 'Bomba sucia' : 'Liberación de un reactor';
   const base = blast ?? null;
   const rings: Ring[] = base ? [...base.rings] : [];
   const notes: string[] = [
     `${iso.name}: ${Q >= 1e15 ? (Q / 1e15).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' PBq' : (Q / 1e12).toLocaleString('es-ES', { maximumFractionDigits: 2 }) + ' TBq'} dispersados${sc.source === 'dirtybomb' ? ' (≈ 20 % del material, en aerosol)' : ''}, liberados a ${Math.round(H)} m de altura con viento de ${Math.round(W.kmh)} km/h.`,
     iso.note,
-    sc.source === 'reactor' ? 'Una sola dirección de viento: en un accidente real el viento cambia durante los días de emisión y reparte la contaminación en varias direcciones (en Chernóbil, durante 10 días).' : 'Una bomba sucia apenas mata por radiación: su efecto principal es el pánico, la contaminación y el coste de limpieza.',
+    sc.source === 'reactor' && traj ? `Viento hora a hora (previsión de Open-Meteo para ${env.windHourly!.length} h; después se mantiene el último): la emisión se reparte en bocanadas que siguen el viento de cada hora, como ocurrió en Chernóbil.` : sc.source === 'reactor' ? 'Una sola dirección de viento: en un accidente real el viento cambia durante los días de emisión y reparte la contaminación en varias direcciones (en Chernóbil, durante 10 días).' : 'Una bomba sucia apenas mata por radiación: su efecto principal es el pánico, la contaminación y el coste de limpieza.',
   ];
   return {
     ...emptyEffects(env),
@@ -131,11 +226,11 @@ export function computeRelease(sc: ReleaseInput, env: Environment, lat: number, 
     fallout,
     casualties: base?.casualties ?? { deaths: 0, injuries: 0, exposed: popAny, profile: { r: [0, 1], pop: [0, 0], deaths: [0, 0], inj: [0, 0], burns: [0, 0] }, cityName: nearestCity(lat, lon).city.name },
     notes,
-    falloutRateAt: (e: number, n: number) => (depLocal(e, n) / 1000) * iso.nSvhPerkBq * 1e-4, // rem/h ≈ 100 µSv/h
-    windKmh: W.kmh,
-    windFromDeg: W.fromDeg,
+    falloutRateAt: (e: number, n: number) => (depAt(e, n) / 1000) * iso.nSvhPerkBq * 1e-4, // rem/h ≈ 100 µSv/h
+    windKmh: traj ? traj.axisKmh : W.kmh,
+    windFromDeg: traj ? traj.axisFromDeg : W.fromDeg,
     noFlash: true,
-    release: { isotope: sc.isotope, isoName: iso.name, activityBq: Q, popZone, popAny, collectiveSv: collective, cancerDeaths: collective * 0.05, depositAt: (e, n) => depLocal(e, n) / 1000, nSvhPerkBq: iso.nSvhPerkBq, name },
+    release: { isotope: sc.isotope, isoName: iso.name, activityBq: Q, popZone, popAny, collectiveSv: collective, cancerDeaths: collective * 0.05, depositAt: (e, n) => depAt(e, n) / 1000, nSvhPerkBq: iso.nSvhPerkBq, name },
   } as Effects;
 }
 

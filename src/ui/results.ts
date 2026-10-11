@@ -2,7 +2,8 @@ import { h, ICONS, fmtNum, setRangeFill } from './dom';
 import { fmtDist, fmtArea, fmtEnergy } from '../physics/effects';
 import { buildStats, type StatSection } from './stats';
 import type { Effects } from '../physics/types';
-import { INFRA, type InfraResult } from '../data/osm';
+import { INFRA, type InfraResult, type BuildingCounts } from '../data/osm';
+import type { TerrainShadow } from '../physics/terrain';
 
 const n1 = (x: number, d = 1) => x.toLocaleString('es-ES', { maximumFractionDigits: d });
 const dur = (s: number) => { if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min`; if (s < 86400 * 2) { const hh = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return m ? `${hh} h ${m} min` : `${hh} h`; } return `${n1(s / 86400, s < 86400 * 10 ? 1 : 0)} días`; };
@@ -14,6 +15,9 @@ export interface ResultsEvents {
   onFocus(id: string): void;
   /** abrir la ficha de la enciclopedia del escenario */
   onBook(name: string): void;
+  /** comparar con otro escenario en el mapa partido */
+  onCompare?(): void;
+  onHeat?(k: 'off' | 'pop' | 'deaths' | 'fallout'): void;
 }
 
 const GROUP_NAMES: Record<string, string> = {
@@ -54,14 +58,78 @@ export class ResultsPanel {
 
   hide() { this.el.classList.add('hidden'); cancelAnimationFrame(this.anim); }
 
+  /** mapa de calor activo (para marcar el botón) */
+  private heat: 'off' | 'pop' | 'deaths' | 'fallout' = 'off';
+  setHeat(k: 'off' | 'pop' | 'deaths' | 'fallout') { this.heat = k; if (this.tab === 'pop') this.reshow?.(); }
+  private heatBlock(body: HTMLElement, fx: Effects) {
+    if (!this.ev.onHeat) return;
+    const nuc = !fx.release && !fx.volcano && !fx.dam && !fx.solar && !fx.war;
+    const opts: ['pop' | 'deaths' | 'fallout', string][] = [['pop', 'Población']];
+    if (nuc) opts.push(['deaths', 'Víctimas']);
+    if (nuc && fx.fallout.length && fx.falloutDoseAt) opts.push(['fallout', 'Lluvia radiactiva']);
+    const row = h('div', { class: 'seg heat-row' });
+    for (const [k, l] of opts) row.append(h('button', { type: 'button', class: this.heat === k ? 'on' : '', onclick: () => this.ev.onHeat!(this.heat === k ? 'off' : k) }, l));
+    body.append(h('div', { class: 'heat-blk' }, h('div', { class: 'heat-h' }, 'Mapa de calor'), row));
+  }
+
   /** infraestructuras de OpenStreetMap por zona (llegan después, de forma asíncrona) */
   private infra: InfraResult | 'loading' | 'error' | null = null;
   private reshow: (() => void) | null = null;
+  private bld: BuildingCounts | 'loading' | 'error' | null = null;
+  setBuildings(r: BuildingCounts | 'loading' | 'error' | null) {
+    this.bld = r;
+    if (this.tab === 'pop') this.reshow?.();
+  }
+  private shadow: TerrainShadow | 'loading' | null = null;
+  setShadow(s: TerrainShadow | 'loading' | null) { this.shadow = s; if (this.tab === 'phys') this.reshow?.(); }
+  private shadowBlock(body: HTMLElement) {
+    const s = this.shadow;
+    if (!s) return;
+    body.append(h('div', { class: 'res-h3' }, 'Sombra del relieve'));
+    if (s === 'loading') { body.append(h('div', { class: 'sec-note' }, 'Calculando las líneas de visión con el modelo del terreno…')); return; }
+    if (!s.areaKm2) { body.append(h('div', { class: 'sec-note' }, `El terreno es lo bastante llano (relieve máximo de ${fmtDist(Math.max(0, s.reliefM))} sobre la zona cero) para que la bola de fuego se vea desde todas partes en ${fmtDist(s.radiusM)} a la redonda.`)); return; }
+    body.append(h('div', { class: 'bld' },
+      h('div', { class: 'bld-r' }, h('div', {}, h('b', {}, 'Zona protegida del destello'), h('span', {}, 'colinas y montañas tapan la bola de fuego')), h('strong', {}, fmtArea(s.areaKm2 * 1e6))),
+      h('div', { class: 'bld-r' }, h('div', {}, h('b', {}, 'Del área con quemaduras'), h('span', {}, `hasta ${fmtDist(s.radiusM)}`)), h('strong', {}, `${Math.round(s.frac * 100)} %`))),
+      h('div', { class: 'sec-note' }, 'En las zonas sombreadas del mapa el calor no llega directamente (sólo la luz dispersada por el aire, mucho más débil) y la onda expansiva se debilita un poco al rodear el obstáculo. En Nagasaki, las colinas del valle del Urakami protegieron así a buena parte de la ciudad.'));
+  }
+  private vb: { destroyed: number; severe: number; moderate: number; light: number; intact: number; total: number } | null = null;
+  setViewBuildings(v: { destroyed: number; severe: number; moderate: number; light: number; intact: number; total: number } | null) {
+    const same = JSON.stringify(v) === JSON.stringify(this.vb);
+    this.vb = v;
+    if (!same && this.tab === 'pop') this.reshow?.();
+  }
+  private buildingsBlock(body: HTMLElement) {
+    const v = this.vb;
+    if (v) {
+      body.append(h('div', { class: 'res-h3' }, 'Edificios en la vista actual, uno a uno'));
+      const tbl = h('div', { class: 'bld' });
+      const rows: [string, string, number][] = [['Destruidos', '≥ 20 psi', v.destroyed], ['Muy dañados', '5–20 psi', v.severe], ['Dañados', '2–5 psi', v.moderate], ['Daños leves', '1–2 psi', v.light], ['Sin daños graves', '< 1 psi', v.intact]];
+      for (const [k, hint, n] of rows) if (n > 0) tbl.append(h('div', { class: 'bld-r' }, h('div', {}, h('b', {}, k), h('span', {}, hint)), h('strong', {}, fmtNum(n))));
+      body.append(tbl, h('div', { class: 'sec-note' }, `${fmtNum(v.total)} edificios del mapa que se ven ahora (acércate o muévete para contar otras zonas). Cada uno se clasifica por la sobrepresión en su centro.`));
+    }
+    const r = this.bld;
+    if (!r) return;
+    body.append(h('div', { class: 'res-h3' }, 'Edificios dañados (OpenStreetMap)'));
+    if (r === 'loading') { body.append(h('div', { class: 'sec-note' }, 'Contando edificios en OpenStreetMap…')); return; }
+    if (r === 'error') { body.append(h('div', { class: 'sec-note' }, 'No se pudo contar los edificios (servidor Overpass ocupado o sin conexión).')); return; }
+    const get = (id: string) => r.zones.find((z) => z.id === id);
+    const z20 = get('psi20'), z5 = get('psi5'), z1 = get('psi1');
+    const rows: [string, string, number | null, boolean][] = [];
+    if (z20) rows.push(['Destruidos', '≥ 20 psi: se derrumban incluso los de hormigón armado', z20.count, z20.radiusM > r.maxR]);
+    if (z5) rows.push(['Destruidos o muy dañados', '5–20 psi: casas derrumbadas, estructuras de acero deformadas', z5.count - (z20?.count ?? 0), z5.radiusM > r.maxR]);
+    if (z1) rows.push(['Con daños', '1–5 psi: cristales, puertas, tabiques y tejados', z1.count - (z5?.count ?? 0), z1.radiusM > r.maxR]);
+    const tbl = h('div', { class: 'bld' });
+    for (const [k, hint, n, cap] of rows) tbl.append(h('div', { class: 'bld-r' }, h('div', {}, h('b', {}, k), h('span', {}, hint)), h('strong', {}, n == null ? '—' : `${cap ? '≥ ' : ''}${fmtNum(Math.max(0, n))}`)));
+    const tot = z1?.count ?? z5?.count ?? z20?.count ?? 0;
+    body.append(tbl, h('div', { class: 'sec-note' }, `En total, ${fmtNum(tot)} edificios cartografiados dentro del radio de 1 psi. En el mapa, cada edificio se colorea y se hunde según la sobrepresión que le llega. OpenStreetMap no recoge todos los edificios en algunas zonas.${r.capped ? ` Recuento limitado a ${fmtDist(r.maxR)} de la zona cero.` : ''}`));
+  }
   setInfra(r: InfraResult | 'loading' | 'error' | null) {
     this.infra = r;
     if (this.tab === 'pop') this.reshow?.();
   }
   private infraBlock(body: HTMLElement) {
+    this.buildingsBlock(body);
     const r = this.infra;
     if (!r) return;
     body.append(h('div', { class: 'res-h3' }, 'Infraestructuras en cada zona (OpenStreetMap)'));
@@ -83,17 +151,17 @@ export class ResultsPanel {
     el.classList.remove('hidden');
     const sc = fx.scenario;
     const hiro = fx.energyKt / 15;
-    const kicker = sc.kind === 'release' ? (sc.source === 'dirtybomb' ? 'Bomba sucia' : 'Accidente nuclear') : sc.kind === 'volcano' ? 'Erupción volcánica' : sc.kind === 'nuclear'
+    const kicker = sc.kind === 'war' ? 'Guerra nuclear e invierno nuclear' : sc.kind === 'dam' ? 'Rotura de presa' : sc.kind === 'solar' ? 'Tormenta geomagnética' : sc.kind === 'release' ? (sc.source === 'dirtybomb' ? 'Bomba sucia' : 'Accidente nuclear') : sc.kind === 'volcano' ? 'Erupción volcánica' : sc.kind === 'nuclear'
       ? fx.chemical ? 'Explosión convencional' : 'Detonación nuclear'
       : fx.asteroid?.fate === 'airburst' ? 'Explosión aérea de asteroide' : 'Impacto de asteroide';
-    const burst = sc.kind === 'release' ? `${fx.release?.isoName ?? ''}` : sc.kind === 'volcano' ? `VEI ${sc.vei}` : fx.buried ? `${fx.buried.mode === 'underground' ? 'bajo tierra' : 'bajo el agua'} a ${fmtDist(fx.buried.depthM)}` : fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : sc.kind === 'asteroid' && sc.target === 'water' ? `en el océano (${fmtDist(sc.waterDepthM)} de prof.)` : 'en superficie';
+    const burst = sc.kind === 'war' ? `${fx.war?.sides.join(' · ')}` : sc.kind === 'dam' ? `${Math.round(sc.heightM)} m · ${sc.volumeHm3.toLocaleString('es-ES')} hm³` : sc.kind === 'solar' ? `Dst ${Math.round(sc.dstNt)} nT` : sc.kind === 'release' ? `${fx.release?.isoName ?? ''}` : sc.kind === 'volcano' ? `VEI ${sc.vei}` : fx.buried ? `${fx.buried.mode === 'underground' ? 'bajo tierra' : 'bajo el agua'} a ${fmtDist(fx.buried.depthM)}` : fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : sc.kind === 'asteroid' && sc.target === 'water' ? `en el océano (${fmtDist(sc.waterDepthM)} de prof.)` : 'en superficie';
     const minBtn = h('button', { class: 'icon-btn', title: 'Minimizar', html: ICONS.min, onclick: () => { el.classList.toggle('min'); minBtn.innerHTML = el.classList.contains('min') ? ICONS.max : ICONS.min; } });
     const hiroTxt = hiro >= 1 ? `×${fmtNum(hiro)} Hiroshima` : `${(hiro * 100).toFixed(hiro < 0.01 ? 2 : 1).replace('.', ',')} % de Hiroshima`;
     const head = h('div', { class: 'res-head' },
       h('div', { class: 'ttl' },
         h('div', { class: 'kicker' }, kicker),
         h('h2', {}, sc.name || fmtEnergy(fx.energyKt)),
-        h('div', { class: 'sub' }, `${fx.energyKt > 0 && sc.kind !== 'release' && sc.kind !== 'volcano' ? fmtEnergy(fx.energyKt) + ' ' : ''}${burst} · ${place}`),
+        h('div', { class: 'sub' }, `${fx.energyKt > 0 && sc.kind !== 'release' && sc.kind !== 'volcano' ? fmtEnergy(fx.energyKt) + ' ' : ''}${burst}${sc.kind === 'solar' || sc.kind === 'war' ? ' · todo el planeta' : ` · ${place}`}`),
       ),
       h('button', { class: 'icon-btn', title: 'Ficha en la enciclopedia', html: ICONS.book, onclick: () => this.ev.onBook(sc.name) }),
       h('button', { class: 'icon-btn', title: 'Compartir enlace', html: ICONS.share, onclick: () => this.ev.onShare() }),
@@ -105,10 +173,13 @@ export class ResultsPanel {
     const dEl = h('div', { class: 'v' }, '0');
     const iEl = h('div', { class: 'v' }, '0');
     const counters = h('div', { class: 'counters' },
-      h('div', { class: 'cnt red' }, dEl, h('div', { class: 'l' }, fx.release ? 'Muertes estimadas' : 'Fallecidos')),
-      h('div', { class: 'cnt amber' }, iEl, h('div', { class: 'l' }, fx.release ? 'En zona de evacuación' : 'Heridos')),
+      h('div', { class: 'cnt red' }, dEl, h('div', { class: 'l' }, fx.war ? 'Muertes por las explosiones' : fx.solar ? 'En zona de riesgo alto' : fx.release ? 'Muertes estimadas' : 'Fallecidos')),
+      h('div', { class: 'cnt amber' }, iEl, h('div', { class: 'l' }, fx.war ? 'Muertes por hambre (2 años)' : fx.solar ? 'Coste (billones de $)' : fx.dam ? 'En la zona inundada' : fx.release ? 'En zona de evacuación' : 'Heridos')),
     );
-    if (fx.release) this.countUp([[dEl, c.deaths + fx.release.cancerDeaths], [iEl, fx.release.popZone]]);
+    if (fx.war) { dEl.classList.add('long'); iEl.classList.add('long'); this.countUp([[dEl, fx.war.directDeathsM * 1e6], [iEl, fx.war.famineDeathsM * 1e6]]); }
+    else if (fx.solar) { this.countUp([[dEl, fx.solar.popHighRisk]]); iEl.textContent = `${n1(fx.solar.costUSDtn[0], 1)}–${n1(fx.solar.costUSDtn[1], 1)}`; }
+    else if (fx.dam) this.countUp([[dEl, c.deaths], [iEl, fx.dam.popFlooded]]);
+    else if (fx.release) this.countUp([[dEl, c.deaths + fx.release.cancerDeaths], [iEl, fx.release.popZone]]);
     else this.countUp([[dEl, multi?.deaths ?? c.deaths], [iEl, multi?.injuries ?? c.injuries]]);
 
     const stats = buildStats(fx);
@@ -124,7 +195,10 @@ export class ResultsPanel {
       if (t === 'sum') { if (multi) this.multiBlock(body, multi); this.summary(body, fx, hiroTxt); }
       else if (t === 'eff') this.effects(body, fx);
       else if (t === 'def') this.defense(body, fx);
-      else { this.sections(body, stats.filter((s) => s.tab === t)); if (t === 'pop') this.infraBlock(body); if (t === 'rad' && fx.fallout.length && fx.falloutDoseAt && !fx.release) this.shelter(body, fx); }
+      else {
+        if (t === 'cmp' && this.ev.onCompare && (sc.kind === 'nuclear' || sc.kind === 'asteroid')) body.append(h('button', { type: 'button', class: 'btn-line cmp-split', onclick: () => this.ev.onCompare!() }, 'Comparar con otro escenario en el mapa partido'));
+        if (t === 'pop') this.heatBlock(body, fx);
+        this.sections(body, stats.filter((s) => s.tab === t)); if (t === 'pop') this.infraBlock(body); if (t === 'phys') this.shadowBlock(body); if (t === 'rad' && fx.fallout.length && fx.falloutDoseAt && !fx.release) this.shelter(body, fx); }
     };
     this.reshow = () => show(this.tab);
     for (const [t, l] of avail) tabsBar.append(h('button', { type: 'button', 'data-t': t, onclick: () => show(t) }, l));
@@ -243,7 +317,7 @@ export class ResultsPanel {
   }
 
   private summary(body: HTMLElement, fx: Effects, hiroTxt: string) {
-    if (fx.release || fx.volcano) return this.summaryOther(body, fx);
+    if (fx.release || fx.volcano || fx.dam || fx.solar || fx.war) return this.summaryOther(body, fx);
     const ring = (id: string) => fx.rings.find((r) => r.id === id);
     const kv: [string, string][] = [];
     const affected = fx.casualties.profile;
@@ -276,6 +350,23 @@ export class ResultsPanel {
     ));
   }
 
+  /** gráfico del invierno nuclear: anomalía de temperatura y de lluvia durante 15 años */
+  private winterChart(S: { t: number; dT: number; dP: number }[]) {
+    const W = 340, H = 150, pl = 34, pr = 34, pt = 12, pb = 24;
+    const tMax = S[S.length - 1].t, dTmin = Math.min(-1, ...S.map((s) => s.dT)), dPmin = Math.min(-5, ...S.map((s) => s.dP));
+    const x = (t: number) => pl + (t / tMax) * (W - pl - pr);
+    const yT = (v: number) => pt + (v / dTmin) * (H - pt - pb), yP = (v: number) => pt + (v / dPmin) * (H - pt - pb);
+    const path = (f: (s: { t: number; dT: number; dP: number }) => number) => S.map((s, i) => `${i ? 'L' : 'M'}${x(s.t).toFixed(1)},${f(s).toFixed(1)}`).join('');
+    const ticks = [0, 5, 10, 15].filter((v) => v <= tMax).map((v) => `<text x="${x(v)}" y="${H - 6}" text-anchor="middle">${v}</text><line x1="${x(v)}" x2="${x(v)}" y1="${pt}" y2="${H - pb}" class="g"/>`).join('');
+    const svg = `<svg viewBox="0 0 ${W} ${H}" class="winter"><line x1="${pl}" x2="${W - pr}" y1="${pt}" y2="${pt}" class="g"/>${ticks}
+      ${Array.from({ length: Math.floor(tMax) }, (_, k) => { const yr = S.filter((s) => s.t >= k && s.t < k + 1); const m = yr.reduce((a, s) => a + s.dP, 0) / Math.max(1, yr.length); const bw = (W - pl - pr) / tMax; return `<rect x="${(x(k) + bw * 0.18).toFixed(1)}" y="${pt}" width="${(bw * 0.64).toFixed(1)}" height="${Math.max(0, yP(m) - pt).toFixed(1)}" class="pb"/>`; }).join('')}
+      <path d="${path((s) => yT(s.dT))}" class="t"/>
+      <text x="${pl - 4}" y="${pt + 4}" text-anchor="end">0</text><text x="${pl - 4}" y="${H - pb}" text-anchor="end" class="t">${dTmin.toFixed(0)} °C</text>
+      <text x="${W - pr + 4}" y="${H - pb}" class="p">${dPmin.toFixed(0)} %</text><text x="${W / 2}" y="${H - 6 + 0}" text-anchor="middle" dy="0" class="ax"> </text></svg>`;
+    return h('div', { class: 'winter-wrap' }, h('div', { class: 'res-h3' }, 'Invierno nuclear: los años siguientes'), h('div', { html: svg }),
+      h('div', { class: 'winter-leg' }, h('span', { class: 't' }, 'Temperatura media mundial'), h('span', { class: 'p' }, 'Lluvias'), h('span', {}, 'años después de la guerra')));
+  }
+
   /** resumen de accidentes, bombas sucias y erupciones */
   private summaryOther(body: HTMLElement, fx: Effects) {
     const kv: [string, string][] = [];
@@ -293,6 +384,35 @@ export class ResultsPanel {
       kv.push(['Dosis colectiva (primer año)', `${fmtNum(r.collectiveSv)} Sv·persona`]);
       kv.push(['Cánceres mortales adicionales', `≈ ${fmtNum(r.cancerDeaths)}`]);
       if (fx.casualties.deaths > 0) kv.push(['Víctimas de la explosión', fmtNum(fx.casualties.deaths)]);
+    } else if (fx.dam) {
+      const d = fx.dam;
+      kv.push(['Altura de la presa', `${Math.round(d.heightM)} m`]);
+      kv.push(['Agua embalsada', `${d.volumeHm3.toLocaleString('es-ES')} hm³`]);
+      kv.push(['Caudal punta de la brecha', `${fmtNum(d.peakM3s)} m³/s`]);
+      if (d.demOk) {
+        kv.push(['Zona inundada', `${fmtNum(d.floodKm2)} km²`]);
+        kv.push(['Alcance de la ola', `${fmtNum(d.reachKm)} km`]);
+        for (const z of zones) kv.push([z.label, `${fmtNum(z.areaKm2)} km²`]);
+        kv.push(['Población en la zona inundada', fmtNum(d.popFlooded)]);
+        kv.push(['Víctimas estimadas', `≈ ${fmtNum(fx.casualties.deaths)}`]);
+      } else kv.push(['Zona inundada', 'sin datos del relieve']);
+    } else if (fx.war) {
+      const w = fx.war;
+      kv.push(['Ojivas', `${fmtNum(w.warheads)} × ${fmtNum(w.yieldKt)} kt`]);
+      kv.push(['Energía total', fmtEnergy(w.warheads * w.yieldKt)]);
+      kv.push(['Hollín en la estratosfera', `${fmtNum(w.sootTg)} millones de t`]);
+      kv.push(['Enfriamiento global máximo', `−${n1(w.coolingC, 1)} °C`]);
+      kv.push(['Lluvias', `−${w.precipPct} %`]);
+      kv.push(['Calorías disponibles en el mundo', `−${w.caloriesPct} % a los 3–5 años`]);
+      kv.push(['Muertes directas', `${fmtNum(w.directDeathsM)} millones`]);
+      kv.push(['Muertes por hambre', `${fmtNum(w.famineDeathsM)} millones`]);
+    } else if (fx.solar) {
+      const s = fx.solar;
+      kv.push(['Índice Dst', `${Math.round(s.dstNt)} nT`]);
+      kv.push(['Auroras visibles hasta', `${Math.round(s.auroraMlat)}° de latitud geomagnética`]);
+      for (const b of s.bands) kv.push([b.label, b.risk]);
+      kv.push(['Población urbana en riesgo alto', fmtNum(s.popHighRisk)]);
+      kv.push(['Coste mundial estimado', `${n1(s.costUSDtn[0], 1)}–${n1(s.costUSDtn[1], 1)} billones de dólares`]);
     } else if (fx.volcano) {
       const v = fx.volcano;
       kv.push(['Índice de explosividad (VEI)', String(v.vei)]);
@@ -306,8 +426,14 @@ export class ResultsPanel {
     }
     kv.push(['Datos de población', fx.popSource ?? 'modelo urbano aproximado']);
     body.append(h('div', { class: 'kv' }, ...kv.flatMap(([k, v]) => [h('span', {}, k), h('span', {}, v)])));
+    if (fx.war) body.append(this.winterChart(fx.war.series));
     if (fx.notes.length) body.append(h('ul', { class: 'notes' }, ...fx.notes.map((t) => h('li', {}, t))));
-    body.append(h('div', { class: 'disclaimer' }, fx.release
+    body.append(h('div', { class: 'disclaimer' }, fx.war
+      ? 'Estimaciones de los estudios científicos de referencia (Xia et al. 2022, Nature Food; Toon et al. 2019, Science Advances; Coupe et al. 2019), con modelos climáticos acoplados. Las curvas del gráfico son una aproximación a sus resultados. Las cifras dependen mucho de cuánto ardan las ciudades.'
+      : fx.dam
+      ? 'Estimaciones orientativas con fines educativos. Caudal punta según las fórmulas empíricas de roturas históricas (Froehlich); la ola se propaga por el relieve real y se atenúa con la distancia; mortalidad según la profundidad y el tiempo de aviso (Jonkman, 2007). No sustituye a un estudio hidráulico.'
+      : fx.solar ? 'Estimaciones orientativas con fines educativos. Latitud geomagnética con un dipolo centrado (IGRF); borde de las auroras según tormentas históricas; coste a partir del informe de Lloyd\'s (2013) sobre una tormenta como la de 1859, extrapolado a todo el mundo.'
+      : fx.release
       ? 'Estimaciones orientativas con fines educativos. Pluma gaussiana con coeficientes de Briggs (atmósfera neutra) y depósito seco; dosis externa del primer año con ocupación del 30 % y riesgo lineal sin umbral (5 % por Sv, CIPR). Las cifras de cánceres son estadísticas y muy inciertas a dosis bajas.'
       : 'Estimaciones orientativas con fines educativos. Espesor de ceniza con la ley exponencial de Pyle (1989) alargada por el viento; alcance de los flujos piroclásticos y enfriamiento según erupciones históricas. Población según un modelo de densidad aproximado.'));
   }

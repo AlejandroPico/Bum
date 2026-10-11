@@ -144,6 +144,17 @@ export function buildStats(fx: Effects): StatSection[] {
     if (W / 1361 > 1e-3) fb.push({ k: `Brillo a ${dk} km`, v: `${ratio(W / 1361)} el Sol`, hint: 'irradiancia media durante el pulso' });
   }
   S.push({ tab: 'phys', title: 'Bola de fuego y nube', rows: fb });
+  if (fx.missile) {
+    const M = fx.missile, n0 = (x: number) => Math.round(x).toLocaleString('es-ES');
+    S.push({ tab: 'phys', title: 'Trayectoria del misil', rows: [
+      { k: 'Lanzado desde', v: M.site, hint: M.country },
+      { k: 'Distancia', v: `${n0(M.rangeKm)} km`, hint: 'por la ortodrómica (camino más corto sobre el globo)' },
+      { k: 'Tiempo de vuelo', v: `${n0(M.flightMin)} min`, strong: true, hint: `fase propulsada de unos ${M.boostMin} min` },
+      { k: 'Apogeo', v: `${n0(M.apogeeKm)} km`, hint: 'altura máxima de la trayectoria, por encima de la Estación Espacial' },
+      { k: 'Velocidad de reentrada', v: `${M.reentryKms.toFixed(1).replace('.', ',')} km/s`, hint: `unas ${n0((M.reentryKms * 1000) / 340)} veces la velocidad del sonido` },
+      { k: 'Tiempo de aviso', v: `≈ ${n0(M.warningMin)} min`, hint: 'desde que los satélites detectan el lanzamiento' },
+    ], note: 'Trayectoria de energía mínima sobre una Tierra esférica y sin rotación (Wright, 2017). Los tiempos reales dependen del misil y de la trayectoria elegida.' });
+  }
 
   // onda expansiva por distancia
   const dists = [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000, 2000000];

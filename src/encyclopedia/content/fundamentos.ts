@@ -399,6 +399,7 @@ export const ARTICLES: Article[] = [
         ['Radiación residual (lluvia radiactiva)', '≈ 10 %', '[[lluvia-radiactiva|Lluvia radiactiva]]'],
       ] },
       { t: 'p', text: 'Este reparto cambia con la altura de la explosión, con la potencia y con el tipo de arma. En una [[bomba-de-neutrones|bomba de neutrones]], por ejemplo, la radiación inicial tiene más peso; en una explosión a gran altitud, casi toda la energía sale como rayos X y se genera un intenso [[pulso-electromagnetico|pulso electromagnético]].' },
+      { t: 'chart', id: 'yields', caption: 'Potencia de explosiones famosas en escala logarítmica, desde una tonelada de TNT hasta la Tsar Bomba.' },
       { t: 'h', text: 'La regla del cubo: diez veces más potencia no son diez veces más daño' },
       { t: 'p', text: 'El efecto más contraintuitivo de la escala nuclear es que el radio de destrucción crece mucho más despacio que la potencia. La energía de la onda expansiva se reparte en un volumen, y el volumen crece con el cubo de la distancia. Por eso la distancia a la que se alcanza una determinada sobrepresión aumenta con la **raíz cúbica** de la potencia: para duplicar el radio de destrucción hay que multiplicar la potencia por ocho, y para multiplicarlo por diez, por mil. La superficie destruida crece con la potencia elevada a dos tercios.' },
       { t: 'compare', head: ['Potencia', 'Radio relativo de la onda expansiva', 'Superficie relativa'], rows: [

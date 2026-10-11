@@ -7,6 +7,18 @@ export default defineConfig({
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      output: {
+        // bibliotecas grandes en trozos propios: se descargan en paralelo y siguen en la caché
+        // del navegador aunque cambie el código de la aplicación
+        manualChunks(id: string) {
+          if (id.includes('node_modules/maplibre-gl')) return 'maplibre';
+          if (id.includes('node_modules/three')) return 'three';
+          if (id.includes('node_modules/d3-')) return 'd3';
+          return undefined;
+        },
+      },
+    },
   },
   server: { host: true, port: 5173 },
   plugins: [

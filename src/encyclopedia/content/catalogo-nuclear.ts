@@ -22,7 +22,7 @@ export const ARTICLES: Article[] = [
     cat: 'cat',
     order: 100,
     summary: 'La mayor explosión provocada jamás por el ser humano: unos 50 megatones sobre el archipiélago ártico de Nueva Zembla, el 30 de octubre de 1961. Estaba diseñada para el doble, pero se probó a media potencia.',
-    tags: ['Tsar Bomba', 'Bomba del Zar', 'AN602', 'RDS-202', 'Iván', 'Vania', 'Nueva Zembla', 'Sujói Nos', 'Tu-95', 'Durnovtsev', 'Sajárov', 'Jruschov', 'madre de Kuzmá', 'megatón', 'URSS', '1961', G1],
+    tags: ['Tsar Bomba', 'Bomba del Zar', 'AN602', 'RDS-202', 'Iván', 'Vania', 'Nueva Zembla', 'Sujói Nos', 'Tu-95', 'Durnovtsev', 'Sajárov', 'Jruschov', 'madre de Kuzmá', 'megatón', 'URSS', '1961', 'Tsar Bomba · diseño completo de 100 Mt', '100 megatones', G1],
     blocks: [
       { t: 'p', text: 'La **Tsar Bomba** («la bomba del zar», nombre que se le dio después por analogía con el Cañón del Zar y la Campana del Zar del Kremlin) fue un arma [[bomba-de-hidrogeno|termonuclear]] soviética probada una sola vez, el **30 de octubre de 1961**. Con unos **50 megatones**, liberó en un instante más de mil veces la energía de las bombas de [[hiroshima|Hiroshima]] y [[nagasaki|Nagasaki]] juntas, y unas diez veces la de todos los explosivos usados en la Segunda Guerra Mundial. Sigue siendo, con mucha diferencia, la mayor explosión jamás provocada.' },
       { t: 'facts', rows: [
@@ -53,6 +53,11 @@ export const ARTICLES: Article[] = [
       { t: 'p', text: 'Para **Andréi Sajárov** fue un punto de inflexión: en los años siguientes presionó dentro del sistema soviético para limitar las pruebas atmosféricas, que terminaron para las tres potencias con el Tratado de Prohibición Parcial de 1963 (véase [[tratados|Tratados]]), y acabó convertido en disidente y premio Nobel de la Paz en 1975. En 2020, la corporación nuclear rusa Rosatom desclasificó una película de unos 40 minutos sobre la prueba.' },
       { t: 'note', text: 'Una comparación útil: la Tsar Bomba equivalía a unas 3300 bombas de Hiroshima. Aun así, el radio de destrucción grave no es 3300 veces mayor, sino unas 15 veces mayor, porque los efectos de la onda expansiva crecen sólo con la raíz cúbica de la potencia. Véase [[energia-y-tnt|Energía y TNT]].' },
       { t: 'sim', preset: 'Tsar Bomba (URSS, 1961)', label: 'Simular la Tsar Bomba sobre cualquier ciudad' },
+      { t: 'h', text: 'La bomba que nunca se probó: el diseño completo de 100 Mt' },
+      { t: 'p', text: 'Los documentos soviéticos desclasificados y los testimonios de sus diseñadores coinciden en que el AN602 se concibió para unos **100 megatones**. La diferencia con la versión probada estaba en la última etapa: en 1961 se usó un material inerte (se ha citado plomo) donde el diseño completo llevaba uranio, que habría aportado una enorme energía de fisión adicional. La mitad de la potencia, y sobre todo la mayor parte de la radiactividad, habría venido de ahí.' },
+      { t: 'p', text: 'Una explosión de 100 Mt no sería «el doble de destructiva» que la de 50 Mt. Por la [[onda-expansiva|ley de la raíz cúbica]], los radios de destrucción por onda expansiva sólo crecen un 26 % (la raíz cúbica de 2) y la superficie arrasada un 59 %. Lo que sí cambiaría por completo es la [[lluvia-radiactiva|lluvia radiactiva]]: una explosión así, en superficie, contaminaría con dosis letales franjas de cientos de kilómetros a sotavento. Ese fue precisamente el motivo de que se probara a media potencia y a 4 km de altura.' },
+      { t: 'note', text: 'El preset «Tsar Bomba · diseño completo de 100 Mt» del simulador muestra ese caso hipotético. Compáralo con la versión de 50 Mt y fíjate en que los anillos de daño apenas crecen, mientras que la zona de lluvia radiactiva se multiplica si la explosión se hace a ras de suelo.' },
+      { t: 'sim', preset: 'Tsar Bomba · diseño completo de 100 Mt', label: 'Simular el diseño completo de 100 Mt' },
     ],
     related: ['tsar-bomba', 'bomba-de-hidrogeno', 'armas-de-tres-etapas', 'programa-sovietico', 'pruebas-nucleares', 'tratados'],
   },

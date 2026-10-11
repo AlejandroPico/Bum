@@ -7,6 +7,7 @@ export interface TimelineEvents {
   onSpeed(s: number): void;
   onCloud(): void;
   onGround(): void;
+  onTour(): void;
 }
 
 /** Línea de tiempo con escala logarítmica (los primeros segundos ocupan más espacio). */
@@ -19,6 +20,7 @@ export class Timeline {
   private tStart = 0;
   private tEnd = 600;
   private seeking = false;
+  private tourBtn: HTMLButtonElement;
 
   constructor(el: HTMLElement, ev: TimelineEvents) {
     this.el = el;
@@ -37,8 +39,12 @@ export class Timeline {
     }
     const cloud = h('button', { class: 'tl-btn', title: 'Encuadrar la nube completa', html: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><path d="M8 11.2c0-2.2 1.8-3.7 4-3.7s4 1.5 4 3.7c0 1.3-1.8 2-4 2s-4-.7-4-2z"/><path d="M11 13.2h2V18h-2z"/></svg>', onclick: () => ev.onCloud() });
     const ground = h('button', { class: 'tl-btn', title: 'Vista desde el suelo: un testigo a distancia (pulsa otra vez para alejarlo o acercarlo)', html: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 20h20"/><path d="M3.5 13c2.3-3.2 5.2-4.8 8.5-4.8s6.2 1.6 8.5 4.8c-2.3 3.2-5.2 4.8-8.5 4.8S5.8 16.2 3.5 13z"/><circle cx="12" cy="13" r="2.4"/></svg>', onclick: () => ev.onGround() });
-    el.append(restart, this.play, this.time, h('div', { class: 'tl-track' }, this.events, this.range), speed, ground, cloud);
+    this.tourBtn = h('button', { class: 'tl-btn tl-tour', title: 'Recorrido cinematográfico: repite la simulación con planos y rótulos', html: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h13v10H3z"/><path d="M16 10.5l5-3v9l-5-3"/><path d="M3 4.5h13M3 19.5h13" stroke-dasharray="2 2"/></svg>', onclick: () => ev.onTour() }) as HTMLButtonElement;
+    el.append(restart, this.play, this.time, h('div', { class: 'tl-track' }, this.events, this.range), speed, this.tourBtn, ground, cloud);
   }
+
+  /** muestra u oculta el botón del recorrido cinematográfico */
+  setTour(available: boolean) { this.tourBtn.style.display = available ? '' : 'none'; }
 
   configure(tStart: number, tEnd: number, events: { t: number; label: string }[]) {
     this.tStart = tStart;

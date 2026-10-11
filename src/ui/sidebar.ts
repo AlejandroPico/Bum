@@ -1,8 +1,10 @@
+import { WAR_PRESETS } from '../data/war';
+import { LAUNCH_SITES, greatCircleKm, ballistic, type LaunchSite } from '../data/launch';
 import { h, setRangeFill, ICONS, toast } from './dom';
 import { NUKE_PRESETS, ASTEROID_PRESETS, COMPOSITIONS } from '../data/presets';
 import { parseCoords, fetchWeather, type Weather } from './geo';
 import { fmtEnergy } from '../physics/effects';
-import type { NuclearInput, AsteroidInput, Environment, BurstMode, TargetType, Scenario, ReleaseInput, VolcanoInput, Isotope } from '../physics/types';
+import type { NuclearInput, AsteroidInput, Environment, BurstMode, TargetType, Scenario, ReleaseInput, VolcanoInput, Isotope, DamInput, SolarInput, WarInput } from '../physics/types';
 import { ISOTOPES } from '../physics/other';
 import type { ThemeChoice } from './theme';
 
@@ -10,6 +12,11 @@ export interface ViewOptions {
   domes: boolean; rings: boolean; fallout: boolean; damage: boolean; fires: boolean; sound: boolean; cinematic: boolean; labels: boolean;
   globe: boolean;
   marks: boolean;
+  /** mapa de calor visible */
+  heat: 'off' | 'pop' | 'deaths' | 'fallout';
+  /** tiempo real dibujado en el mapa (nubes, lluvia, niebla) y radar de precipitación */
+  weather: boolean;
+  radar: boolean;
   basemap: string;
   fxOpacity: number;
   forceDay: boolean;
@@ -27,11 +34,13 @@ export interface ViewOptions {
   tests: boolean;
   /** tema de la interfaz y de la luz del mapa */
   theme: ThemeChoice;
+  /** atenúa destellos, resplandores y sacudidas (fotosensibilidad) */
+  reduceFlash: boolean;
 }
 
 export interface AppState {
   mode: 'nuclear' | 'asteroid' | 'other';
-  other: { type: 'reactor' | 'dirtybomb' | 'volcano'; release: ReleaseInput; volcano: VolcanoInput };
+  other: { type: 'reactor' | 'dirtybomb' | 'volcano' | 'dam' | 'solar' | 'war'; release: ReleaseInput; volcano: VolcanoInput; dam: DamInput; solar: SolarInput; war: WarInput };
   nuke: NuclearInput;
   ast: AsteroidInput & { azimuth: number; surface: 'auto' | TargetType };
   env: Environment;
@@ -41,6 +50,8 @@ export interface AppState {
   live: boolean;
   /** ataque con varias detonaciones */
   multi: { on: boolean; strikes: Strike[] };
+  /** base de lanzamiento del misil (vacío: sin trayectoria) */
+  launch: string;
 }
 
 export interface Strike { lat: number; lon: number; label: string; sc: Scenario; azimuth?: number }
@@ -52,9 +63,10 @@ export function defaultState(): AppState {
     ast: { kind: 'asteroid', name: 'Tunguska (Siberia, 1908)', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'sediment', waterDepthM: 0, azimuth: 250, surface: 'auto' },
     env: { windFromDeg: 270, windKmh: 24, visibilityKm: 25, humidity: 65, hour: 12, outdoorPct: null },
     target: { lat: 40.4168, lon: -3.7038, label: 'Madrid' },
-    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1, basemap: 'relieve', fxOpacity: 1, forceDay: false, terrain3d: true, buildings: true, mapLabels: true, autoQ: true, post: true, realPop: true, tests: false, theme: 'auto' },
+    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1, basemap: 'relieve', fxOpacity: 1, forceDay: false, terrain3d: true, buildings: true, mapLabels: true, autoQ: true, post: true, realPop: true, tests: false, theme: 'auto', reduceFlash: false, heat: 'off', weather: true, radar: false },
     live: true,
-    other: { type: 'reactor', release: { kind: 'release', name: 'Chernóbil (1986)', source: 'reactor', isotope: 'Cs-137', activityTBq: 85000, heightM: 1000, durationH: 240 }, volcano: { kind: 'volcano', name: 'Yellowstone (supererupción)', vei: 8, volumeMul: 2.5 } },
+    launch: '',
+    other: { type: 'reactor', release: { kind: 'release', name: 'Chernóbil (1986)', source: 'reactor', isotope: 'Cs-137', activityTBq: 85000, heightM: 1000, durationH: 240 }, volcano: { kind: 'volcano', name: 'Yellowstone (supererupción)', vei: 8, volumeMul: 2.5 }, dam: { kind: 'dam', name: 'Presa de las Tres Gargantas (China)', volumeHm3: 39300, heightM: 181 }, solar: { kind: 'solar', name: 'Evento Carrington (1859)', dstNt: -1200 }, war: { kind: 'war', name: 'India–Pakistán: 100 armas de 15 kt', preset: 'inpk-5' } },
     multi: { on: false, strikes: [] },
   };
 }
@@ -68,6 +80,8 @@ export interface SidebarEvents {
   onCollapse(): void;
   onProjection(globe: boolean): void;
   onMulti(): void;
+  /** llegó el tiempo real del objetivo */
+  onWeather?(w: Weather): void;
 }
 
 const logSlider = (min: number, max: number, val: number, step = 0.01) => {
@@ -157,10 +171,14 @@ export class Sidebar {
   detectNote!: HTMLElement;
   /** redibuja la lista del ataque múltiple */
   renderMulti: () => void = () => {};
+  /** actualiza la nota de la trayectoria (al mover el objetivo) */
+  updLaunch: () => void = () => {};
+  /** elige un caso de «Otros» (accidente, bomba sucia, volcán) por su nombre */
+  selectOther: (name: string) => boolean = () => false;
   /** escenario actual (copia) */
   currentScenario(): Scenario {
     const S = this.state;
-    if (S.mode === 'other') return S.other.type === 'volcano' ? { ...S.other.volcano } : { ...S.other.release, source: S.other.type === 'dirtybomb' ? 'dirtybomb' : 'reactor' };
+    if (S.mode === 'other') return S.other.type === 'volcano' ? { ...S.other.volcano } : S.other.type === 'dam' ? { ...S.other.dam } : S.other.type === 'solar' ? { ...S.other.solar } : S.other.type === 'war' ? { ...S.other.war } : { ...S.other.release, source: S.other.type === 'dirtybomb' ? 'dirtybomb' : 'reactor' };
     return S.mode === 'nuclear' ? { ...S.nuke } : { ...S.ast };
   }
   /** consulta el tiempo real en el objetivo y lo aplica al entorno */
@@ -181,7 +199,7 @@ export class Sidebar {
     }));
     if (found) return true;
     const ai = ASTEROID_PRESETS.findIndex((a) => a.name === name);
-    if (ai < 0) return false;
+    if (ai < 0) return this.selectOther(name);
     this.setMode('asteroid');
     this.aPresetEl.value = String(ai);
     this.aPresetEl.dispatchEvent(new Event('change'));
@@ -347,6 +365,28 @@ export class Sidebar {
     // valor inicial del preset
     NUKE_PRESETS.forEach((g, gi) => g.items.forEach((it, ii) => { if (it.name === nk.name) { presetSel.value = `${gi}:${ii}`; presetNote.textContent = it.note; } }));
 
+    // base de lanzamiento: dibuja el arco del misil y calcula el tiempo de vuelo
+    const launchSel = h('select') as HTMLSelectElement;
+    launchSel.append(h('option', { value: '' }, '— Sin trayectoria —'));
+    const byCountry = new Map<string, LaunchSite[]>();
+    for (const s of LAUNCH_SITES) { if (!byCountry.has(s.country)) byCountry.set(s.country, []); byCountry.get(s.country)!.push(s); }
+    for (const [c, list] of byCountry) {
+      const g = h('optgroup', { label: c });
+      for (const s of list) g.append(h('option', { value: s.id }, s.name));
+      launchSel.append(g);
+    }
+    const launchNote = h('div', { class: 'note' });
+    const updLaunch = () => {
+      const s = LAUNCH_SITES.find((x) => x.id === S.launch);
+      launchSel.value = s ? s.id : '';
+      if (!s) { launchNote.textContent = ''; return; }
+      const d = greatCircleKm(s.lat, s.lon, S.target.lat, S.target.lon), b = ballistic(d);
+      launchNote.textContent = `${s.note} Distancia ${Math.round(d).toLocaleString('es-ES')} km · vuelo de unos ${Math.round(b.flightMin)} min · apogeo ${Math.round(b.apogeeKm).toLocaleString('es-ES')} km.`;
+    };
+    launchSel.addEventListener('change', () => { S.launch = launchSel.value; updLaunch(); });
+    this.updLaunch = updLaunch;
+    updLaunch();
+
     this.nukePanel = h('div', {},
       section('Arma', h('div', {},
         field('Modelo', null, presetSel),
@@ -360,6 +400,8 @@ export class Sidebar {
         sField,
         dNote,
         h('div', { class: 'toggles one' }, chemTg),
+        field('Lanzado desde (trayectoria del misil)', null, launchSel),
+        launchNote,
       )),
     );
     updNuke();
@@ -471,7 +513,28 @@ export class Sidebar {
       { v: { name: 'Pinatubo (1991)', vei: 6, volumeMul: 1 }, at: [15.13, 120.35, 'Pinatubo'], note: 'Enfrió la Tierra ≈ 0,5 °C durante un año.' },
       { v: { name: 'Mount St. Helens (1980)', vei: 5, volumeMul: 1 }, at: [46.191, -122.194, 'Mount St. Helens'], note: 'Erupción lateral que arrasó 600 km² de bosque.' },
     ];
-    const oType = seg<'reactor' | 'dirtybomb' | 'volcano'>([['reactor', 'Accidente nuclear'], ['dirtybomb', 'Bomba sucia'], ['volcano', 'Supervolcán']], O.type, (v) => { O.type = v; updOther(); });
+    const DAM_PRESETS: { d: Omit<DamInput, 'kind'>; note: string; at: [number, number, string] }[] = [
+      { d: { name: 'Presa de las Tres Gargantas (China)', volumeHm3: 39300, heightM: 181 }, at: [30.823, 111.003, 'Tres Gargantas'], note: 'La mayor central hidroeléctrica del mundo, en el río Yangtsé.' },
+      { d: { name: 'Presa Hoover (EE. UU.)', volumeHm3: 35200, heightM: 221 }, at: [36.016, -114.737, 'Presa Hoover'], note: 'Embalsa el lago Mead en el río Colorado.' },
+      { d: { name: 'Presa de Asuán (Egipto)', volumeHm3: 162000, heightM: 111 }, at: [23.97, 32.877, 'Asuán'], note: 'El lago Nasser, uno de los mayores embalses artificiales.' },
+      { d: { name: 'Presa de Itaipú (Brasil y Paraguay)', volumeHm3: 29000, heightM: 196 }, at: [-25.408, -54.589, 'Itaipú'], note: 'En el río Paraná, aguas arriba de las cataratas del Iguazú.' },
+      { d: { name: 'Presa de Alcántara (España)', volumeHm3: 3160, heightM: 130 }, at: [39.722, -6.883, 'Alcántara'], note: 'El mayor embalse de España, en el Tajo.' },
+      { d: { name: 'Presa de la Almendra (España)', volumeHm3: 2649, heightM: 202 }, at: [41.27, -6.15, 'Almendra'], note: 'La presa más alta de España, en el Tormes.' },
+      { d: { name: 'Presa de Mequinenza (España)', volumeHm3: 1530, heightM: 79 }, at: [41.36, 0.27, 'Mequinenza'], note: 'El «mar de Aragón», en el Ebro.' },
+      { d: { name: 'Presa de Tous (España, 1982)', volumeHm3: 52, heightM: 60 }, at: [39.15, -0.65, 'Tous'], note: 'La «pantanada de Tous»: se rompió el 20 de octubre de 1982 durante una gota fría e inundó la Ribera del Júcar.' },
+      { d: { name: 'Presa de Banqiao (China, 1975)', volumeHm3: 492, heightM: 25 }, at: [32.99, 113.66, 'Banqiao'], note: 'La peor rotura de presas de la historia: unas 26 000 muertes directas tras el tifón Nina.' },
+      { d: { name: 'Presa de Teton (EE. UU., 1976)', volumeHm3: 356, heightM: 93 }, at: [43.91, -111.54, 'Teton'], note: 'Se rompió en su primer llenado; el aviso a tiempo limitó las víctimas a 11.' },
+      { d: { name: 'Presa de Malpasset (Francia, 1959)', volumeHm3: 49, heightM: 66 }, at: [43.51, 6.756, 'Malpasset'], note: 'La ola arrasó Fréjus: 423 muertos.' },
+    ];
+    const SOLAR_PRESETS: { s: Omit<SolarInput, 'kind'>; note: string }[] = [
+      { s: { name: 'Evento Carrington (1859)', dstNt: -1200 }, note: 'La mayor tormenta geomagnética registrada: auroras en Cuba y en Hawái, telégrafos en llamas.' },
+      { s: { name: 'Gran tormenta de 1921', dstNt: -907 }, note: 'Incendios en centrales telegráficas de Nueva York y Suecia.' },
+      { s: { name: 'Apagón de Quebec (1989)', dstNt: -589 }, note: '6 millones de personas sin luz durante 9 horas.' },
+      { s: { name: 'Tormentas de Halloween (2003)', dstNt: -383 }, note: 'Satélites dañados y apagón en Malmö (Suecia).' },
+      { s: { name: 'Tormenta de mayo de 2024 (Gannon)', dstNt: -412 }, note: 'Auroras vistas en toda España; el GPS de los tractores falló en EE. UU.' },
+      { s: { name: 'Supertormenta hipotética', dstNt: -2500 }, note: 'Una tormenta el doble de intensa que la de 1859, en el límite de lo que se cree posible.' },
+    ];
+    const oType = seg<'reactor' | 'dirtybomb' | 'volcano' | 'dam' | 'solar' | 'war'>([['reactor', 'Accidente nuclear'], ['dirtybomb', 'Bomba sucia'], ['volcano', 'Supervolcán'], ['dam', 'Rotura de presa'], ['solar', 'Tormenta solar'], ['war', 'Guerra nuclear']], O.type, (v) => { O.type = v; updOther(); });
     const oPreset = h('select') as HTMLSelectElement;
     const oNote = h('div', { class: 'note' });
     const isoSel = h('select') as HTMLSelectElement;
@@ -485,15 +548,34 @@ export class Sidebar {
     const durF = field('Duración de la emisión (h)', null, durIn), kgF = field('Explosivo (kg de TNT)', null, kgIn);
     relBox.append(durF, kgF);
     const volBox = h('div', {}, field('Índice de explosividad (VEI)', veiVal, veiR));
+    const damVv = h('b'), damV = h('input', { type: 'range', min: 0, max: 5.3, step: 0.01, value: Math.log10(O.dam.volumeHm3) }) as HTMLInputElement;
+    const damHv = h('b'), damH = h('input', { type: 'range', min: 10, max: 300, step: 1, value: O.dam.heightM }) as HTMLInputElement;
+    const damBox = h('div', {}, field('Agua embalsada', damVv, damV), field('Altura de la presa', damHv, damH),
+      h('div', { class: 'note' }, 'La inundación se calcula con el relieve real: el agua baja por el valle desde la presa. Coloca el objetivo justo sobre la presa.'));
+    const warBox = h('div', {}, h('div', { class: 'note' }, 'Se marcan en el mapa ciudades e instalaciones militares representativas de los dos bandos. Lo decisivo es el hollín de los incendios: provoca un invierno nuclear y una hambruna mundial. Mira la pestaña «Resumen» de los resultados.'));
+    const solDv = h('b'), solD = h('input', { type: 'range', min: 100, max: 3000, step: 10, value: Math.abs(O.solar.dstNt) }) as HTMLInputElement;
+    const solBox = h('div', {}, field('Intensidad (índice Dst)', solDv, solD),
+      h('div', { class: 'note' }, 'Cuanto más negativo es el índice Dst, más intensa es la tormenta y más cerca del ecuador llegan las auroras y las corrientes inducidas. El lugar elegido sólo cambia el punto de vista: la tormenta es planetaria.'));
     const fillPresets = () => {
       oPreset.innerHTML = '';
       oPreset.append(h('option', { value: '' }, '— Personalizado —'));
       if (O.type === 'volcano') VOL_PRESETS.forEach((p, i) => oPreset.append(h('option', { value: String(i) }, p.v.name)));
+      else if (O.type === 'dam') DAM_PRESETS.forEach((p, i) => oPreset.append(h('option', { value: String(i) }, p.d.name)));
+      else if (O.type === 'solar') SOLAR_PRESETS.forEach((p, i) => oPreset.append(h('option', { value: String(i) }, p.s.name)));
+      else if (O.type === 'war') WAR_PRESETS.forEach((p, i) => oPreset.append(h('option', { value: String(i) }, p.name)));
       else REL_PRESETS.forEach((p, i) => { if (p.type === O.type) oPreset.append(h('option', { value: String(i) }, p.r.name)); });
     };
     const updOther = (fromInputs = false) => {
-      relBox.style.display = O.type === 'volcano' ? 'none' : '';
+      relBox.style.display = O.type === 'volcano' || O.type === 'dam' || O.type === 'solar' || O.type === 'war' ? 'none' : '';
+      warBox.style.display = O.type === 'war' ? '' : 'none';
+      if (O.type === 'war') { const wp = WAR_PRESETS.find((x) => x.id === O.war.preset) ?? WAR_PRESETS[0]; oPreset.value = String(WAR_PRESETS.indexOf(wp)); oNote.textContent = wp.note; oNote.style.display = ''; }
       volBox.style.display = O.type === 'volcano' ? '' : 'none';
+      damBox.style.display = O.type === 'dam' ? '' : 'none';
+      solBox.style.display = O.type === 'solar' ? '' : 'none';
+      if (fromInputs) { O.dam.volumeHm3 = Math.round(Math.pow(10, +damV.value)); O.dam.heightM = +damH.value; O.solar.dstNt = -Math.abs(+solD.value); }
+      else { damV.value = String(Math.log10(Math.max(1, O.dam.volumeHm3))); damH.value = String(O.dam.heightM); solD.value = String(Math.abs(O.solar.dstNt)); }
+      setRangeFill(damV); setRangeFill(damH); setRangeFill(solD);
+      damVv.textContent = `${O.dam.volumeHm3.toLocaleString('es-ES')} hm³`; damHv.textContent = `${Math.round(O.dam.heightM)} m`; solDv.textContent = `${Math.round(O.solar.dstNt)} nT`;
       durF.style.display = O.type === 'reactor' ? '' : 'none';
       kgF.style.display = O.type === 'dirtybomb' ? '' : 'none';
       if (!fromInputs) fillPresets();
@@ -509,6 +591,9 @@ export class Sidebar {
     oPreset.addEventListener('change', () => {
       if (!oPreset.value) { oNote.style.display = 'none'; return; }
       const p = O.type === 'volcano' ? VOL_PRESETS[+oPreset.value] : REL_PRESETS[+oPreset.value];
+      if (O.type === 'dam') { const d = DAM_PRESETS[+oPreset.value]; O.dam = { kind: 'dam', ...d.d }; oNote.textContent = d.note + ' Objetivo movido a la presa.'; this.ev.onTarget(d.at[0], d.at[1], d.at[2], true); oNote.style.display = ''; const keep = oPreset.value; updOther(); oPreset.value = keep; return; }
+      if (O.type === 'war') { const w = WAR_PRESETS[+oPreset.value]; O.war = { kind: 'war', name: w.name, preset: w.id }; oNote.textContent = w.note; oNote.style.display = ''; return; }
+      if (O.type === 'solar') { const s = SOLAR_PRESETS[+oPreset.value]; O.solar = { kind: 'solar', ...s.s }; oNote.textContent = s.note; oNote.style.display = ''; const keep = oPreset.value; updOther(); oPreset.value = keep; return; }
       if (O.type === 'volcano') { const v = p as typeof VOL_PRESETS[number]; O.volcano = { kind: 'volcano', ...v.v }; }
       else { const r = p as typeof REL_PRESETS[number]; O.release = { kind: 'release', source: r.type, ...r.r }; }
       oNote.textContent = p.note + (p.at ? ' Objetivo movido al lugar real.' : '');
@@ -516,10 +601,21 @@ export class Sidebar {
       oNote.style.display = '';
       const keep = oPreset.value; updOther(); oPreset.value = keep;
     });
+    this.selectOther = (name: string) => {
+      const vi = VOL_PRESETS.findIndex((p) => p.v.name === name), ri = REL_PRESETS.findIndex((p) => p.r.name === name);
+      if (vi < 0 && ri < 0) return false;
+      this.setMode('other');
+      O.type = vi >= 0 ? 'volcano' : REL_PRESETS[ri].type;
+      oType.set(O.type); updOther();
+      oPreset.value = String(vi >= 0 ? vi : ri);
+      oPreset.dispatchEvent(new Event('change'));
+      return true;
+    };
+    for (const el of [damV, damH, solD]) el.addEventListener('input', () => { updOther(true); oPreset.value = ''; oNote.style.display = 'none'; if (O.type === 'dam') O.dam.name = 'Presa personalizada'; if (O.type === 'solar') O.solar.name = 'Tormenta solar personalizada'; });
     const markO = () => { oPreset.value = ''; oNote.style.display = 'none'; if (O.type === 'volcano') O.volcano.name = 'Erupción personalizada'; else O.release.name = O.type === 'dirtybomb' ? 'Bomba sucia' : 'Liberación radiactiva'; };
     for (const el of [isoSel, actR, hgtIn, durIn, kgIn, veiR]) el.addEventListener('input', () => { updOther(true); markO(); });
     isoSel.addEventListener('change', () => { updOther(true); markO(); });
-    this.otherPanel = h('div', {}, section('Escenario', h('div', {}, oType.el, field('Caso', null, oPreset), oNote, relBox, volBox)));
+    this.otherPanel = h('div', {}, section('Escenario', h('div', {}, oType.el, field('Caso', null, oPreset), oNote, relBox, volBox, damBox, solBox, warBox)));
     updOther();
     oNote.style.display = 'none';
 
@@ -546,7 +642,7 @@ export class Sidebar {
     const E = S.env;
     const wVal = h('b'), wR = linSlider(0, 150, E.windKmh, 1);
     const wdVal = h('b');
-    const wComp = compassInput(E.windFromDeg, (deg) => { E.windFromDeg = deg; E.windProfile = null; updEnv(); if (wxNote) wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
+    const wComp = compassInput(E.windFromDeg, (deg) => { E.windFromDeg = deg; E.windProfile = null; E.windHourly = null; updEnv(); if (wxNote) wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
     const humVal = h('b'), humR = linSlider(0, 100, E.humidity, 1);
     const visVal = h('b'), visR = linSlider(2, 80, E.visibilityKm, 1);
     const hrVal = h('b'), hrR = linSlider(0, 24, E.hour, 0.25);
@@ -568,7 +664,7 @@ export class Sidebar {
       if (!silent) this.ev.onEnv();
     };
     rainR.addEventListener('input', () => updEnv());
-    for (const r of [wR, humR, visR, hrR]) r.addEventListener('input', () => { if (r === wR) E.windProfile = null; updEnv(); wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
+    for (const r of [wR, humR, visR, hrR]) r.addEventListener('input', () => { if (r === wR) { E.windProfile = null; E.windHourly = null; } updEnv(); wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
     outR.addEventListener('input', () => { E.outdoorPct = +outR.value; updEnv(); });
     outVal.title = 'Doble clic: automático según la hora';
     outVal.addEventListener('dblclick', () => { E.outdoorPct = null; updEnv(); });
@@ -585,12 +681,13 @@ export class Sidebar {
       rainR.value = String(Math.min(20, Math.round((w.rainMmH ?? 0) * 2) / 2));
       updEnv();
       E.windProfile = w.profile;
+      E.windHourly = w.hourly ?? null;
       const top = w.profile[w.profile.length - 1];
-      wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} %${w.rainMmH > 0 ? ` · lluvia ${String(w.rainMmH).replace('.', ',')} mm/h` : ''} · viento a ${(top.zM / 1000).toFixed(0)} km: ${Math.round(top.kmh)} km/h desde ${dirName(top.fromDeg)}. La nube y la lluvia radiactiva usan el perfil de viento hasta la altura real de la nube.`;
+      wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} %${w.rainMmH > 0 ? ` · lluvia ${String(w.rainMmH).replace('.', ',')} mm/h` : ''} · viento a ${(top.zM / 1000).toFixed(0)} km: ${Math.round(top.kmh)} km/h desde ${dirName(top.fromDeg)}. La nube y la lluvia radiactiva usan el perfil de viento hasta la altura real de la nube${w.hourly ? ` y la previsión hora a hora de las próximas ${w.hourly.length} h` : ''}.`;
     };
     this.loadWeather = async (quiet = false) => {
       wxBtn.disabled = true; wxBtn.classList.add('busy');
-      try { applyWx(await fetchWeather(S.target.lat, S.target.lon)); }
+      try { const w = await fetchWeather(S.target.lat, S.target.lon); applyWx(w); this.ev.onWeather?.(w); }
       catch { if (!quiet) toast('No se pudo obtener el tiempo real (Open-Meteo)'); wxNote.textContent = 'Tiempo real no disponible: valores manuales.'; }
       finally { wxBtn.disabled = false; wxBtn.classList.remove('busy'); }
     };
