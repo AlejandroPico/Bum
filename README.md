@@ -70,7 +70,7 @@ Otros comandos:
 - **Infraestructuras por zona** (pestaña *Población*): hospitales, centros de salud, bomberos, comisarías, colegios, universidades, centrales y subestaciones eléctricas, potabilizadoras, aeropuertos, estaciones y gasolineras dentro de cada zona de daño, contados en OpenStreetMap (API Overpass).
 - **Riesgos reales de la NASA**: los objetos de la lista Sentry (NASA/JPL) con su probabilidad de impacto, como escenarios de asteroide.
 - **Mapa de pruebas nucleares** (capas): los 24 polígonos de pruebas con su número de ensayos y 24 pruebas célebres que se pueden simular en su lugar real.
-- **Imagen cinematográfica**: post-procesado con resplandor, destello de lente, distorsión por calor y refracción de la onda de choque; polvo del derrumbe de los edificios; **vista desde el suelo** (botón del testigo en la línea de tiempo) y **calidad automática** que ajusta la resolución según los fotogramas por segundo.
+- **Imagen cinematográfica**: post-procesado con resplandor, destello de lente, distorsión por calor y refracción de la onda de choque; polvo del derrumbe de los edificios; **vista desde el suelo** (botón del testigo en la línea de tiempo) y **calidad** Mínima, Baja, Alta, Ultra o Automática: en portátiles y tabletas empieza en un modo ligero (menos resolución, nube de partículas, sin post-procesado, 30 fps) y, si la animación va a saltos, baja sola un nivel en plena simulación.
 - **Marcas en el terreno**: suelo quemado, cráter, manto de eyecta, suelo activado por neutrones y zona
   contaminada (rayado) que permanecen tras la explosión.
 - **Línea de tiempo**: reproducir/pausar, rebobinar, velocidad ×0,25–×16. La escala es logarítmica: los

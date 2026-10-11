@@ -709,7 +709,8 @@ export class Sidebar {
 
     // ---------- visualización ----------
     const V = S.view;
-    const qual = seg<string>([['auto', 'Auto'], ['0.5', 'Baja'], ['1', 'Alta'], ['1.6', 'Ultra']], V.autoQ ? 'auto' : String(V.quality), (v) => { V.autoQ = v === 'auto'; if (!V.autoQ) V.quality = +v; this.ev.onView(); });
+    const qual = seg<string>([['auto', 'Auto'], ['0.25', 'Mínima'], ['0.5', 'Baja'], ['1', 'Alta'], ['1.6', 'Ultra']], V.autoQ ? 'auto' : String(V.quality), (v) => { V.autoQ = v === 'auto'; if (!V.autoQ) V.quality = +v; this.ev.onView(); });
+    this.setQuality = (v: string) => qual.set(v);
     this.projSeg = seg<string>([['flat', 'Plano 2D'], ['globe', 'Globo 3D']], V.globe ? 'globe' : 'flat', (v) => { V.globe = v === 'globe'; this.ev.onProjection(V.globe); });
     const viewSec = section('Visualización', h('div', {},
       h('div', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Mapa')), this.projSeg.el),
@@ -726,6 +727,7 @@ export class Sidebar {
         toggle('Post-procesado', V.post, (v) => { V.post = v; this.ev.onView(); }),
       ),
       h('div', { class: 'field', style: { marginTop: '12px' } }, h('div', { class: 'field-head' }, h('span', {}, 'Calidad'), this.qualVal), qual.el),
+      h('div', { class: 'hint' }, 'Baja y Mínima son el modo ligero para portátiles y tabletas: menos resolución, nube de partículas en vez de volumétrica, sin post-procesado y 30 imágenes por segundo; Mínima quita además el relieve y los edificios 3D. En Auto se elige según tu equipo y baja sola si la animación va a saltos.'),
     ), true);
 
     this.multiSec = multiSec;
@@ -741,6 +743,8 @@ export class Sidebar {
   private multiSec?: HTMLElement;
   /** indicador de la calidad automática (fps) */
   qualVal = h('b');
+  /** marca el nivel de calidad elegido (lo cambia también la calidad automática) */
+  setQuality: ((v: string) => void) | null = null;
   setMode(m: 'nuclear' | 'asteroid' | 'other') {
     this.state.mode = m;
     this.tabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', (t as HTMLElement).dataset.m === m));

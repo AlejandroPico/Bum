@@ -38,6 +38,9 @@ export class FxLayer implements CustomLayerInterface {
   /** duración del último fotograma de la capa (ms), para la calidad automática */
   frameMs = 16;
   private lastT = 0;
+  /** fotogramas por segundo máximos mientras se anima (0 = los de la pantalla) */
+  maxFps = 0;
+  private pending = 0;
 
   onAdd(map: MLMap, gl: WebGLRenderingContext | WebGL2RenderingContext) {
     this.map = map;
@@ -86,6 +89,15 @@ export class FxLayer implements CustomLayerInterface {
   add(m: FxModule) {
     this.modules.push(m);
     this.scene.add(m.object);
+  }
+
+  /** quita un módulo de la escena */
+  remove(m: FxModule) {
+    const i = this.modules.indexOf(m);
+    if (i < 0) return;
+    this.modules.splice(i, 1);
+    this.scene.remove(m.object);
+    m.dispose();
   }
 
   clear() {
@@ -139,7 +151,12 @@ export class FxLayer implements CustomLayerInterface {
     const gap = now - this.lastT;
     if (this.lastT && gap < 400) this.frameMs = this.frameMs * 0.92 + gap * 0.08;
     this.lastT = now;
-    if (this.animating) this.map.triggerRepaint();
+    // sólo se pide otro fotograma si algo se mueve; con límite, se espera lo que falte
+    if (this.animating && !this.pending) {
+      const wait = this.maxFps ? 1000 / this.maxFps - (performance.now() - now) - 1 : 0;
+      if (wait > 2) this.pending = window.setTimeout(() => { this.pending = 0; this.map.triggerRepaint(); }, wait);
+      else this.map.triggerRepaint();
+    }
   }
 
   onRemove() {

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { ModelId, ModelParams } from '../types';
+import { perf } from '../../perf';
 import type { AnimCtx, BuiltModel, Part } from './kit';
 import { littleBoy, fatMan, gadget, sausage } from './models-historic';
 import { staged, bomb, rv, missile, cruise, torpedo, shell, conventional } from './models-generic';
@@ -88,8 +89,8 @@ export class ModelViewer {
     host.append(this.el);
     this.buildUI();
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: false });
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    this.renderer = new THREE.WebGLRenderer({ antialias: !perf.lite, alpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(perf.lite ? 1 : 2, window.devicePixelRatio));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -156,9 +157,17 @@ export class ModelViewer {
     let down = { x: 0, y: 0 };
     cv.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
     cv.addEventListener('pointerup', (e) => { if (Math.hypot(e.clientX - down.x, e.clientY - down.y) < 5) this.pick(e); });
+    // sólo se anima mientras el visor está a la vista (y a 30 fotogramas por segundo en el modo ligero)
+    this.io = new IntersectionObserver((es) => {
+      const vis = es.some((e) => e.isIntersecting);
+      this.renderer.setAnimationLoop(vis && !this.disposed ? () => this.frame() : null);
+      this.last = performance.now();
+    });
+    this.io.observe(this.canvasWrap);
     this.renderer.setAnimationLoop(() => this.frame());
     this.applyModes();
   }
+  private io: IntersectionObserver;
 
   // ---------------------------------------------------------------- interfaz
   private buildUI() {
@@ -382,6 +391,7 @@ export class ModelViewer {
   private frame() {
     if (this.disposed) return;
     const now = performance.now();
+    if (perf.lite && now - this.last < 30) return;
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     this.explode += (this.explodeTarget - this.explode) * Math.min(1, dt * 4);
@@ -487,6 +497,7 @@ export class ModelViewer {
 
   destroy() {
     this.disposed = true;
+    this.io?.disconnect();
     this.renderer.setAnimationLoop(null);
     this.ro.disconnect();
     this.controls.dispose();

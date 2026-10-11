@@ -109,6 +109,28 @@ Pendiente menor: las nubes no se mueven con el viento; el radar sólo llega al n
 - [x] La app busca versiones nuevas al volver a la pestaña y cada hora, y se recarga sola cuando se instala una
       (si hay una simulación en marcha, sólo avisa).
 
+## 1.5 — Rendimiento en equipos modestos (publicada)
+
+Motivo: en portátiles (Surface Book 2) la web se atascaba y el equipo se calentaba incluso en calidad baja.
+Lo que más costaba: pantalla de alta densidad (×2 = cuatro veces más píxeles), suavizado de bordes, nube
+volumétrica a pantalla completa, post-procesado, el desenfoque de fondo de los paneles (se recalcula en cada
+fotograma del mapa), dibujar sin parar aunque la simulación estuviera en pausa o terminada, y reenviar las capas
+de efectos al mapa varias veces por segundo durante la lluvia radiactiva.
+
+- [x] `src/perf.ts`: nivel de calidad común (Mínima 0,25 · Baja 0,5 · Alta 1 · Ultra 1,6) y detección de equipos poco
+      potentes (gráfica integrada o por software, ≤ 4 núcleos, ≤ 4 GB, pantalla táctil). En Auto se empieza en Baja
+      en esos equipos y en Alta en el resto; si la animación baja de 24 fps durante 2,5 s, baja un nivel en plena
+      simulación (la nube volumétrica se cambia por la de partículas) y lo recuerda (`bum:autoq`).
+- [x] Modo ligero (Baja y Mínima): mapa a 1 píxel por píxel CSS (¾ en Mínima), sin suavizado ni fundidos de rótulos
+      (al cargar), sin nube volumétrica (ni su textura de ruido), sin post-procesado, menos partículas, 30 fps como
+      máximo (`FxLayer.maxFps`), sin sombreado del relieve ni desenfoque de los paneles, sin recuento de edificios
+      del mapa; Mínima quita además el relieve y los edificios 3D. Visor 3D de la enciclopedia a 1×, 30 fps y parado
+      fuera de la vista; lluvia en pantalla con la mitad de gotas.
+- [x] Para todos: la escena sólo se redibuja si algo se mueve (reproducción, destello, sacudida, órbita o recorrido);
+      con la enciclopedia abierta, tampoco. Las capas de efectos (`Overlays.refresh`) llevan una firma por grupo
+      (anillos, lluvia radiactiva, marcas, incendio) y sólo se reenvían las que cambian, con el frente de la lluvia
+      en pasos del 2,5 %. Las capas de destello con mezcla de color se ocultan cuando no se ven.
+
 ## Más adelante
 
 - [ ] Varios idiomas (inglés y otros), elegidos según el idioma del sistema.

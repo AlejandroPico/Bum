@@ -95,6 +95,10 @@ export class WeatherLayer {
   private loading = false;
   private radarTimer = 0;
   onUpdate: (() => void) | null = null;
+  private _lite = false;
+  /** modo ligero: lluvia a menos resolución, con menos gotas y a 30 fotogramas por segundo */
+  get lite() { return this._lite; }
+  set lite(v: boolean) { if (v !== this._lite) { this._lite = v; this.resize(); } }
 
   constructor(map: maplibregl.Map, parent: HTMLElement) {
     this.map = map;
@@ -109,7 +113,7 @@ export class WeatherLayer {
 
   private resize() {
     const r = this.map.getContainer().getBoundingClientRect();
-    const d = Math.min(1.5, window.devicePixelRatio || 1);
+    const d = Math.min(this._lite ? 1 : 1.5, window.devicePixelRatio || 1);
     this.canvas.width = Math.round(r.width * d); this.canvas.height = Math.round(r.height * d);
     this.canvas.style.width = `${r.width}px`; this.canvas.style.height = `${r.height}px`;
     this.drops = [];
@@ -238,6 +242,7 @@ export class WeatherLayer {
   }
 
   private frame = (now: number) => {
+    if (this._lite && now - this.lastT < 30) { this.raf = requestAnimationFrame(this.frame); return; }
     const r = this.rainNow();
     const ctx = this.canvas.getContext('2d')!;
     const W = this.canvas.width, H = this.canvas.height;
@@ -246,7 +251,7 @@ export class WeatherLayer {
     const dt = Math.min(0.05, (now - this.lastT) / 1000);
     this.lastT = now;
     const k = Math.min(1, Math.log10(1 + r.mm) / Math.log10(26)); // 0,1 → 0,03 · 25 mm/h → 1
-    const count = Math.round((W * H) / (1600 * 900) * (r.snow ? 160 + 900 * k : 120 + 1400 * k));
+    const count = Math.round((W * H) / (1600 * 900) * (r.snow ? 160 + 900 * k : 120 + 1400 * k) * (this._lite ? 0.5 : 1));
     const pitch = this.map.getPitch() / 90;
     // el viento inclina las gotas según hacia dónde mira la cámara
     const L = this.local!;

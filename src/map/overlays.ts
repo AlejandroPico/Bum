@@ -269,14 +269,61 @@ export class Overlays {
   /** detonaciones adicionales de un ataque múltiple */
   extras: { fx: Effects; lat: number; lon: number }[] = [];
 
+  /** firma de lo que hay dibujado en cada grupo de capas: sólo se reenvía lo que cambia */
+  private keys: Record<string, string> = {};
+  /** extensión máxima de la lluvia radiactiva de cada escenario (m desde la zona cero) */
+  private foExt = new WeakMap<Effects, number>();
+  private falloutExtent(fx: Effects) {
+    let r = this.foExt.get(fx);
+    if (r === undefined) {
+      r = 0;
+      for (const c of fx.fallout) for (const p of c.polygons) for (const ring of p) for (const [e, n] of ring) r = Math.max(r, Math.hypot(e, n));
+      this.foExt.set(fx, r);
+    }
+    return r;
+  }
+  /** frente de deposición de la lluvia radiactiva (m) en el instante actual */
+  private falloutFront(fx: Effects) {
+    if (this.falloutT === Infinity) return Infinity;
+    const windKmh = Math.max(4, fx.windKmh);
+    const tS = this.falloutT * 3600 - this.falloutDelayS;
+    const f = tS <= 0 ? 0 : windKmh * (tS / 3600) * 1000 + fx.cloud.capRadiusM * Math.min(1, tS / Math.max(1, this.falloutDelayS * 2));
+    return f >= this.falloutExtent(fx) ? Infinity : f;
+  }
+  /** cuantiza una distancia en pasos de ~2,5 % (los cambios menores no se ven) */
+  private static qz(r: number) { return r === Infinity ? 'inf' : r <= 1 ? '0' : String(Math.round(Math.log(r) * 40)); }
+
   refresh() {
     const m = this.map;
     const src = (id: string) => m.getSource(id) as GeoJSONSource | undefined;
     if (!this.current) {
       for (const id of SOURCES) src(id)?.setData(empty());
+      this.keys = {};
       return;
     }
     const sets = [{ fx: this.current.fx, lat: this.current.lat, lon: this.current.lon, main: true }, ...this.extras.map((e) => ({ ...e, main: false }))];
+    // firmas de cada grupo (baratas de calcular): si no cambian, no se rehace ni se reenvía nada
+    const hid = [...this.hidden].sort().join(',');
+    const flags = `${this.showRings ? 1 : 0}${this.showFallout ? 1 : 0}${this.showMarks ? 1 : 0}${this.showDamage ? 1 : 0}|${hid}`;
+    const id0 = `${this.current.lat},${this.current.lon},${this.current.fx.energyKt},${sets.length}`;
+    let kRings = '', kFall = '', kScorch = '', kBurn = '';
+    for (const S of sets) {
+      kRings += S.fx.rings.map((r) => (this.reached(r, S.fx) >= r.radiusM * 0.98 ? 1 : 0)).join('') + ';';
+      kFall += (this.falloutT * 3600 > this.falloutDelayS ? Overlays.qz(this.falloutFront(S.fx)) : '-') + ';';
+      const ej = S.fx.rings.filter((r) => r.group === 'ejecta').sort((a, b) => a.radiusM - b.radiusM).pop();
+      kScorch += `${Overlays.qz(Math.min(this.revealR, S.fx.rings.find((r) => r.id === 'burn3')?.radiusM ?? 0))},${ej ? Overlays.qz(Math.min(ej.radiusM, this.reached(ej, S.fx))) : ''},${this.simT >= this.gateT ? 1 : 0};`;
+      if (S.fx.fires) kBurn += (this.simT === Infinity ? 'inf' : Math.round(Math.min(12, this.simT / 3600) * 20)) + ';';
+    }
+    const want: Record<string, string> = {
+      rings: `${id0}|${flags}|${this.highlight}|${kRings}`,
+      fallout: `${id0}|${flags}|${kFall}`,
+      scorch: `${id0}|${flags}|${kScorch}|${kRings}`,
+      burn: `${id0}|${flags}|${kBurn}|${this.simT >= this.gateT ? 1 : 0}`,
+    };
+    const doRings = want.rings !== this.keys.rings, doFall = want.fallout !== this.keys.fallout;
+    const doScorch = want.scorch !== this.keys.scorch, doBurn = want.burn !== this.keys.burn;
+    if (!doRings && !doFall && !doScorch && !doBurn) return;
+    this.keys = want;
     const rings: GeoJSON.Feature[] = [];
     const labels: GeoJSON.Feature[] = [];
     const lines: GeoJSON.Feature[] = [];
@@ -288,7 +335,7 @@ export class Overlays {
     const burn: GeoJSON.Feature[] = [];
     for (const S of sets) {
       const { fx, lat, lon } = S;
-      const visible = fx.rings.filter((r) => !this.hidden.has(r.id) && this.showRings && !r.global);
+      const visible = doRings ? fx.rings.filter((r) => !this.hidden.has(r.id) && this.showRings && !r.global) : [];
       // de mayor a menor para que los pequeños queden encima
       const sorted = [...visible].sort((a, b) => b.radiusM - a.radiusM);
       sorted.forEach((r: Ring, i) => {
@@ -312,11 +359,9 @@ export class Overlays {
       });
 
       // lluvia radiactiva (se revela a medida que avanza el viento)
-      if ((this.showFallout || this.showMarks) && !this.hidden.has('fallout') && this.falloutT * 3600 > this.falloutDelayS) {
-        const windKmh = Math.max(4, fx.windKmh);
+      if (doFall && (this.showFallout || this.showMarks) && !this.hidden.has('fallout') && this.falloutT * 3600 > this.falloutDelayS) {
         // las partículas empiezan a caer cuando la nube ya ha subido y se ha extendido
-        const tS = this.falloutT * 3600 - this.falloutDelayS;
-        const front = this.falloutT === Infinity ? Infinity : tS <= 0 ? 0 : windKmh * (tS / 3600) * 1000 + fx.cloud.capRadiusM * Math.min(1, tS / Math.max(1, this.falloutDelayS * 2));
+        const front = this.falloutFront(fx);
         for (const c of fx.fallout) {
           if (this.hidden.has(`fo:${c.level}`)) continue;
           for (const poly of c.polygons) {
@@ -340,7 +385,7 @@ export class Overlays {
 
       // terreno chamuscado y otras marcas
       const scorchR = Math.min(this.revealR, fx.rings.find((r) => r.id === 'burn3')?.radiusM ?? 0);
-      if (this.showMarks && this.simT >= this.gateT) {
+      if ((doScorch || doBurn) && this.showMarks && this.simT >= this.gateT) {
         const steps: { r: number; color: string; opacity: number }[] = [];
         if (scorchR > 0) {
           steps.push({ r: scorchR, color: '#1a0f08', opacity: 0.35 });
@@ -383,7 +428,7 @@ export class Overlays {
       }
 
       // campo del pulso electromagnético de gran altitud ("sonrisa")
-      if (fx.emp && this.showRings && !this.hidden.has('emp')) {
+      if (doRings && fx.emp && this.showRings && !this.hidden.has('emp')) {
         for (const lv of [25, 12.5, 6]) {
           if (fx.emp.peakKVm < lv) continue;
           const ring: [number, number][] = [];
@@ -398,15 +443,20 @@ export class Overlays {
         }
       }
     }
-    src('fx-rings')?.setData({ type: 'FeatureCollection', features: rings });
-    src('fx-ring-lines')?.setData({ type: 'FeatureCollection', features: lines });
-    src('fx-labels')?.setData({ type: 'FeatureCollection', features: labels });
-    src('fx-fallout')?.setData({ type: 'FeatureCollection', features: this.showFallout ? ff : [] });
-    src('fx-deposit')?.setData({ type: 'FeatureCollection', features: this.showMarks ? dep : [] });
-    src('fx-fallout-labels')?.setData({ type: 'FeatureCollection', features: flab });
-    src('fx-scorch')?.setData({ type: 'FeatureCollection', features: sc });
-    src('fx-emp')?.setData({ type: 'FeatureCollection', features: emp });
-    src('fx-burn')?.setData({ type: 'FeatureCollection', features: burn });
+    const fc = (f: GeoJSON.Feature[]): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: f });
+    if (doRings) {
+      src('fx-rings')?.setData(fc(rings));
+      src('fx-ring-lines')?.setData(fc(lines));
+      src('fx-labels')?.setData(fc(labels));
+      src('fx-emp')?.setData(fc(emp));
+    }
+    if (doFall) {
+      src('fx-fallout')?.setData(fc(this.showFallout ? ff : []));
+      src('fx-deposit')?.setData(fc(this.showMarks ? dep : []));
+      src('fx-fallout-labels')?.setData(fc(flab));
+    }
+    if (doScorch) src('fx-scorch')?.setData(fc(sc));
+    if (doBurn) src('fx-burn')?.setData(fc(burn));
   }
 
   private lastBuild = '';

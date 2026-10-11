@@ -123,8 +123,10 @@ function style(): StyleSpecification {
   };
 }
 
-export function createMap(container: HTMLElement, center: [number, number]): MLMap {
+export function createMap(container: HTMLElement, center: [number, number], opts: { lite?: boolean; pixelRatio?: number } = {}): MLMap {
   const map = new maplibregl.Map({
+    // en equipos poco potentes: sin suavizado de bordes, menos píxeles y sin fundidos de rótulos
+    ...(opts.pixelRatio ? { pixelRatio: opts.pixelRatio } : {}),
     container,
     style: style(),
     center,
@@ -132,9 +134,9 @@ export function createMap(container: HTMLElement, center: [number, number]): MLM
     pitch: 62,
     bearing: -20,
     maxPitch: 89,
-    canvasContextAttributes: { antialias: true, preserveDrawingBuffer: false },
+    canvasContextAttributes: { antialias: !opts.lite, preserveDrawingBuffer: false, powerPreference: 'high-performance' } as never,
     attributionControl: { compact: true },
-    fadeDuration: 150,
+    fadeDuration: opts.lite ? 0 : 150,
   });
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
   return map;

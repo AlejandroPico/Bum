@@ -4,3 +4,5 @@ dist/
 *.log
 .vite/
 Claude outputs/
+*.tgz
+*.bundle

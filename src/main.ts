@@ -25,6 +25,7 @@ import { heatGrid, type HeatKind } from './physics/heat';
 import { HeatLayer } from './map/heat';
 import { Tour } from './tour';
 import { WeatherLayer } from './map/weather';
+import { perf, detectLowPower, pixelRatioFor, maxFpsFor } from './perf';
 import type { Weather } from './ui/geo';
 import { assessPoint, type SafetyReport } from './physics/safety';
 import { nearestCity, haversineKm, setRealPopulation } from './data/cities';
@@ -44,11 +45,28 @@ import { h, ICONS, toast, fmtTime, setRangeFill } from './ui/dom';
 const state: AppState = defaultState();
 readHash(state);
 
-const map = createMap(document.getElementById('map')!, [state.target.lon, state.target.lat]);
+// rendimiento: nivel inicial según las preferencias guardadas o, en automático, según el equipo
+const AUTOQ_KEY = 'bum:autoq';
+/** nivel automático: el del equipo, o uno más bajo si una simulación anterior iba a saltos */
+function autoLevel() {
+  let q = perf.lowPower ? 0.5 : 1;
+  try { const a = +(localStorage.getItem(AUTOQ_KEY) ?? ''); if (a === 0.25 || a === 0.5) q = Math.min(q, a); } catch { /* sin almacenamiento */ }
+  return q;
+}
+{
+  detectLowPower();
+  let pr: { autoQ?: boolean; quality?: number } = {};
+  try { pr = JSON.parse(localStorage.getItem('bum:mapprefs') ?? '{}'); } catch { /* sin almacenamiento */ }
+  const auto = pr.autoQ ?? true;
+  perf.q = auto ? autoLevel() : [0.25, 0.5, 1, 1.6].includes(+(pr.quality ?? 1)) ? +(pr.quality ?? 1) : 1;
+}
+document.body.classList.toggle('lite', perf.lite);
+const map = createMap(document.getElementById('map')!, [state.target.lon, state.target.lat], { lite: perf.lite, pixelRatio: pixelRatioFor(perf.q) });
 const overlays = new Overlays(map);
 // tiempo real en el mapa (nubes, radar, lluvia en pantalla y niebla)
 const weatherLayer: WeatherLayer = new WeatherLayer(map, document.getElementById('app')!);
 weatherLayer.enabled = state.view.weather;
+weatherLayer.lite = perf.lite;
 weatherLayer.target = { lat: state.target.lat, lon: state.target.lon };
 weatherLayer.onUpdate = () => { if (mapLoaded) atmosphere = tod(); };
 // el motor 3D (three.js) se descarga en paralelo con el mapa y se instala al cargarse éste
@@ -59,7 +77,9 @@ const fxReady = import('./fx/engine').then((m) => {
   fxLayer = new m.FxLayer();
   fxLayer.onFrame = onFxFrame;
   tmpColor = new m.Color();
-  m.createCloudNoise3D(64).then((t) => { cloudNoise = t; });
+  fxLayer.maxFps = maxFpsFor(perf.q);
+  // la textura de ruido 3D sólo hace falta para la nube volumétrica (calidad alta)
+  if (!perf.lite) m.createCloudNoise3D(64).then((t) => { cloudNoise = t; });
   return m;
 });
 const audio = new Audio();
@@ -88,6 +108,10 @@ interface Run {
   orbit: { bearing: number; final: boolean } | null;
   flashReal: number;
   wideDone: boolean;
+  /** cambios de la nube volumétrica por la de partículas (paso a modo ligero) */
+  swaps: (() => void)[];
+  /** desde cuándo va lenta la animación (calidad automática) */
+  slowSince: number;
   /** detonaciones adicionales (ataque múltiple) */
   extras: { fx: Effects; plan: FxPlan; domes: Domes; fires: Fires; lat: number; lon: number }[];
 }
@@ -122,6 +146,7 @@ try {
   if (!('reduceFlash' in pr)) state.view.reduceFlash = matchMedia('(prefers-reduced-motion: reduce)').matches;
 } catch { /* sin almacenamiento */ }
 if (!['day', 'evening', 'night', 'auto'].includes(state.view.theme)) state.view.theme = 'auto';
+state.view.quality = perf.q;
 function savePrefs() {
   const V = state.view;
   try { localStorage.setItem(PREF_KEY, JSON.stringify({ basemap: V.basemap, fxOpacity: V.fxOpacity, theme: V.theme, terrain3d: V.terrain3d, buildings: V.buildings, mapLabels: V.mapLabels, tests: V.tests, post: V.post, autoQ: V.autoQ, quality: V.quality, realPop: V.realPop, reduceFlash: V.reduceFlash, weather: V.weather, radar: V.radar })); } catch { /* sin almacenamiento */ }
@@ -348,7 +373,7 @@ async function refreshHeat(explicit = false) {
     if (token !== heatToken) return;
   }
   await new Promise((r) => setTimeout(r, 0));
-  const g = heatGrid(k, nuclear ? strikes : [], area);
+  const g = heatGrid(k, nuclear ? strikes : [], area, perf.lite ? 150 : 220);
   if (token !== heatToken) return;
   if (!g || g.max <= 0) {
     heatLayer.set(null);
@@ -394,7 +419,8 @@ popovers.push({ el: layersPanel, btn: layersBtn });
 
 // edificios visibles: recuento uno a uno por sobrepresión con las teselas ya cargadas
 function countVisibleBuildings() {
-  if (!run || run.fx.release || run.fx.volcano || !map.getLayer('buildings') || map.getZoom() < 13 || !state.view.buildings) { results.setViewBuildings(null); return; }
+  // en el modo ligero no se recorren los edificios del mapa (queda el recuento del servidor)
+  if (perf.lite || !run || run.fx.release || run.fx.volcano || !map.getLayer('buildings') || map.getZoom() < 13 || !state.view.buildings) { results.setViewBuildings(null); return; }
   const fx = run.fx, lat = run.lat, lon = run.lon;
   const feats = map.querySourceFeatures('omt', { sourceLayer: 'building' });
   const seen = new Set<string>();
@@ -734,7 +760,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.5';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -772,6 +798,7 @@ function openAbout() {
         feat('Efectos y víctimas.', 'Bola de fuego, onda expansiva, quemaduras, radiación, lluvia radiactiva, incendios, pulso electromagnético, ceniza y contaminación, con la población real de la zona, los hospitales y servicios afectados y cuánto protege cada tipo de refugio.'),
         feat('Tiempo real.', 'El viento de las próximas horas, la lluvia, el relieve y la hora del lugar cambian el resultado, y el mapa muestra las nubes, la lluvia, la niebla y el radar de precipitación de ahora mismo; una línea de tiempo deja ver la explosión a cámara lenta o el avance de la nube durante días.'),
         feat('Mapas de calor y recorrido de cine.', 'Mapas de calor de la población, de las víctimas y de las muertes por la lluvia radiactiva, y un recorrido automático con planos de cine y rótulos que cuenta la catástrofe de principio a fin.'),
+        feat('Para cualquier equipo.', 'En portátiles y tabletas se activa sola una calidad ligera que mantiene la animación fluida, y si aun así va a saltos baja un poco más en plena simulación; también se puede elegir a mano.'),
         feat('Enciclopedia.', 'Cientos de artículos sobre la historia, la ciencia y los efectos de estas armas y catástrofes, con esquemas animados y modelos 3D que se pueden desmontar.'),
       ),
       h('p', { class: 'about-note' }, 'Herramienta divulgativa y educativa: las cifras son estimaciones a partir de modelos científicos públicos y no sustituyen a los planes oficiales de protección civil.'),
@@ -794,11 +821,11 @@ function applyFxOpacity() {
 function applyMapPrefs() {
   const V = state.view;
   setBasemap(map, (BASEMAPS.some((b) => b.id === V.basemap) ? V.basemap : 'relieve') as BasemapId);
-  map.setTerrain(V.terrain3d ? { source: 'terrain', exaggeration: 1 } : null);
-  if (map.getLayer('buildings')) map.setLayoutProperty('buildings', 'visibility', V.buildings ? 'visible' : 'none');
+  applyPerfLayers();
   if (map.getLayer('place-labels')) map.setLayoutProperty('place-labels', 'visibility', V.mapLabels ? 'visible' : 'none');
   if (map.getLayer('vb-labels')) map.setLayoutProperty('vb-labels', 'visibility', V.mapLabels ? 'visible' : 'none');
   testsLayer.setVisible(V.tests);
+  applyHillshade();
   atmosphere = tod();
   applyFxOpacity();
   savePrefs();
@@ -917,6 +944,9 @@ for (const ev of ['dragstart', 'rotatestart', 'pitchstart', 'wheel'] as const) {
 
 function applyView() {
   const V = state.view;
+  if (!V.autoQ) { try { localStorage.removeItem(AUTOQ_KEY); } catch { /* sin almacenamiento */ } }
+  const wantQ = V.autoQ ? autoLevel() : V.quality;
+  if (wantQ !== perf.q) applyPerf(wantQ);
   overlays.showRings = V.rings;
   overlays.showFallout = V.fallout;
   overlays.showDamage = V.damage;
@@ -1201,10 +1231,10 @@ async function detonate() {
     fxLayer.setOrigin(lon, lat, elev);
     fxLayer.extentM = Math.max(...fx.rings.filter((r) => r.dome).map((r) => r.radiusM), fx.cloud.capRadiusM * 2.5, fx.cloud.topM * 1.5, 1000) + spread * 2;
     (map as any).transform?._calcMatrices?.();
-    if (state.view.autoQ) state.view.quality = autoQ.fps < 22 ? 0.5 : 1;
-    const q = state.view.quality;
+    const q = perf.q;
+    const volumetric = !perf.lite;
     // espera a la textura de ruido 3D (se genera en segundo plano al cargar)
-    for (let i = 0; i < 60 && !cloudNoise; i++) await new Promise((r) => setTimeout(r, 50));
+    if (volumetric) for (let i = 0; i < 60 && !cloudNoise; i++) await new Promise((r) => setTimeout(r, 50));
 
     /** crea los efectos 3D de una detonación desplazada (e, n) metros respecto a la principal */
     const build = (fxi: Effects, pl: FxPlan, la: number, lo: number, primary: boolean) => {
@@ -1227,21 +1257,32 @@ async function detonate() {
       fires.object.visible = state.view.fires;
       mods.push(fires);
       // presas y tormentas solares no tienen nube, onda ni bola de fuego
+      let swap: (() => void) | null = null;
       if (!fxi.dam && !fxi.solar && !fxi.war) {
-        if (cloudNoise) mods.push(new FX.VolumeCloud(pl, cloudNoise, primary ? q : Math.min(q, 0.6)));
-        mods.push(new FX.Mushroom(pl, puffTex!, primary ? q : q * 0.5, !!cloudNoise));
+        const vol = volumetric && cloudNoise ? new FX.VolumeCloud(pl, cloudNoise, primary ? q : Math.min(q, 0.6)) : null;
+        if (vol) mods.push(vol);
+        const mush = new FX.Mushroom(pl, puffTex!, primary ? q : q * 0.5, !!vol);
+        mods.push(mush);
+        // paso a modo ligero en plena simulación: la nube volumétrica se cambia por partículas
+        if (vol) swap = () => {
+          fxLayer.remove(vol); fxLayer.remove(mush);
+          const m2 = new FX.Mushroom(pl, puffTex!, primary ? 0.5 : 0.25, false);
+          fxLayer.add(m2); m2.object.position.set(e, el, -n); m2.object.updateMatrixWorld();
+        };
         mods.push(new FX.Shock(pl));
         if (FX.Rubble.wanted(pl)) mods.push(new FX.Rubble(pl, primary ? q : q * 0.5));
         mods.push(new FX.Fireball(pl));
       }
       for (const m of mods) { fxLayer.add(m); m.object.position.set(e, el, -n); m.object.updateMatrixWorld(); }
-      return { domes, fires };
+      return { domes, fires, swap };
     };
     const main = build(fx, plan, lat, lon, true);
+    const swaps: (() => void)[] = main.swap ? [main.swap] : [];
     const extras: Run['extras'] = [];
     for (let k = 1; k < comp.length; k++) {
       const pk = new FxPlan(comp[k].fx, env);
       const b = build(comp[k].fx, pk, comp[k].st.lat, comp[k].st.lon, false);
+      if (b.swap) swaps.push(b.swap);
       extras.push({ fx: comp[k].fx, plan: pk, domes: b.domes, fires: b.fires, lat: comp[k].st.lat, lon: comp[k].st.lon });
     }
 
@@ -1306,7 +1347,7 @@ async function detonate() {
       fx, plan, lat, lon, t: plan.isAsteroid ? -plan.entryDuration : 0, playing: true, speed: 1, lastReal: performance.now(),
       boomDone: false, flashDone: false, obsArrival: plan.shockTime(Math.hypot(dObs, plan.h)), obsPsi: fx.pressurePsiAt(dObs),
       domes: main.domes, beats: 0, userCam: !state.view.cinematic || comp.length > 1 || !!fx.dam || !!fx.solar || !!fx.war, lastOverlay: 0, skyFlash: false, rate: 1, orbit: null, flashReal: -1, wideDone: false,
-      extras,
+      extras, swaps, slowSince: 0,
     };
     const ev: { t: number; label: string }[] = [{ t: plan.tMax, label: 'Destello' }];
     if (plan.psi5R) ev.push({ t: plan.shockTime(Math.hypot(plan.psi5R, plan.h)), label: 'Onda 5 psi' });
@@ -1400,8 +1441,11 @@ function photoWarning() {
   setTimeout(() => box.remove(), 30000);
 }
 function setFlash(a: number, g: number) {
+  // con opacidad 0 se quitan del todo: las capas con mezcla de color cuestan aunque no se vean
   flashEl.style.opacity = String(a);
   gradeEl.style.opacity = String(g);
+  flashEl.style.display = a > 0.002 ? '' : 'none';
+  gradeEl.style.display = g > 0.002 ? '' : 'none';
 }
 
 let shakeT = 0, shakeI = 0;
@@ -1530,19 +1574,31 @@ function onFxFrame(ctx: FrameCtx) {
     }
   }
 
-  // calidad automática: mide los fotogramas por segundo para elegir la calidad de la próxima
-  // simulación (nunca baja la resolución del mapa: los textos y las líneas se verían borrosos)
-  if (state.view.autoQ && R.playing && now - autoQ.last > 1500) {
+  // calidad automática: si la animación va a saltos (menos de 24 fotogramas por segundo durante
+  // unos segundos), baja un nivel en plena simulación y lo recuerda para la próxima vez
+  if (R.playing && now - autoQ.last > 1000) {
     autoQ.last = now;
     autoQ.fps = 1000 / Math.max(1, fxLayer.frameMs);
     sidebar.qualVal.textContent = `${Math.round(autoQ.fps)} fps`;
+    if (state.view.autoQ && perf.q > 0.25 && !document.hidden) {
+      if (autoQ.fps < 24) {
+        if (!R.slowSince) R.slowSince = now;
+        else if (now - R.slowSince > 2500) {
+          R.slowSince = 0;
+          const q = perf.q > 0.5 ? 0.5 : 0.25;
+          try { localStorage.setItem(AUTOQ_KEY, String(q)); } catch { /* sin almacenamiento */ }
+          applyPerf(q);
+          toast(q === 0.5 ? 'Calidad baja para que la animación vaya fluida' : 'Calidad mínima para que la animación vaya fluida', 3000);
+        }
+      } else R.slowSince = 0;
+    }
   }
 
   // post-procesado
   const post = fxLayer.post;
-  post.enabled = state.view.post;
+  post.enabled = state.view.post && !perf.lite;
   const pp = post.params;
-  if (state.view.post && t > 0) {
+  if (post.enabled && t > 0) {
     pp.fb.set(0, P.capZ(t), 0);
     pp.fbR = Math.max(P.fireballRadius(t), 1);
     const hk = Math.min(1.2, heat);
@@ -1555,7 +1611,48 @@ function onFxFrame(ctx: FrameCtx) {
     pp.shockK = gR > 0 && lim > 0 && gR < lim ? Math.pow(1 - gR / lim, 0.7) * (P.buried?.contained ? 0 : 1) : 0;
   } else { pp.flare = 0; pp.haze = 0; pp.bloom = 0; pp.shockK = 0; }
 
-  fxLayer.animating = true;
+  // sólo se sigue dibujando si algo se mueve: en pausa o al terminar, el mapa queda quieto
+  // (y no gasta) hasta que se toca la cámara; con la enciclopedia abierta, tampoco se dibuja
+  const flashing = R.flashReal > 0 && now - R.flashReal < 7000;
+  const shaking = shakeI > 0 && (now - shakeT) < 3000;
+  fxLayer.animating = !document.body.classList.contains('enc-open') && (R.playing || flashing || shaking || (!!R.orbit && !R.userCam) || tour.active);
+}
+// al cerrar la enciclopedia se reanuda el dibujo
+new MutationObserver(() => { if (run && !document.body.classList.contains('enc-open') && fxLayer) { fxLayer.animating = true; map.triggerRepaint(); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+/** aplica un nivel de calidad al momento (resolución del mapa, efectos, límite de fotogramas) */
+function applyPerf(q: number) {
+  const wasLite = perf.lite;
+  perf.q = q;
+  state.view.quality = q;
+  document.body.classList.toggle('lite', perf.lite);
+  try { map.setPixelRatio(pixelRatioFor(q)); } catch { /* versión sin cambio de resolución */ }
+  if (fxLayer) fxLayer.maxFps = maxFpsFor(q);
+  weatherLayer.lite = perf.lite;
+  if (perf.lite && !wasLite && run) { for (const f of run.swaps) f(); run.swaps = []; }
+  if (!perf.lite && !cloudNoise && FX) FX.createCloudNoise3D(64).then((t) => { cloudNoise = t; });
+  if (mapLoaded) applyPerfLayers();
+  sidebar.setQuality?.(state.view.autoQ ? 'auto' : String(q));
+  savePrefs();
+  map.triggerRepaint();
+}
+/**
+ * Capas que dependen de la calidad: en Mínima no hay relieve 3D ni edificios 3D (son lo que más
+ * cuesta dibujar al mapa); el sombreado del relieve se quita en todo el modo ligero.
+ */
+function applyPerfLayers() {
+  const V = state.view, min = perf.q <= 0.25;
+  const wantT = V.terrain3d && !min;
+  if (!!map.getTerrain() !== wantT) map.setTerrain(wantT ? { source: 'terrain', exaggeration: 1 } : null);
+  if (map.getLayer('buildings')) map.setLayoutProperty('buildings', 'visibility', V.buildings && !min ? 'visible' : 'none');
+  applyHillshade();
+}
+/** el sombreado del relieve es otra capa de relieve que dibujar: fuera en el modo ligero */
+function applyHillshade() {
+  if (!map.getLayer('hillshade')) return;
+  const base = state.view.basemap;
+  const want = !perf.lite && (base === 'relieve' || base === 'topo' || base === 'politico');
+  if ((map.getLayoutProperty('hillshade', 'visibility') !== 'none') !== want) map.setLayoutProperty('hillshade', 'visibility', want ? 'visible' : 'none');
 }
 
 // ---------------------------------------------------------------------------
