@@ -217,7 +217,7 @@ export interface Effects {
   /** guerra a gran escala e invierno nuclear */
   war?: { preset: string; sides: [string, string]; warheads: number; yieldKt: number; sootTg: number; directDeathsM: number; famineDeathsM: number; coolingC: number; precipPct: number; caloriesPct: number; targets: [number, number, string][]; series: { t: number; dT: number; dP: number }[] };
   /** trayectoria del misil (si se eligió una base de lanzamiento) */
-  missile?: { site: string; country: string; rangeKm: number; flightMin: number; apogeeKm: number; reentryKms: number; warningMin: number; boostMin: number };
+  missile?: { site: string; country: string; rangeKm: number; flightMin: number; apogeeKm: number; reentryKms: number; warningMin: number; boostMin: number; profile?: 'ballistic' | 'hgv' | 'cruise' | 'aircraft'; profileName?: string; cruiseKm?: number; mirv?: number; targets?: number };
   /** hora de llegada (h) de la lluvia radiactiva a un punto */
   falloutArrivalH?: (eM: number, nM: number) => number;
 }

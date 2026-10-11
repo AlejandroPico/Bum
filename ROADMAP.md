@@ -131,8 +131,54 @@ de efectos al mapa varias veces por segundo durante la lluvia radiactiva.
       (anillos, lluvia radiactiva, marcas, incendio) y sólo se reenvían las que cambian, con el frente de la lluvia
       en pasos del 2,5 %. Las capas de destello con mezcla de color se ocultan cuando no se ven.
 
-## Más adelante
+## 1.6 — Preparación y menús (publicada con la 1.7)
 
+- [x] 1.6a Calidad en automático para todos: al llegar a esta versión se olvida la calidad elegida antes
+      (`pv: 2` en `bum:mapprefs`); se puede cambiar a mano en el menú del ojo.
+- [x] 1.6b Botón «Visualización y calidad» (ojo) en la barra de arriba: plano/globo, qué se ve (cúpulas, anillos,
+      lluvia radiactiva, marcas, daños, incendios, etiquetas), sonido, cámara cinemática, post-procesado y calidad.
+      Sale del panel izquierdo (`Sidebar.viewEl`).
+- [x] 1.6c Panel «Preparando la simulación» (`ui/prep.ts`): pasos con su estado (efectos, población real, mapa y
+      relieve de cada plano) y barra de progreso; se visitan tras el panel los planos que va a usar la cámara
+      (vuelo del misil, encuadre inicial, planos cinemáticos, nube, lluvia radiactiva) esperando a que el mapa cargue
+      sus teselas (`prefetchCams`), y la simulación empieza sola al terminar. El recorrido cinematográfico hace lo
+      mismo con sus planos (incluido el testigo a pie de calle).
+
+## 1.7 — Vuelo del arma (publicada)
+
+- [x] 1.7a El vuelo es parte de la línea de tiempo: el reloj empieza en el lanzamiento (T−) y llega a la detonación
+      en unos 12 s reales a ×1, con pausa, rebobinado, velocidad y marcas (lanzamiento, separación, reentrada).
+      Rótulo con el tiempo que falta, la fase y la altura; ruta prevista tenue y tramo recorrido; al final la cámara
+      va sola hacia el objetivo.
+- [x] 1.7b Tipos de vuelo (`data/flight.ts`), elegidos según el arma o a mano («Tipo de vuelo»): balístico (arco por el
+      espacio), planeador hipersónico (Avangard, DF-17: cohete hasta ~100 km y planeo a ~55 km maniobrando), misil de
+      crucero (Kh-102, Tomahawk: a ~60 m del suelo, subsónico, ruta con desvíos) y bombardero (bombas de gravedad).
+- [x] 1.7c Ojivas múltiples (MIRV): con varios objetivos a menos de ~1.500 km entre sí, un solo misil sube, el bus se
+      separa a mitad del vuelo y cada ojiva va a su objetivo; si están más separados, un misil por objetivo.
+
+Pendiente menor: la trayectoria se dibuja sobre el mapa (con su altura en el rótulo), no como arco en 3D; las ojivas
+de un MIRV llegan a la vez.
+
+## Propuestas para las próximas versiones
+
+Cada una se puede hacer por separado; el orden es una sugerencia.
+
+- [ ] 1.8 Recorrido narrado: voz en español con la síntesis del navegador (sin servidores), sonido de ambiente y
+      planos del vuelo del misil (cámara que lo sigue) y de los ataques múltiples.
+- [ ] 1.9 Defensa antimisiles: interceptores (GMD, Aegis SM-3, Arrow 3, S-500…) desde bases reales, probabilidad de
+      interceptación según el tipo de arma (los planeadores y los MIRV la complican) y animación del intento.
+- [ ] 2.0 Las pruebas nucleares en el tiempo: animación de las más de 2.000 pruebas de 1945 a 2017 sobre el mapa, año a
+      año, con un contador por país y un sonido por prueba (al estilo de la obra de Isao Hashimoto).
+- [ ] 2.1 Refugio más cercano: estaciones de metro, aparcamientos subterráneos y sótanos públicos de OpenStreetMap
+      cerca de tu punto (en «¿Estoy a salvo?»), con el tiempo andando y si llegarías antes que la onda o la lluvia.
+- [ ] 2.2 Escalada: el contraataque y la respuesta, paso a paso, con los vuelos de los misiles de cada bando y el
+      balance acumulado (enlaza con la guerra a gran escala y el invierno nuclear).
+- [ ] 2.3 «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
+      fuego sobre tu horizonte, según dónde estés.
+- [ ] 2.4 Hospitales y sanidad: camas y hospitales de la zona frente al número de heridos y quemados (cuántos quedarían
+      sin atender), con los hospitales destruidos marcados en el mapa.
+- [ ] 2.5 Días después: línea de tiempo de las semanas siguientes (síndrome de radiación, agua, electricidad, ayuda
+      exterior, regreso a la zona) con lo que se sabe de Hiroshima, Chernóbil y Fukushima.
 - [ ] Varios idiomas (inglés y otros), elegidos según el idioma del sistema.
 
 ## Descartado por ahora

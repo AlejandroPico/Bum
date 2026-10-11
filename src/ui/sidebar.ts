@@ -1,5 +1,6 @@
 import { WAR_PRESETS } from '../data/war';
-import { LAUNCH_SITES, greatCircleKm, ballistic, type LaunchSite } from '../data/launch';
+import { LAUNCH_SITES, type LaunchSite } from '../data/launch';
+import { planFlight, profileFor } from '../data/flight';
 import { h, setRangeFill, ICONS, toast } from './dom';
 import { NUKE_PRESETS, ASTEROID_PRESETS, COMPOSITIONS } from '../data/presets';
 import { parseCoords, fetchWeather, type Weather } from './geo';
@@ -52,6 +53,8 @@ export interface AppState {
   multi: { on: boolean; strikes: Strike[] };
   /** base de lanzamiento del misil (vacío: sin trayectoria) */
   launch: string;
+  /** trayectoria: automática según el arma o una elegida */
+  flightProfile: 'auto' | 'ballistic' | 'hgv' | 'cruise' | 'aircraft';
 }
 
 export interface Strike { lat: number; lon: number; label: string; sc: Scenario; azimuth?: number }
@@ -66,6 +69,7 @@ export function defaultState(): AppState {
     view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1, basemap: 'relieve', fxOpacity: 1, forceDay: false, terrain3d: true, buildings: true, mapLabels: true, autoQ: true, post: true, realPop: true, tests: false, theme: 'auto', reduceFlash: false, heat: 'off', weather: true, radar: false },
     live: true,
     launch: '',
+    flightProfile: 'auto',
     other: { type: 'reactor', release: { kind: 'release', name: 'Chernóbil (1986)', source: 'reactor', isotope: 'Cs-137', activityTBq: 85000, heightM: 1000, durationH: 240 }, volcano: { kind: 'volcano', name: 'Yellowstone (supererupción)', vei: 8, volumeMul: 2.5 }, dam: { kind: 'dam', name: 'Presa de las Tres Gargantas (China)', volumeHm3: 39300, heightM: 181 }, solar: { kind: 'solar', name: 'Evento Carrington (1859)', dstNt: -1200 }, war: { kind: 'war', name: 'India–Pakistán: 100 armas de 15 kt', preset: 'inpk-5' } },
     multi: { on: false, strikes: [] },
   };
@@ -346,6 +350,7 @@ export class Sidebar {
       const [gi, ii] = presetSel.value.split(':').map(Number);
       const p = NUKE_PRESETS[gi].items[ii];
       Object.assign(nk, { name: p.name, yieldKt: p.yieldKt, fission: p.fission, burst: p.burst, heightM: p.heightM, chemical: !!p.chemical });
+      this.updLaunch();
       (chemTg.querySelector('input') as HTMLInputElement).checked = !!p.chemical;
       fisR.value = String(p.fission * 100);
       hIn.value = String(p.heightM);
@@ -376,14 +381,27 @@ export class Sidebar {
       launchSel.append(g);
     }
     const launchNote = h('div', { class: 'note' });
+    // tipo de trayectoria: automático según el arma, o uno elegido
+    const profSel = h('select') as HTMLSelectElement;
+    for (const [v, l] of [['auto', 'Según el arma'], ['ballistic', 'Misil balístico (arco por el espacio)'], ['hgv', 'Planeador hipersónico (Avangard, DF-17)'], ['cruise', 'Misil de crucero (vuelo rasante)'], ['aircraft', 'Bombardero (bomba de gravedad)']] as const) profSel.append(h('option', { value: v }, l));
+    profSel.value = S.flightProfile;
+    const profField = field('Tipo de vuelo', null, profSel);
     const updLaunch = () => {
       const s = LAUNCH_SITES.find((x) => x.id === S.launch);
       launchSel.value = s ? s.id : '';
+      profField.style.display = s ? '' : 'none';
       if (!s) { launchNote.textContent = ''; return; }
-      const d = greatCircleKm(s.lat, s.lon, S.target.lat, S.target.lon), b = ballistic(d);
-      launchNote.textContent = `${s.note} Distancia ${Math.round(d).toLocaleString('es-ES')} km · vuelo de unos ${Math.round(b.flightMin)} min · apogeo ${Math.round(b.apogeeKm).toLocaleString('es-ES')} km.`;
+      const prof = S.flightProfile === 'auto' ? profileFor(S.nuke.name) : S.flightProfile;
+      const multi = S.multi.on && S.multi.strikes.length > 1;
+      const targets = multi ? S.multi.strikes.map((x) => ({ lat: x.lat, lon: x.lon })) : [{ lat: S.target.lat, lon: S.target.lon }];
+      const F = planFlight(prof, s, targets);
+      const dur = F.flightMin >= 90 ? `${Math.floor(F.flightMin / 60)} h ${Math.round(F.flightMin % 60)} min` : `${Math.round(F.flightMin)} min`;
+      const alt = F.profile === 'ballistic' ? `apogeo ${Math.round(F.apogeeKm).toLocaleString('es-ES')} km` : F.profile === 'hgv' ? `planeo a unos ${F.cruiseKm} km de altura` : F.profile === 'cruise' ? 'a unos 60 m del suelo' : 'a unos 11 km de altura';
+      const mv = F.mirv ? ` · un solo misil con ${F.mirv} ojivas (MIRV)` : multi && F.profile === 'ballistic' ? ' · objetivos demasiado separados para un solo misil: uno por objetivo' : '';
+      launchNote.textContent = `${s.note} ${F.name}: ${Math.round(F.rangeKm).toLocaleString('es-ES')} km · vuelo de unos ${dur} · ${alt}${mv}.`;
     };
     launchSel.addEventListener('change', () => { S.launch = launchSel.value; updLaunch(); });
+    profSel.addEventListener('change', () => { S.flightProfile = profSel.value as AppState['flightProfile']; updLaunch(); });
     this.updLaunch = updLaunch;
     updLaunch();
 
@@ -401,6 +419,7 @@ export class Sidebar {
         dNote,
         h('div', { class: 'toggles one' }, chemTg),
         field('Lanzado desde (trayectoria del misil)', null, launchSel),
+        profField,
         launchNote,
       )),
     );
@@ -712,8 +731,10 @@ export class Sidebar {
     const qual = seg<string>([['auto', 'Auto'], ['0.25', 'Mínima'], ['0.5', 'Baja'], ['1', 'Alta'], ['1.6', 'Ultra']], V.autoQ ? 'auto' : String(V.quality), (v) => { V.autoQ = v === 'auto'; if (!V.autoQ) V.quality = +v; this.ev.onView(); });
     this.setQuality = (v: string) => qual.set(v);
     this.projSeg = seg<string>([['flat', 'Plano 2D'], ['globe', 'Globo 3D']], V.globe ? 'globe' : 'flat', (v) => { V.globe = v === 'globe'; this.ev.onProjection(V.globe); });
-    const viewSec = section('Visualización', h('div', {},
-      h('div', { class: 'field' }, h('div', { class: 'field-head' }, h('span', {}, 'Mapa')), this.projSeg.el),
+    // la visualización vive en su propio menú de la barra de arriba (botón del ojo)
+    this.viewEl = h('div', { class: 'view-body' },
+      h('div', { class: 'lp-h' }, 'Mapa'), this.projSeg.el,
+      h('div', { class: 'lp-h' }, 'Qué se ve'),
       h('div', { class: 'toggles' },
         toggle('Cúpulas 3D', V.domes, (v) => { V.domes = v; this.ev.onView(); }),
         toggle('Anillos', V.rings, (v) => { V.rings = v; this.ev.onView(); }),
@@ -726,12 +747,12 @@ export class Sidebar {
         toggle('Cámara cinemática', V.cinematic, (v) => { V.cinematic = v; this.ev.onView(); }),
         toggle('Post-procesado', V.post, (v) => { V.post = v; this.ev.onView(); }),
       ),
-      h('div', { class: 'field', style: { marginTop: '12px' } }, h('div', { class: 'field-head' }, h('span', {}, 'Calidad'), this.qualVal), qual.el),
+      h('div', { class: 'lp-h' }, h('span', {}, 'Calidad '), this.qualVal), qual.el,
       h('div', { class: 'hint' }, 'Baja y Mínima son el modo ligero para portátiles y tabletas: menos resolución, nube de partículas en vez de volumétrica, sin post-procesado y 30 imágenes por segundo; Mínima quita además el relieve y los edificios 3D. En Auto se elige según tu equipo y baja sola si la animación va a saltos.'),
-    ), true);
+    );
 
     this.multiSec = multiSec;
-    const body = h('div', { class: 'sb-body' }, targetSec, this.nukePanel, this.astPanel, this.otherPanel, multiSec, envSec, viewSec);
+    const body = h('div', { class: 'sb-body' }, targetSec, this.nukePanel, this.astPanel, this.otherPanel, multiSec, envSec);
 
     this.fireBtn = h('button', { class: 'btn-fire', type: 'button', onclick: () => this.ev.onDetonate() }, 'DETONAR') as HTMLButtonElement;
     const foot = h('div', { class: 'sb-foot' }, this.fireBtn, h('button', { class: 'btn-ghost', type: 'button', title: 'Borrar efectos', onclick: () => this.ev.onClear() }, 'Limpiar'));
@@ -743,6 +764,8 @@ export class Sidebar {
   private multiSec?: HTMLElement;
   /** indicador de la calidad automática (fps) */
   qualVal = h('b');
+  /** contenido del menú «Visualización» (lo coloca la barra de botones) */
+  viewEl!: HTMLElement;
   /** marca el nivel de calidad elegido (lo cambia también la calidad automática) */
   setQuality: ((v: string) => void) | null = null;
   setMode(m: 'nuclear' | 'asteroid' | 'other') {

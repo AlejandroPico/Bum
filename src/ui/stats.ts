@@ -146,14 +146,21 @@ export function buildStats(fx: Effects): StatSection[] {
   S.push({ tab: 'phys', title: 'Bola de fuego y nube', rows: fb });
   if (fx.missile) {
     const M = fx.missile, n0 = (x: number) => Math.round(x).toLocaleString('es-ES');
-    S.push({ tab: 'phys', title: 'Trayectoria del misil', rows: [
+    const dur = (m: number) => (m >= 90 ? `${Math.floor(m / 60)} h ${Math.round(m % 60)} min` : `${n0(m)} min`);
+    const P = M.profile ?? 'ballistic';
+    const rows: StatRow[] = [
       { k: 'Lanzado desde', v: M.site, hint: M.country },
+      { k: 'Vector', v: M.profileName ?? 'Misil balístico', hint: P === 'hgv' ? 'un cohete lo sube y después planea por la alta atmósfera maniobrando' : P === 'cruise' ? 'vuela a ras de suelo siguiendo el relieve y una ruta de puntos de paso' : P === 'aircraft' ? 'lanzada desde un avión' : 'arco por el espacio exterior' },
       { k: 'Distancia', v: `${n0(M.rangeKm)} km`, hint: 'por la ortodrómica (camino más corto sobre el globo)' },
-      { k: 'Tiempo de vuelo', v: `${n0(M.flightMin)} min`, strong: true, hint: `fase propulsada de unos ${M.boostMin} min` },
-      { k: 'Apogeo', v: `${n0(M.apogeeKm)} km`, hint: 'altura máxima de la trayectoria, por encima de la Estación Espacial' },
-      { k: 'Velocidad de reentrada', v: `${M.reentryKms.toFixed(1).replace('.', ',')} km/s`, hint: `unas ${n0((M.reentryKms * 1000) / 340)} veces la velocidad del sonido` },
-      { k: 'Tiempo de aviso', v: `≈ ${n0(M.warningMin)} min`, hint: 'desde que los satélites detectan el lanzamiento' },
-    ], note: 'Trayectoria de energía mínima sobre una Tierra esférica y sin rotación (Wright, 2017). Los tiempos reales dependen del misil y de la trayectoria elegida.' });
+      { k: 'Tiempo de vuelo', v: dur(M.flightMin), strong: true, hint: M.boostMin >= 1 ? `fase propulsada de unos ${n0(M.boostMin)} min` : '' },
+    ];
+    if (P === 'ballistic') rows.push({ k: 'Apogeo', v: `${n0(M.apogeeKm)} km`, hint: 'altura máxima de la trayectoria, por encima de la Estación Espacial' });
+    else rows.push({ k: P === 'hgv' ? 'Altura de planeo' : 'Altura de vuelo', v: (M.cruiseKm ?? 0) >= 1 ? `≈ ${n0(M.cruiseKm!)} km` : `≈ ${n0((M.cruiseKm ?? 0) * 1000)} m`, hint: P === 'hgv' ? 'muy por debajo de un misil balístico: los radares de alerta lo ven tarde' : P === 'cruise' ? 'por debajo del horizonte de los radares de tierra' : '' });
+    rows.push({ k: P === 'ballistic' ? 'Velocidad de reentrada' : 'Velocidad final', v: `${M.reentryKms.toFixed(1).replace('.', ',')} km/s`, hint: `unas ${n0((M.reentryKms * 1000) / 340)} veces la velocidad del sonido` });
+    if (M.mirv) rows.push({ k: 'Ojivas en un solo misil', v: `${M.mirv}`, hint: 'el «bus» las suelta en el espacio y cada una cae sobre su objetivo (MIRV)' });
+    else if ((M.targets ?? 1) > 1) rows.push({ k: 'Misiles', v: `${M.targets}`, hint: P === 'ballistic' ? 'objetivos demasiado separados para un solo misil' : 'uno por objetivo' });
+    rows.push({ k: 'Tiempo de aviso', v: `≈ ${dur(M.warningMin)}`, hint: P === 'ballistic' ? 'desde que los satélites detectan el lanzamiento' : P === 'hgv' ? 'los satélites ven el cohete, pero el planeador se pierde bajo el horizonte de los radares' : 'desde que un radar puede verlo' });
+    S.push({ tab: 'phys', title: 'Trayectoria del arma', rows, note: P === 'ballistic' ? 'Trayectoria de energía mínima sobre una Tierra esférica y sin rotación (Wright, 2017). Los tiempos reales dependen del misil y de la trayectoria elegida.' : 'Perfil de vuelo aproximado, de divulgación (CSIS Missile Threat, FAS). La ruta real de planeadores y misiles de crucero es secreta: aquí se dibuja una ruta ilustrativa con desvíos.' });
   }
 
   // onda expansiva por distancia

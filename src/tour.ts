@@ -26,6 +26,8 @@ export interface TourCtx {
   heat(k: 'off' | 'deaths' | 'fallout' | 'pop'): 'off' | 'deaths' | 'fallout' | 'pop';
   /** márgenes del mapa (sin paneles durante el recorrido) */
   layout(): void;
+  /** descarga previa del mapa y el relieve de cada plano (panel de preparación) */
+  prepare(cams: { center: [number, number]; zoom: number; pitch: number; bearing: number }[]): Promise<void>;
   repaint(): void;
 }
 
@@ -158,6 +160,37 @@ export class Tour {
     const kt = fx.energyKt;
     const energy = kt >= 1000 ? `${(kt / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} megatones` : `${kt.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kilotones`;
     let bearing = map.getBearing();
+
+    // planos del recorrido: se descargan antes de empezar para que no haya saltos ni relieve a medias
+    {
+      const b0 = bearing;
+      const cams: { center: [number, number]; zoom: number; pitch: number; bearing: number }[] = [];
+      cams.push({ center: [lon, lat], zoom: C.zoomForRadius(Math.max(psi1 * 1.25, P.fireballR * 10, 2500), lat), pitch: 55, bearing: b0 - 20 });
+      try {
+        const dW0 = Math.max(psi1 * 0.95, P.fireballR * 6, 1500);
+        const from = C.destination(lat, lon, dW0, b0 + 4 + 180);
+        const el = map.queryTerrainElevation({ lng: from[0], lat: from[1] }) ?? 0;
+        const cam = map.calculateCameraOptionsFromCameraLngLatAltRotation(new maplibregl.LngLat(from[0], from[1]), el + 1.7, b0 + 4, 88.5);
+        const ll = maplibregl.LngLat.convert(cam.center!);
+        cams.push({ center: [ll.lng, ll.lat], zoom: cam.zoom!, pitch: cam.pitch!, bearing: cam.bearing! });
+      } catch { /* sin cámara libre */ }
+      if (psi1 > 0) cams.push({ center: [lon, lat], zoom: C.zoomForRadius(psi1 * 1.15, lat), pitch: 58, bearing: b0 + 34 });
+      const cc = !P.highAltitude && P.capTop > 600 ? C.cloudCamera(b0 + 34, true) : null;
+      if (cc) cams.push(cc);
+      if (burn3 > 0) cams.push({ center: [lon, lat], zoom: C.zoomForRadius(burn3 * 1.5, lat), pitch: 40, bearing: b0 + 78 });
+      if (fx.fallout.length && P.falloutExtKm > 1) {
+        const tTo = Math.min(P.tEnd, 24 * 3600);
+        const r = Math.max(Math.min(P.falloutExtKm * 1000, P.falloutFront(tTo)) * 0.62, psi1 * 2, P.capR * 3);
+        cams.push({ center: C.destination(lat, lon, r * 0.45, fx.windFromDeg + 180), zoom: C.zoomForRadius(r * 0.9, lat), pitch: 42, bearing: 0 });
+      }
+      cams.push({ center: [lon, lat], zoom: C.zoomForRadius(Math.max(psi1 * 1.35, burn3 * 1.6, P.fireballR * 8, 2000), lat), pitch: 0, bearing: 0 });
+      document.body.classList.remove('touring');
+      await C.prepare(cams);
+      this.guard(tok);
+      document.body.classList.add('touring');
+      C.layout();
+      map.jumpTo(cams[0]);
+    }
 
     // la simulación vuelve a empezar, en pausa, sin la cámara automática
     C.restart();

@@ -46,7 +46,8 @@ export class Timeline {
   /** muestra u oculta el botón del recorrido cinematográfico */
   setTour(available: boolean) { this.tourBtn.style.display = available ? '' : 'none'; }
 
-  configure(tStart: number, tEnd: number, events: { t: number; label: string }[]) {
+  configure(tStart: number, tEnd: number, events: { t: number; label: string }[], entryFrac = 0.12) {
+    this.entryFrac = entryFrac;
     this.tStart = tStart;
     this.tEnd = tEnd;
     this.evList = [...events].sort((a, b) => a.t - b.t);
@@ -73,7 +74,8 @@ export class Timeline {
     }
   }
 
-  private get entry() { return this.tStart < 0 ? 0.12 : 0; }
+  private entryFrac = 0.12;
+  private get entry() { return this.tStart < 0 ? this.entryFrac : 0; }
   toT(s: number): number {
     const E = this.entry;
     if (E && s < E) return this.tStart * (1 - s / E);

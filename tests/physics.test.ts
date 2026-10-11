@@ -21,6 +21,7 @@ import { computeTerrainShadow } from '../src/physics/terrain';
 import { geomagLat, auroraBoundary } from '../src/physics/disasters';
 import { WAR_PRESETS, climateSeries } from '../src/data/war';
 import { heatGrid } from '../src/physics/heat';
+import { planFlight, profileFor, legAt } from '../src/data/flight';
 import { combinedCasualties } from '../src/physics/effects';
 
 const ENV = { windFromDeg: 270, windKmh: 24, visibilityKm: 22, humidity: 60, hour: 12 };
@@ -334,6 +335,27 @@ section('Mapas de calor');
   truthy('Lluvia radiactiva: la malla se extiende hacia el este', !!f && (f.east - MADRID[1]) > (MADRID[1] - f.west));
   truthy('Sin explosión: población alrededor de un punto', (heatGrid('pop', [], { lat: MADRID[0], lon: MADRID[1], radiusKm: 30 })?.total ?? 0) > 1e6);
   truthy('Sin explosión no hay mapa de víctimas', heatGrid('deaths', []) === null);
+}
+
+
+section('Vuelo del arma');
+{
+  const koz = { lat: 54.03, lon: 35.78 };
+  const mad = [{ lat: 40.4168, lon: -3.7038 }];
+  const b = planFlight('ballistic', koz, mad), g = planFlight('hgv', koz, mad), c = planFlight('cruise', koz, mad);
+  range('Kozelsk–Madrid: tiempo de vuelo balístico (min)', b.flightMin, 15, 20, 'Wright 2017: ≈ 17 min para 3.300 km');
+  truthy('El planeador hipersónico llega antes que el arco balístico', g.flightMin < b.flightMin, `(${g.flightMin.toFixed(1)} < ${b.flightMin.toFixed(1)} min)`);
+  range('Altura de planeo del Avangard (km)', g.cruiseKm ?? NaN, 30, 80, 'planeo en la alta atmósfera, no a ras de suelo');
+  range('Misil de crucero: horas de vuelo', c.flightMin / 60, 3, 5, 'subsónico, ≈ 850 km/h');
+  truthy('Avangard se reconoce como planeador', profileFor('Avangard (Rusia)') === 'hgv');
+  truthy('Kh-102 se reconoce como misil de crucero', profileFor('Kh-102 (Rusia)') === 'cruise');
+  truthy('W88 vuela en misil balístico', profileFor('W88 (EE. UU.)') === 'ballistic');
+  const mv = planFlight('ballistic', koz, [{ lat: 40.42, lon: -3.7 }, { lat: 41.39, lon: 2.17 }, { lat: 39.47, lon: -0.38 }]);
+  truthy('Tres ciudades españolas: un solo misil con tres ojivas', mv.mirv === 3 && mv.legs.length === 4, `(mirv ${mv.mirv}, tramos ${mv.legs.length})`);
+  const far = planFlight('ballistic', koz, [{ lat: 40.42, lon: -3.7 }, { lat: 40.71, lon: -74 }]);
+  truthy('Madrid y Nueva York: un misil por objetivo', !far.mirv && far.legs.length === 2);
+  const end = legAt(b.legs[0], 1)!;
+  truthy('La trayectoria termina en el objetivo', Math.abs(end.p[1] - 40.4168) < 0.05 && Math.abs(((end.p[0] + 540) % 360) - 180 + 3.7038) < 0.05, `(${end.p[1].toFixed(3)}, ${end.p[0].toFixed(3)})`);
 }
 
 // ───────────────────────────────────────────────────────── formato

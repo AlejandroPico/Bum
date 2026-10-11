@@ -31,12 +31,14 @@ import { assessPoint, type SafetyReport } from './physics/safety';
 import { nearestCity, haversineKm, setRealPopulation } from './data/cities';
 import { loadRealPopulation } from './data/worldpop';
 import { fetchInfrastructure, fetchBuildingCounts } from './data/osm';
-import { LAUNCH_SITES, greatCircleKm, greatCirclePath, ballistic } from './data/launch';
+import { LAUNCH_SITES, greatCirclePath } from './data/launch';
+import { planFlight, profileFor, legAt, type FlightPlan, type FlightProfile } from './data/flight';
 import type { Effects, Scenario } from './physics/types';
 import type { FxModule } from './fx/types';
 import { Sidebar, defaultState, type AppState, type Strike } from './ui/sidebar';
 import { ResultsPanel, type MultiInfo } from './ui/results';
 import { Timeline } from './ui/timeline';
+import { PrepPanel } from './ui/prep';
 import { h, ICONS, toast, fmtTime, setRangeFill } from './ui/dom';
 
 // ---------------------------------------------------------------------------
@@ -55,9 +57,10 @@ function autoLevel() {
 }
 {
   detectLowPower();
-  let pr: { autoQ?: boolean; quality?: number } = {};
+  let pr: { autoQ?: boolean; quality?: number; pv?: number } = {};
   try { pr = JSON.parse(localStorage.getItem('bum:mapprefs') ?? '{}'); } catch { /* sin almacenamiento */ }
-  const auto = pr.autoQ ?? true;
+  // desde la 1.6 la calidad empieza siempre en automático (se olvida la elegida en versiones anteriores)
+  const auto = (pr.pv ?? 0) >= 2 ? pr.autoQ ?? true : true;
   perf.q = auto ? autoLevel() : [0.25, 0.5, 1, 1.6].includes(+(pr.quality ?? 1)) ? +(pr.quality ?? 1) : 1;
 }
 document.body.classList.toggle('lite', perf.lite);
@@ -108,6 +111,12 @@ interface Run {
   orbit: { bearing: number; final: boolean } | null;
   flashReal: number;
   wideDone: boolean;
+  /** instante inicial del reloj (negativo con el vuelo del misil o la entrada del asteroide) */
+  tStart: number;
+  /** ritmo del reloj antes de la detonación (s simulados por s reales, a velocidad ×1) */
+  preRate: number;
+  /** vuelo del arma desde su base */
+  flight: { plan: FlightPlan; flightS: number; camStart: Cam; camDone: boolean } | null;
   /** cambios de la nube volumétrica por la de partículas (paso a modo ligero) */
   swaps: (() => void)[];
   /** desde cuándo va lenta la animación (calidad automática) */
@@ -141,7 +150,10 @@ function syncLocalWeather() {
 const PREF_KEY = 'bum:mapprefs';
 try {
   const pr = JSON.parse(localStorage.getItem(PREF_KEY) ?? '{}');
-  for (const k of ['basemap', 'fxOpacity', 'theme', 'terrain3d', 'buildings', 'mapLabels', 'tests', 'post', 'autoQ', 'quality', 'realPop', 'reduceFlash', 'weather', 'radar'] as const) if (k in pr) (state.view as any)[k] = pr[k];
+  for (const k of ['basemap', 'fxOpacity', 'theme', 'terrain3d', 'buildings', 'mapLabels', 'tests', 'post', 'autoQ', 'quality', 'realPop', 'reduceFlash', 'weather', 'radar'] as const) {
+    if ((k === 'autoQ' || k === 'quality') && (pr.pv ?? 0) < 2) continue;
+    if (k in pr) (state.view as any)[k] = pr[k];
+  }
   // sin preferencia guardada, se respeta el ajuste del sistema «reducir movimiento»
   if (!('reduceFlash' in pr)) state.view.reduceFlash = matchMedia('(prefers-reduced-motion: reduce)').matches;
 } catch { /* sin almacenamiento */ }
@@ -149,7 +161,7 @@ if (!['day', 'evening', 'night', 'auto'].includes(state.view.theme)) state.view.
 state.view.quality = perf.q;
 function savePrefs() {
   const V = state.view;
-  try { localStorage.setItem(PREF_KEY, JSON.stringify({ basemap: V.basemap, fxOpacity: V.fxOpacity, theme: V.theme, terrain3d: V.terrain3d, buildings: V.buildings, mapLabels: V.mapLabels, tests: V.tests, post: V.post, autoQ: V.autoQ, quality: V.quality, realPop: V.realPop, reduceFlash: V.reduceFlash, weather: V.weather, radar: V.radar })); } catch { /* sin almacenamiento */ }
+  try { localStorage.setItem(PREF_KEY, JSON.stringify({ pv: 2, basemap: V.basemap, fxOpacity: V.fxOpacity, theme: V.theme, terrain3d: V.terrain3d, buildings: V.buildings, mapLabels: V.mapLabels, tests: V.tests, post: V.post, autoQ: V.autoQ, quality: V.quality, realPop: V.realPop, reduceFlash: V.reduceFlash, weather: V.weather, radar: V.radar })); } catch { /* sin almacenamiento */ }
 }
 
 
@@ -165,7 +177,7 @@ const sidebar = new Sidebar(document.getElementById('sidebar')!, state, {
   onView: () => applyView(),
   onCollapse: () => toggleUI(),
   onProjection: (g) => applyProjection(g),
-  onMulti: () => syncStrikeMarkers(),
+  onMulti: () => { syncStrikeMarkers(); sidebar.updLaunch(); },
 });
 
 const enc = new Encyclopedia((preset) => {
@@ -185,6 +197,23 @@ const results = new ResultsPanel(document.getElementById('results')!, {
     if (r) frame(r.radiusM * 1.3, 1500);
   },
 });
+
+// panel «Preparando la simulación» (cálculo y descarga previa de cada plano de cámara)
+const prep = new PrepPanel(document.getElementById('app')!);
+type Cam = { center: [number, number]; zoom: number; pitch: number; bearing: number };
+/**
+ * Visita cada plano de cámara tras el panel de preparación y espera a que el mapa termine de cargar
+ * sus teselas (relieve, mapa base, edificios): después, la cámara se mueve por zonas ya descargadas.
+ */
+async function prefetchCams(cams: Cam[], stepIdx: number) {
+  const n = cams.length;
+  for (let i = 0; i < n; i++) {
+    if (prep.skipped) break;
+    try { map.jumpTo(cams[i]); } catch { continue; }
+    prep.sub(stepIdx, i / n, `plano ${i + 1} de ${n}`);
+    await waitIdle(perf.lite ? 8000 : 6000);
+  }
+}
 
 const timeline = new Timeline(document.getElementById('timeline')!, {
   onPlayPause: () => { if (run) { run.playing = !run.playing; run.lastReal = performance.now(); fxLayer.animating = true; map.triggerRepaint(); } },
@@ -417,6 +446,13 @@ tbBtn('book-btn', 'Enciclopedia (E)', BOOK_ICON, () => enc.toggle());
 const layersBtn = tbBtn('layers-btn', 'Mapas y capas', LAYERS_ICON, (e) => { e.stopPropagation(); togglePopover(layersPanel, layersBtn, buildLayersPanel); });
 popovers.push({ el: layersPanel, btn: layersBtn });
 
+// visualización: qué efectos se ven, sonido, cámara y calidad (botón del ojo)
+const EYE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 12c2.4-4.2 5.6-6.3 9.5-6.3s7.1 2.1 9.5 6.3c-2.4 4.2-5.6 6.3-9.5 6.3S4.9 16.2 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>';
+const viewPop = h('div', { id: 'view-pop', class: 'glass hidden' }, sidebar.viewEl);
+document.getElementById('app')!.append(viewPop);
+const viewBtn = tbBtn('view-btn', 'Visualización y calidad', EYE_ICON, (e) => { e.stopPropagation(); togglePopover(viewPop, viewBtn, () => {}); });
+popovers.push({ el: viewPop, btn: viewBtn });
+
 // edificios visibles: recuento uno a uno por sobrepresión con las teselas ya cargadas
 function countVisibleBuildings() {
   // en el modo ligero no se recorren los edificios del mapa (queda el recuento del servidor)
@@ -627,51 +663,60 @@ function setShadowLayer(polys: [number, number][][][] | null, lat: number, lon: 
   map.addLayer({ id: 'fx-shadow-line', type: 'line', source: 'fx-shadow', paint: { 'line-color': '#7dd3fc', 'line-width': 1, 'line-opacity': 0.6, 'line-dasharray': [2, 2] } }, map.getLayer('fx-labels') ? 'fx-labels' : undefined);
 }
 
-// trayectoria del misil sobre el mapa
-function setMissilePath(path: [number, number][] | null, dot?: [number, number]) {
-  const line: GeoJSON.Feature = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: path ?? [] } };
-  const pt: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: dot ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: dot } }] : [] };
+// vuelo del arma sobre el mapa: ruta prevista (tenue), tramo recorrido (vivo) y un punto por ojiva
+function setMissilePath(plan: FlightPlan | null, f = 1) {
+  const planned: GeoJSON.Feature[] = [], flown: GeoJSON.Feature[] = [];
+  if (plan) for (const L of plan.legs) {
+    planned.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: L.pts } });
+    const at = legAt(L, f);
+    if (at) flown.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [...L.pts.slice(0, at.i + 1), at.p] } });
+  }
+  const fc = (x: GeoJSON.Feature[]): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: x });
   if (!map.getSource('fx-missile')) {
-    if (!path) return;
-    map.addSource('fx-missile', { type: 'geojson', data: line });
-    map.addSource('fx-missile-dot', { type: 'geojson', data: pt });
-    map.addLayer({ id: 'fx-missile-glow', type: 'line', source: 'fx-missile', paint: { 'line-color': '#ff6a1a', 'line-width': 7, 'line-opacity': 0.18, 'line-blur': 4 } });
-    map.addLayer({ id: 'fx-missile-line', type: 'line', source: 'fx-missile', paint: { 'line-color': '#ffb020', 'line-width': 1.8, 'line-dasharray': [3, 2], 'line-opacity': 0.9 } });
-    map.addLayer({ id: 'fx-missile-dot', type: 'circle', source: 'fx-missile-dot', paint: { 'circle-radius': 6, 'circle-color': '#fff3d6', 'circle-stroke-color': '#ff6a1a', 'circle-stroke-width': 3, 'circle-blur': 0.15 } });
+    if (!plan) return;
+    map.addSource('fx-missile-plan', { type: 'geojson', data: fc(planned) });
+    map.addSource('fx-missile', { type: 'geojson', data: fc(flown) });
+    map.addLayer({ id: 'fx-missile-plan', type: 'line', source: 'fx-missile-plan', paint: { 'line-color': '#ffb020', 'line-width': 1.2, 'line-dasharray': [2, 3], 'line-opacity': 0.45 } });
+    map.addLayer({ id: 'fx-missile-glow', type: 'line', source: 'fx-missile', paint: { 'line-color': '#ff6a1a', 'line-width': 7, 'line-opacity': 0.2, 'line-blur': 4 } });
+    map.addLayer({ id: 'fx-missile-line', type: 'line', source: 'fx-missile', paint: { 'line-color': '#ffc04a', 'line-width': 2, 'line-opacity': 0.95 } });
     return;
   }
-  (map.getSource('fx-missile') as maplibregl.GeoJSONSource).setData(line);
-  (map.getSource('fx-missile-dot') as maplibregl.GeoJSONSource).setData(pt);
+  (map.getSource('fx-missile-plan') as maplibregl.GeoJSONSource).setData(fc(planned));
+  (map.getSource('fx-missile') as maplibregl.GeoJSONSource).setData(fc(flown));
 }
-let missileLabel: maplibregl.Marker | null = null;
-/** encuadra el arco completo y anima el vuelo (unos segundos que representan el tiempo real de vuelo) */
-async function missileIntro(la0: number, lo0: number, la1: number, lo1: number, flightMin: number, apogeeKm: number) {
-  const path = greatCirclePath(la0, lo0, la1, lo1, 200);
-  setMissilePath(path, path[0]);
-  let minX = 999, maxX = -999, minY = 90, maxY = -90;
-  for (const [x, y] of path) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
-  map.fitBounds([[minX, minY], [maxX, maxY]], { padding: { top: 90, bottom: 120, left: 60, right: 60 }, pitch: 30, bearing: 0, duration: 1800, maxZoom: 7 });
-  await waitIdle(4000);
-  const el = h('div', { class: 'missile-lbl' });
-  missileLabel?.remove();
-  missileLabel = new maplibregl.Marker({ element: el, anchor: 'left', offset: [12, 0] }).setLngLat(path[0]).addTo(map);
-  const dur = Math.min(7000, 3000 + flightMin * 120);
-  const t0 = performance.now();
-  await new Promise<void>((done) => {
-    const step = () => {
-      const f = Math.min(1, (performance.now() - t0) / dur);
-      const k = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
-      const i = Math.min(path.length - 1, Math.round(k * (path.length - 1)));
-      setMissilePath(path.slice(0, i + 1), path[i]);
-      missileLabel!.setLngLat(path[i]);
-      const left = flightMin * (1 - k);
-      el.innerHTML = `<b>T−${left >= 1 ? Math.ceil(left) + ' min' : Math.ceil(left * 60) + ' s'}</b><span>${Math.round(apogeeKm * Math.sin(Math.PI * k)).toLocaleString('es-ES')} km de altura</span>`;
-      if (f < 1) requestAnimationFrame(step); else done();
-    };
-    requestAnimationFrame(step);
-  });
-  missileLabel.remove(); missileLabel = null;
-  setMissilePath(path);
+/** marcadores del vuelo (un punto por tramo activo y el rótulo con el reloj) */
+const flightUI: { dots: maplibregl.Marker[]; label: maplibregl.Marker | null; labelEl: HTMLElement | null; lastLine: number } = { dots: [], label: null, labelEl: null, lastLine: 0 };
+function clearFlightUI() {
+  for (const d of flightUI.dots) d.remove();
+  flightUI.dots = [];
+  flightUI.label?.remove(); flightUI.label = null; flightUI.labelEl = null;
+}
+/** dibuja el vuelo en el instante t (negativo hasta la detonación) */
+function drawFlight(R: Run, t: number, now: number) {
+  const F = R.flight!;
+  const f = Math.max(0, Math.min(1, (t - R.tStart) / F.flightS));
+  if (t >= 0) {
+    if (flightUI.dots.length || flightUI.label) { clearFlightUI(); setMissilePath(F.plan, 1); }
+    return;
+  }
+  if (now - flightUI.lastLine > 90) { flightUI.lastLine = now; setMissilePath(F.plan, f); }
+  const active = F.plan.legs.filter((L) => f >= L.f0 && (f < L.f1 || L.target >= 0) && !(L.target < 0 && f >= L.f1));
+  while (flightUI.dots.length < active.length) flightUI.dots.push(new maplibregl.Marker({ element: h('div', { class: 'flight-dot' }) }).setLngLat([0, 0]).addTo(map));
+  while (flightUI.dots.length > active.length) flightUI.dots.pop()!.remove();
+  let lead: { p: [number, number]; alt: number } | null = null;
+  active.forEach((L, k) => { const a = legAt(L, f); if (a) { flightUI.dots[k].setLngLat(a.p); if (!lead) lead = a; } });
+  if (!flightUI.label) {
+    flightUI.labelEl = h('div', { class: 'missile-lbl' });
+    flightUI.label = new maplibregl.Marker({ element: flightUI.labelEl, anchor: 'left', offset: [14, 0] }).setLngLat([0, 0]).addTo(map);
+  }
+  if (lead) {
+    const L = lead as { p: [number, number]; alt: number };
+    flightUI.label.setLngLat(L.p);
+    const left = -t;
+    const altTxt = L.alt >= 1 ? `${Math.round(L.alt).toLocaleString('es-ES')} km` : `${Math.round(L.alt * 1000)} m`;
+    const multi = F.plan.mirv && f >= F.plan.legs[0].f1 ? ` · ${F.plan.mirv} ojivas` : '';
+    flightUI.labelEl!.innerHTML = `<b>T−${fmtTime(left).replace('−', '')}</b><span>${F.plan.phase(f)} · ${altTxt} de altura${multi}</span>`;
+  }
 }
 
 // ¿Estoy a salvo? — efectos en un punto concreto (tu ubicación o uno elegido en el mapa)
@@ -760,7 +805,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.7';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -794,7 +839,7 @@ function openAbout() {
         feat('Armas nucleares y explosivos.', 'Más de 70 armas reales, de las bombas de Hiroshima y Nagasaki a la Bomba del Zar y los arsenales actuales, o una potencia a tu medida; en superficie, en el aire, en el espacio, bajo tierra o bajo el agua, y ataques con varias detonaciones a la vez.'),
         feat('Asteroides y cometas.', 'Impactos históricos e hipotéticos y los objetos reales que vigila la NASA, con su cráter, el terremoto, el tsunami que recorre los océanos y la posibilidad de desviarlos a tiempo.'),
         feat('Otras catástrofes.', 'Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala con su invierno nuclear.'),
-        feat('¿Estoy a salvo?', 'Elige tu casa o cualquier punto y verás qué te llegaría, cuándo, y qué hacer para protegerte; también puedes comparar dos escenarios en un mapa partido o seguir el vuelo del misil desde su base.'),
+        feat('¿Estoy a salvo?', 'Elige tu casa o cualquier punto y verás qué te llegaría, cuándo, y qué hacer para protegerte; también puedes comparar dos escenarios en un mapa partido o seguir el vuelo del arma desde su base: misil balístico, planeador hipersónico, misil de crucero o bombardero, y varias ojivas de un mismo misil.'),
         feat('Efectos y víctimas.', 'Bola de fuego, onda expansiva, quemaduras, radiación, lluvia radiactiva, incendios, pulso electromagnético, ceniza y contaminación, con la población real de la zona, los hospitales y servicios afectados y cuánto protege cada tipo de refugio.'),
         feat('Tiempo real.', 'El viento de las próximas horas, la lluvia, el relieve y la hora del lugar cambian el resultado, y el mapa muestra las nubes, la lluvia, la niebla y el radar de precipitación de ahora mismo; una línea de tiempo deja ver la explosión a cámara lenta o el avance de la nube durante días.'),
         feat('Mapas de calor y recorrido de cine.', 'Mapas de calor de la población, de las víctimas y de las muertes por la lluvia radiactiva, y un recorrido automático con planos de cine y rótulos que cuenta la catástrofe de principio a fin.'),
@@ -996,7 +1041,9 @@ function frame(r: number, duration = 3500, pitch?: number, bearingDelta = 0) {
  */
 function cloudCamera(bearingDeg: number, final = true) {
   if (!run) return null;
-  const P = run.plan, t = run.t;
+  return cloudCameraFor(run.plan, run.lat, run.lon, run.t, bearingDeg, final);
+}
+function cloudCameraFor(P: FxPlan, lat0: number, lon0: number, t: number, bearingDeg: number, final = true) {
   const H = Math.max(final ? P.capTop + P.capR * 0.15 : P.capZ(t) + P.capRadius(t) * 0.7, 1500);
   const Wr = Math.max(final ? P.capR : P.capRadius(t), P.stemR * 2);
   const el = map.getContainer();
@@ -1012,7 +1059,7 @@ function cloudCamera(bearingDeg: number, final = true) {
   const A = Hm + D * Math.tan(down); // altura de la cámara sobre el suelo
   const ahead = A / Math.tan(down) - D; // de la zona cero al punto central del mapa
   // la cámara queda anclada a la zona cero: la nube deriva con el viento y sale del encuadre
-  const center = destination(run.lat, run.lon, ahead, bearingDeg);
+  const center = destination(lat0, lon0, ahead, bearingDeg);
   const dist = A / Math.sin(down);
   const ctcPx = (0.5 * hgt) / Math.tan(fovV / 2);
   const mpp = dist / ctcPx;
@@ -1068,7 +1115,8 @@ const tour = new Tour({
   map,
   run: () => run,
   place: () => { if (!run) return ''; const c = nearestCity(run.lat, run.lon); return state.target.label || (c.km < 25 ? c.city.name : `${run.lat.toFixed(3)}, ${run.lon.toFixed(3)}`); },
-  restart: () => restartClock(),
+  // el recorrido empieza en la detonación (sin repetir el vuelo del misil)
+  restart: () => { restartClock(); if (run && run.flight) { run.t = 0; run.flight.camDone = true; } },
   seek: (t) => { if (run) { run.t = t; run.lastOverlay = 0; run.boomDone = t > run.obsArrival; run.flashDone = t > 0.5; run.flashReal = t > 0.5 ? performance.now() - 1e5 : -1; map.triggerRepaint(); } },
   zoomForRadius,
   cloudCamera: (b, f) => cloudCamera(b, f) as never,
@@ -1077,6 +1125,13 @@ const tour = new Tour({
   heat: (k) => { const prev = state.view.heat; if (prev !== k) setHeat(k); return prev; },
   layout: () => updatePadding(),
   repaint: () => map.triggerRepaint(),
+  prepare: async (cams) => {
+    if (run) run.playing = false;
+    prep.show('Preparando el recorrido', ['Mapa, relieve y edificios de cada plano']);
+    prep.step(0, 'run');
+    await prefetchCams(cams, 0);
+    prep.hide();
+  },
 }, document.getElementById('app')!);
 
 // ---------------------------------------------------------------------------
@@ -1085,7 +1140,7 @@ const tour = new Tour({
 function clearRun() {
   tour.stop(true);
   resetFov();
-  setMissilePath(null);
+  setMissilePath(null); clearFlightUI();
   setShadowLayer(null, 0, 0);
   setBlackRainLayer(undefined, 0, 0); showBlackRain(false);
   setSolarLayer(null);
@@ -1157,6 +1212,10 @@ async function detonate() {
     // en móviles y tabletas se pliega el panel de ajustes para dejar ver la explosión y los resultados
     if (window.innerWidth <= 1180 && !document.body.classList.contains('ui-collapsed')) toggleUI();
     const multi = state.multi.on && state.multi.strikes.length > 0 && state.mode !== 'other';
+    const STEP_FX = 0, STEP_POP = 1, STEP_MAP = state.view.realPop ? 2 : 1;
+    prep.show('Preparando la simulación', ['Calculando los efectos', ...(state.view.realPop ? ['Población real (WorldPop 2020)'] : []), 'Mapa, relieve y edificios de cada plano']);
+    prep.step(STEP_FX, 'run');
+    await new Promise((r) => setTimeout(r, 30));
     const list: Strike[] = multi ? state.multi.strikes.slice(0, 24) : [{ lat: state.target.lat, lon: state.target.lon, label: state.target.label, sc: sidebar.currentScenario(), azimuth: state.ast.azimuth }];
     const env = { ...state.env };
     const comp: { st: Strike; fx: Effects }[] = [];
@@ -1164,30 +1223,30 @@ async function detonate() {
       const sc = await prepScenario(st.sc, st.lat, st.lon);
       comp.push({ st, fx: computeEffects(sc, env, st.lat, st.lon) });
     }
+    prep.step(STEP_FX, 'ok');
     // población real (WorldPop): se descarga para la zona afectada y se recalculan las víctimas
     setRealPopulation(state.view.realPop);
     popSource = null;
     if (state.view.realPop) {
       const reach = (f: Effects) => Math.min(600, Math.max(5, ...f.rings.filter((r) => !r.global && r.group !== 'seismic' && r.group !== 'tsunami' && r.group !== 'emp').map((r) => r.radiusM / 1000), ...f.fallout.map((x) => x.maxDownwindKm * 0.8)));
-      const tt = setTimeout(() => toast('Descargando la población real (WorldPop 2020)…', 2500), 600);
+      prep.step(STEP_POP, 'run');
       const srcs = await Promise.all(comp.slice(0, 8).map((c) => loadRealPopulation(c.st.lat, c.st.lon, reach(c.fx)).catch(() => null)));
-      clearTimeout(tt);
       popSource = srcs.find((x) => x) ?? null;
       if (popSource) for (const c of comp) { c.fx = computeEffects(c.fx.scenario, env, c.st.lat, c.st.lon); c.fx.popSource = popSource; }
-      else toast('Población real no disponible: se usa el modelo urbano aproximado', 3000);
+      prep.step(STEP_POP, popSource ? 'ok' : 'skip', popSource ? '' : 'no disponible: modelo urbano aproximado');
     }
     const { lat, lon } = list[0];
     const fx = comp[0].fx;
     const sc = fx.scenario;
     clearRun();
     syncStrikeMarkers();
-    // trayectoria del misil: arco desde la base de lanzamiento y animación del vuelo
-    const site = sc.kind === 'nuclear' && !comp[1] ? LAUNCH_SITES.find((s) => s.id === state.launch) : undefined;
+    // vuelo desde la base de lanzamiento (con varios objetivos, ojivas múltiples o varios misiles)
+    const site = sc.kind === 'nuclear' && comp.every((c) => c.fx.scenario.kind === 'nuclear') ? LAUNCH_SITES.find((s) => s.id === state.launch) : undefined;
+    let flight: FlightPlan | null = null;
     if (site) {
-      const rangeKm = greatCircleKm(site.lat, site.lon, lat, lon);
-      const b = ballistic(rangeKm);
-      fx.missile = { site: site.name, country: site.country, rangeKm, ...b };
-      await missileIntro(site.lat, site.lon, lat, lon, fx.missile.flightMin, fx.missile.apogeeKm);
+      const prof: FlightProfile = state.flightProfile === 'auto' ? profileFor(sc.name) : state.flightProfile;
+      flight = planFlight(prof, site, comp.map((c) => ({ lat: c.st.lat, lon: c.st.lon })));
+      fx.missile = { site: site.name, country: site.country, rangeKm: flight.rangeKm, flightMin: flight.flightMin, apogeeKm: flight.apogeeKm, reentryKms: flight.reentryKms, warningMin: flight.warningMin, boostMin: flight.boostMin, profile: flight.profile, profileName: flight.name, cruiseKm: flight.cruiseKm, mirv: flight.mirv, targets: comp.length };
     }
     const plan = new FxPlan(fx, env);
     if (sc.kind === 'asteroid') plan.entryAzimuth = list[0].azimuth ?? state.ast.azimuth;
@@ -1223,10 +1282,35 @@ async function detonate() {
       bearing = (list[0].azimuth ?? state.ast.azimuth) + 90;
     }
     const z0 = zoomForRadius(r0, cLat);
-    if (far || Math.abs(map.getZoom() - z0) > 1.2 || plan.isAsteroid || comp.length > 1) {
-      map.easeTo({ center: [cLon, cLat], zoom: z0, pitch: fx.war || fx.solar ? 0 : plan.isAsteroid ? 55 : 66, bearing: fx.war || fx.solar ? 0 : bearing, duration: far ? 2600 : 1600, essential: true });
-      await waitIdle(far ? 6000 : 3500);
+    const moveStart = far || Math.abs(map.getZoom() - z0) > 1.2 || plan.isAsteroid || comp.length > 1;
+    const camStart: Cam = moveStart
+      ? { center: [cLon, cLat], zoom: z0, pitch: fx.war || fx.solar ? 0 : plan.isAsteroid ? 55 : 66, bearing: fx.war || fx.solar ? 0 : bearing }
+      : { center: [map.getCenter().lng, map.getCenter().lat], zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() };
+    // planos que va a usar la cámara cinemática (los mismos cálculos que en la animación)
+    const cinematic = state.view.cinematic && comp.length === 1 && !fx.dam && !fx.solar && !fx.war;
+    const cams: Cam[] = [];
+    let flightBounds: [[number, number], [number, number]] | null = null;
+    if (site && flight) {
+      let minX = 999, maxX = -999, minY = 90, maxY = -90;
+      for (const L of flight.legs) for (const [x, y] of L.pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+      flightBounds = [[minX, minY], [maxX, maxY]];
+      const mc = map.cameraForBounds([[minX, minY], [maxX, maxY]], { padding: { top: 90, bottom: 120, left: 60, right: 60 }, maxZoom: 7 });
+      if (mc?.center && mc.zoom != null) { const ll = maplibregl.LngLat.convert(mc.center); cams.push({ center: [ll.lng, ll.lat], zoom: mc.zoom, pitch: 30, bearing: 0 }); }
     }
+    cams.push(camStart);
+    if (cinematic) {
+      const P = plan, b1 = bearing - 25;
+      cams.push({ center: [lon, lat], zoom: zoomForRadius(Math.max(Math.min(P.psi1R * 1.25, P.capTop * 4), P.capTop * 0.9, P.fireballR * 8), lat), pitch: 64, bearing: b1 });
+      if (!P.highAltitude && P.capTop > 600) { const cc = cloudCameraFor(P, lat, lon, P.tEnd, b1, true); cams.push({ center: cc.center as [number, number], zoom: cc.zoom, pitch: cc.pitch, bearing: cc.bearing }); }
+      if (P.psi1R > P.capTop * 4) cams.push({ center: [lon, lat], zoom: zoomForRadius(P.psi1R * 1.15, lat), pitch: 50, bearing: b1 });
+      if (fx.fallout.length) cams.push({ center: [lon, lat], zoom: zoomForRadius(Math.max(Math.min(P.falloutExtKm * 1000, P.falloutFront(P.tEnd)) * 0.6, P.psi1R * 2), lat), pitch: 50, bearing: b1 });
+    }
+    prep.step(STEP_MAP, 'run');
+    await prefetchCams(cams, STEP_MAP);
+    prep.step(STEP_MAP, prep.skipped ? 'skip' : 'ok');
+    map.jumpTo(flight ? cams[0] : camStart);
+    if (flight) setMissilePath(flight, 0);
+    prep.hide();
     const elev = map.queryTerrainElevation([lon, lat]) ?? 0;
     fxLayer.setOrigin(lon, lat, elev);
     fxLayer.extentM = Math.max(...fx.rings.filter((r) => r.dome).map((r) => r.radiusM), fx.cloud.capRadiusM * 2.5, fx.cloud.topM * 1.5, 1000) + spread * 2;
@@ -1343,19 +1427,30 @@ async function detonate() {
     // el cambio de márgenes interrumpe el encuadre: en guerras y tormentas solares se repite
     if (fx.war || fx.solar) map.easeTo({ center: [cLon, cLat], zoom: z0, pitch: 0, bearing: 0, duration: 1400, essential: true });
 
+    // con vuelo del misil, el reloj empieza en el lanzamiento (unos 12 s reales a velocidad ×1)
+    const flightS = flight ? flight.flightMin * 60 : 0;
+    const tStart = flight ? -flightS : plan.isAsteroid ? -plan.entryDuration : 0;
+    const preRate = flight ? flightS / 12 : 0.6;
     run = {
-      fx, plan, lat, lon, t: plan.isAsteroid ? -plan.entryDuration : 0, playing: true, speed: 1, lastReal: performance.now(),
+      fx, plan, lat, lon, t: tStart, tStart, preRate, flight: flight ? { plan: flight, flightS, camStart, camDone: false } : null, playing: true, speed: 1, lastReal: performance.now(),
       boomDone: false, flashDone: false, obsArrival: plan.shockTime(Math.hypot(dObs, plan.h)), obsPsi: fx.pressurePsiAt(dObs),
       domes: main.domes, beats: 0, userCam: !state.view.cinematic || comp.length > 1 || !!fx.dam || !!fx.solar || !!fx.war, lastOverlay: 0, skyFlash: false, rate: 1, orbit: null, flashReal: -1, wideDone: false,
       extras, swaps, slowSince: 0,
     };
+    // el vuelo se encuadra entero con los paneles ya colocados (los márgenes dependen de la simulación)
+    if (flightBounds) { updatePadding(); map.fitBounds(flightBounds, { padding: { top: 80, bottom: 110, left: 50, right: 50 }, maxZoom: 6.5, pitch: 25, bearing: 0, duration: 0 }); }
     const ev: { t: number; label: string }[] = [{ t: plan.tMax, label: 'Destello' }];
     if (plan.psi5R) ev.push({ t: plan.shockTime(Math.hypot(plan.psi5R, plan.h)), label: 'Onda 5 psi' });
     if (plan.psi1R) ev.push({ t: plan.shockTime(Math.hypot(plan.psi1R, plan.h)), label: '1 psi' });
     ev.push({ t: plan.tau * 3, label: 'Nube estabilizada' });
     if (fx.fallout.length) ev.push({ t: 3600, label: 'H+1' });
-    if (plan.isAsteroid) ev.push({ t: -plan.entryDuration * 0.98, label: 'Entrada' });
-    timeline.configure(plan.isAsteroid ? -plan.entryDuration : 0, Math.max(plan.tEnd, ...extras.map((x) => x.plan.tEnd)), ev);
+    if (plan.isAsteroid && !flight) ev.push({ t: -plan.entryDuration * 0.98, label: 'Entrada' });
+    if (flight) {
+      ev.push({ t: tStart, label: 'Lanzamiento' });
+      if (flight.mirv) ev.push({ t: tStart + flightS * flight.legs[0].f1, label: 'Separación' });
+      ev.push({ t: -Math.min(flightS * 0.12, 120), label: flight.profile === 'ballistic' ? 'Reentrada' : 'Llegada' });
+    }
+    timeline.configure(tStart, Math.max(plan.tEnd, ...extras.map((x) => x.plan.tEnd)), ev, flight ? 0.3 : 0.12);
     timeline.setTour(Tour.available(fx));
     document.body.classList.add('detonated');
     syncStrikeMarkers();
@@ -1370,6 +1465,7 @@ async function detonate() {
     if (state.view.heat !== 'off') void refreshHeat();
   } finally {
     busy = false;
+    prep.hide();
   }
 }
 
@@ -1401,7 +1497,8 @@ function startTsunami(fx: Effects, lat: number, lon: number) {
 
 function restartClock() {
   if (!run) return;
-  run.t = run.plan.isAsteroid ? -run.plan.entryDuration : 0;
+  run.t = run.tStart;
+  if (run.flight) { run.flight.camDone = false; clearFlightUI(); setMissilePath(run.flight.plan, 0); }
   run.playing = true;
   run.boomDone = false;
   run.flashDone = false;
@@ -1416,7 +1513,7 @@ function restartClock() {
 
 /** ritmo de la simulación: cámara lenta en el destello, acelerado después */
 function rateAt(t: number, speed: number) {
-  if (t < 0) return 0.6 * speed;
+  if (t < 0) return (run?.preRate ?? 0.6) * speed;
   // con el paso de los días se acelera para recorrer la lluvia radiactiva o la ceniza en pocos minutos
   return speed * Math.min(Math.max(2400, t / 36), 0.12 + 0.35 * t);
 }
@@ -1544,6 +1641,17 @@ function onFxFrame(ctx: FrameCtx) {
     mapEl.style.transform = `translate(${(Math.random() - 0.5) * k}px, ${(Math.random() - 0.5) * k}px)`;
   } else if (mapEl.style.transform) mapEl.style.transform = '';
 
+  // vuelo del misil: posición de cada ojiva y, al final, la cámara va hacia el objetivo
+  if (R.flight) {
+    drawFlight(R, t, now);
+    const F = R.flight;
+    if (!F.camDone && t < 0 && R.playing && (t - R.tStart) / F.flightS > 0.8) {
+      F.camDone = true;
+      const leftReal = (-t / Math.max(1, rateAt(t, R.speed))) * 1000;
+      map.easeTo({ ...F.camStart, duration: Math.max(1200, Math.min(6000, leftReal)), essential: true });
+    }
+  }
+
   // cámara cinemática
   if (!R.userCam && !map.isMoving()) {
     if (R.beats === 0 && t > 0 && t > Math.min(P.shockTime(Math.hypot(P.psi5R || P.fireballR * 3, P.h)) * 0.6, P.tau * 0.4)) {
@@ -1569,7 +1677,7 @@ function onFxFrame(ctx: FrameCtx) {
       R.orbit.bearing += dt * 2;
       const cam = cloudCamera(R.orbit.bearing, R.orbit.final);
       if (cam) map.jumpTo(cam);
-    } else if (R.playing) {
+    } else if (R.playing && !(R.flight && t < 0)) {
       map.setBearing(map.getBearing() + dt * 1.2);
     }
   }
