@@ -100,6 +100,15 @@ distancia); el mapa partido no muestra los efectos 3D del escenario B.
 
 Pendiente menor: las nubes no se mueven con el viento; el radar sólo llega al nivel de zoom 7 (límite de la API).
 
+## 1.4.1 — Actualizaciones sin caché antigua (publicada)
+
+- [x] El service worker sirve la página primero desde la red (`cache: 'no-cache'`) y sólo usa la copia guardada sin
+      conexión; los archivos con huella (`assets/`) van primero a la caché; la instalación evita la caché HTTP de
+      GitHub Pages (10 min). Antes, la página guardada se servía primero y una versión nueva podía tardar varias
+      recargas en verse (se seguía viendo la 1.0).
+- [x] La app busca versiones nuevas al volver a la pestaña y cada hora, y se recarga sola cuando se instala una
+      (si hay una simulación en marcha, sólo avisa).
+
 ## Más adelante
 
 - [ ] Varios idiomas (inglés y otros), elegidos según el idioma del sistema.

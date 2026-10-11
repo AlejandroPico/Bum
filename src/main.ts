@@ -734,7 +734,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.4.1';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1624,7 +1624,21 @@ function share() {
 
 // ---------------------------------------------------------------- app instalable (PWA)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => { /* sin service worker */ }); });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+      // busca versiones nuevas al volver a la pestaña y cada hora
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+      setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+    }).catch(() => { /* sin service worker */ });
+  });
+  // al instalarse una versión nueva se recarga la página (si no hay una simulación en marcha)
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    if (!run) { reloading = true; location.reload(); }
+    else toast('Hay una versión nueva de Bum: recarga la página para verla', 8000);
+  });
 }
 let installEvt: (Event & { prompt(): Promise<void> }) | null = null;
 window.addEventListener('beforeinstallprompt', (e) => {

@@ -1,5 +1,5 @@
 /* Service worker de Bum: la app funciona sin conexión y guarda en caché teselas y datos. */
-const VERSION = 'bum-v1.4';
+const VERSION = 'bum-v1.4.1';
 const SHELL = `${VERSION}-shell`;
 // teselas y datos se conservan entre versiones: sólo se renueva la propia aplicación
 const TILES = 'bum-tiles';
@@ -7,7 +7,9 @@ const DATA = 'bum-data';
 const MAX_TILES = 4000;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['./', './index.html', './favicon.svg', './manifest.webmanifest'])).then(() => self.skipWaiting()));
+  // «reload»: sin pasar por la caché HTTP del navegador (GitHub Pages la guarda 10 minutos)
+  const urls = ['./', './index.html', './favicon.svg', './manifest.webmanifest'].map((u) => new Request(u, { cache: 'reload' }));
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(urls)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => !k.startsWith(VERSION) && k !== TILES && k !== DATA).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -40,12 +42,35 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(req).then((res) => { const cp = res.clone(); caches.open(DATA).then((c) => c.put(req, cp)); return res; }).catch(() => caches.match(req)));
     return;
   }
-  // la propia app: caché y actualización en segundo plano
-  if (url.origin === self.location.origin) {
+  if (url.origin !== self.location.origin) return;
+  // la página: primero la red (así se ve enseguida cada versión nueva); sin conexión, la guardada
+  if (req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')) {
+    e.respondWith(caches.open(SHELL).then(async (c) => {
+      try {
+        const res = await fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' });
+        if (res.ok) c.put(req.url, res.clone());
+        return res;
+      } catch {
+        return (await c.match(req)) || (await c.match('./index.html')) || Response.error();
+      }
+    }));
+    return;
+  }
+  // código y estilos con huella en el nombre (assets/…): no cambian nunca, primero la caché
+  if (url.pathname.includes('/assets/')) {
     e.respondWith(caches.open(SHELL).then(async (c) => {
       const hit = await c.match(req);
-      const net = fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => hit || (req.mode === 'navigate' ? c.match('./index.html') : undefined));
-      return hit || net;
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok) c.put(req, res.clone());
+      return res;
     }));
+    return;
   }
+  // el resto (icono, manifiesto…): caché y actualización en segundo plano
+  e.respondWith(caches.open(SHELL).then(async (c) => {
+    const hit = await c.match(req);
+    const net = fetch(req.url, { cache: 'no-cache' }).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => hit);
+    return hit || net;
+  }));
 });
