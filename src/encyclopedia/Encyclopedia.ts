@@ -1,4 +1,4 @@
-import type { Article, Block, CatId, GlossaryTerm } from './types';
+import type { Article, Block, CatId, GlossaryTerm, ImgRef } from './types';
 import { CATEGORIES } from './types';
 import { mountDiagram } from './diagrams';
 import { slug } from './slug';
@@ -34,6 +34,9 @@ export class Encyclopedia {
   private articles: Article[] = [];
   private byId = new Map<string, Article>();
   private glossary: GlossaryTerm[] = [];
+  private images: Record<string, ImgRef[]> = {};
+  private math: Record<string, Block[]> = {};
+  private sources: { byId: Record<string, string[]>; byCat: Partial<Record<CatId, string[]>> } = { byId: {}, byCat: {} };
   private loaded: Promise<void> | null = null;
   private mounted: Mounted[] = [];
   private observers: IntersectionObserver[] = [];
@@ -66,6 +69,17 @@ export class Encyclopedia {
     this.search.addEventListener('input', () => { const q = this.search.value.trim(); if (q.length >= 2) this.show(`buscar:${q}`, false); else if (!q && this.current.startsWith('buscar:')) this.back(); });
     this.main.addEventListener('click', (e) => this.onClick(e));
     this.nav.addEventListener('click', (e) => this.onClick(e));
+    // Imagen que no carga (Commons caído, límite de peticiones…): un reintento a otro tamaño y, si
+    // vuelve a fallar, se retira la figura para no dejar huecos.
+    this.main.addEventListener('error', (e) => {
+      const img = e.target as HTMLImageElement;
+      if (!(img instanceof HTMLImageElement)) return;
+      const fig = img.closest('figure');
+      const file = img.closest<HTMLElement>('[data-zoom]')?.dataset.zoom;
+      if (file && !img.dataset.retry) { img.dataset.retry = '1'; setTimeout(() => { img.src = this.imgUrl(file, 500); }, 1500); return; }
+      if (fig?.closest('.enc-gal')) fig.remove();
+      else fig?.classList.add('enc-photo-off');
+    }, true);
     window.addEventListener('keydown', (e) => {
       if (this.el.classList.contains('hidden')) return;
       if (e.key === 'Escape') { e.preventDefault(); this.close(); }
@@ -80,6 +94,9 @@ export class Encyclopedia {
       this.loaded = import('./content/index').then((m) => {
         this.articles = m.ALL_ARTICLES;
         this.glossary = m.GLOSSARY;
+        this.images = m.IMAGES;
+        this.math = m.MATH;
+        this.sources = m.SOURCES;
         for (const a of this.articles) this.byId.set(a.id, a);
         this.buildNav();
       });
@@ -175,8 +192,22 @@ export class Encyclopedia {
   }
 
   private onClick(e: Event) {
-    const t = (e.target as HTMLElement).closest('[data-go],[data-sim],[data-model]') as HTMLElement | null;
+    const t = (e.target as HTMLElement).closest('[data-go],[data-sim],[data-model],[data-anchor],[data-zoom],[data-step],[data-step-d]') as HTMLElement | null;
     if (!t) return;
+    if (t.dataset.anchor) { e.preventDefault(); this.main.querySelector(`#${t.dataset.anchor}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (t.dataset.zoom) { e.preventDefault(); this.lightbox(t.dataset.zoom, t.dataset.cap ?? ''); return; }
+    if (t.dataset.step !== undefined || t.dataset.stepD !== undefined) {
+      e.preventDefault();
+      const st = t.closest('.enc-story') as HTMLElement;
+      const n = +(st.dataset.n ?? 1);
+      const cur = +(st.querySelector('.enc-step.on') as HTMLElement).dataset.i!;
+      const to = t.dataset.step !== undefined ? +t.dataset.step : Math.max(0, Math.min(n - 1, cur + +t.dataset.stepD!));
+      st.querySelectorAll('.enc-step').forEach((x, i) => x.classList.toggle('on', i === to));
+      st.querySelectorAll('.enc-story-bar button').forEach((x, i) => { x.classList.toggle('on', i === to); x.classList.toggle('past', i < to); });
+      (st.querySelector('.enc-story-c') as HTMLElement).textContent = `${to + 1} / ${n}`;
+      return;
+    }
+    if (!t.dataset.go && !t.dataset.sim) return;
     e.preventDefault();
     if (t.dataset.go) { if (t.closest('.enc-nav')) this.search.value = ''; this.show(t.dataset.go); }
     else if (t.dataset.sim) { const p = t.dataset.sim; this.close(); this.onSim(p); }
@@ -244,19 +275,79 @@ export class Encyclopedia {
 
   private article(a: Article) {
     const cat = CATEGORIES.find((c) => c.id === a.cat)!;
-    const blocks = a.blocks.map((b, i) => this.block(b, i)).join('');
+    // la primera ficha técnica va en la columna lateral
+    const fi = a.blocks.findIndex((b) => b.t === 'facts');
+    const facts = fi >= 0 ? a.blocks[fi] as Extract<Block, { t: 'facts' }> : null;
+    const body = a.blocks.filter((_, i) => i !== fi);
+    const imgs = this.images[a.id] ?? [];
+    const math = this.math[a.id] ?? [];
+    const src = [...(a.sources ?? []), ...(this.sources.byId[a.id] ?? []), ...(this.sources.byCat[a.cat] ?? [])];
+    // índice de secciones
+    let hn = 0;
+    const toc: string[] = [];
+    const blocks: string[] = [];
+    let story: Extract<Block, { t: 'step' }>[] = [];
+    const flushStory = () => { if (story.length) { blocks.push(this.storyHtml(story)); story = []; } };
+    body.forEach((b, i) => {
+      if (b.t === 'step') { story.push(b); return; }
+      flushStory();
+      if (b.t === 'h') { const id = `s-${++hn}`; toc.push(`<a data-anchor="${id}">${this.md(b.text)}</a>`); blocks.push(`<h2 id="${id}">${this.md(b.text)}</h2>`); return; }
+      blocks.push(this.block(b, i));
+      // segunda foto tras el segundo párrafo, para airear el texto
+      if (i === 2 && imgs[1]) blocks.push(this.figure(imgs[1], false));
+    });
+    flushStory();
+    if (math.length) { toc.push(`<a data-anchor="s-math">Las matemáticas</a>`); blocks.push(`<h2 id="s-math">Las matemáticas</h2>`, ...math.map((b, i) => this.block(b, 1000 + i))); }
+    const rest = imgs.slice(2);
+    if (rest.length) { toc.push(`<a data-anchor="s-img">Imágenes</a>`); blocks.push(`<h2 id="s-img">Imágenes</h2>`, this.gallery(rest)); }
+    if (src.length) { toc.push(`<a data-anchor="s-src">Fuentes</a>`); blocks.push(`<h2 id="s-src">Fuentes y lecturas</h2>`, this.block({ t: 'sources', items: src }, 2000)); }
     const rel = (a.related ?? []).filter((r) => this.byId.has(r)).map((r) => `<a data-go="${r}">${esc(this.byId.get(r)!.title)}</a>`).join('');
     const list = this.inCat(a.cat);
     const i = list.indexOf(a);
     const prev = list[i - 1], next = list[i + 1];
-    return `<article class="enc-art">
-      <div class="enc-kicker"><a data-go="cat:${a.cat}">${cat.name}</a></div>
-      <h1>${esc(a.title)}</h1>
-      <p class="enc-lead">${this.md(a.summary)}</p>
-      ${blocks}
-      ${rel ? `<h2>Artículos relacionados</h2><div class="enc-rel">${rel}</div>` : ''}
-      <div class="enc-pn">${prev ? `<a data-go="${prev.id}">← ${esc(prev.title)}</a>` : '<span></span>'}${next ? `<a data-go="${next.id}">${esc(next.title)} →</a>` : ''}</div>
+    const hero = imgs[0] ? this.figure(imgs[0], true) : '';
+    return `<article class="enc-art enc-wide">
+      <header class="enc-hd">
+        <div class="enc-kicker"><a data-go="cat:${a.cat}">${cat.name}</a></div>
+        <h1>${esc(a.title)}</h1>
+        <p class="enc-lead">${this.md(a.summary)}</p>
+      </header>
+      <div class="enc-grid">
+        <div class="enc-body">
+          ${hero}
+          ${blocks.join('')}
+          ${rel ? `<h2>Artículos relacionados</h2><div class="enc-rel">${rel}</div>` : ''}
+          <div class="enc-pn">${prev ? `<a data-go="${prev.id}">← ${esc(prev.title)}</a>` : '<span></span>'}${next ? `<a data-go="${next.id}">${esc(next.title)} →</a>` : ''}</div>
+        </div>
+        <aside class="enc-aside">
+          ${facts ? `<div class="enc-box"><div class="enc-box-h">Ficha</div>${this.block(facts, fi)}</div>` : ''}
+          ${toc.length > 1 ? `<div class="enc-box enc-toc"><div class="enc-box-h">En este artículo</div>${toc.join('')}</div>` : ''}
+        </aside>
+      </div>
     </article>`;
+  }
+
+  /** URL de una imagen de Wikimedia Commons a un ancho dado */
+  private imgUrl(file: string, w: number) { return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/ /g, '_'))}?width=${w}`; }
+  private imgPage(file: string) { return `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file.replace(/ /g, '_'))}`; }
+  private credit(r: ImgRef) {
+    const parts = [r.credit, r.license].filter(Boolean).map((x) => esc(x!));
+    return `<span class="enc-credit">${parts.join(' · ')}${parts.length ? ' · ' : ''}<a href="${this.imgPage(r.file)}" target="_blank" rel="noopener">Wikimedia Commons</a></span>`;
+  }
+  private figure(r: ImgRef, hero: boolean) {
+    return `<figure class="enc-photo${hero ? ' hero' : ''}"><button type="button" class="enc-zoom" data-zoom="${esc(r.file)}" data-cap="${esc(r.caption)}" aria-label="Ampliar"><img loading="lazy" decoding="async" src="${this.imgUrl(r.file, hero ? 1600 : 1100)}" alt="${esc(r.caption)}" /></button><figcaption>${this.md(r.caption)} ${this.credit(r)}</figcaption></figure>`;
+  }
+  private gallery(items: ImgRef[]) {
+    return `<div class="enc-gal">${items.map((r) => `<figure><button type="button" class="enc-zoom" data-zoom="${esc(r.file)}" data-cap="${esc(r.caption)}" aria-label="Ampliar"><img loading="lazy" decoding="async" src="${this.imgUrl(r.file, 700)}" alt="${esc(r.caption)}" /></button><figcaption>${this.md(r.caption)} ${this.credit(r)}</figcaption></figure>`).join('')}</div>`;
+  }
+  /** relato por pasos con navegación */
+  private storyHtml(steps: Extract<Block, { t: 'step' }>[]) {
+    const dots = steps.map((s, i) => `<button type="button" class="${i === 0 ? 'on' : ''}" data-step="${i}" title="${esc(s.title)}"><b>${esc(s.time)}</b></button>`).join('');
+    const panes = steps.map((s, i) => `<section class="enc-step${i === 0 ? ' on' : ''}" data-i="${i}">
+        ${s.file ? `<figure class="enc-photo"><button type="button" class="enc-zoom" data-zoom="${esc(s.file)}" data-cap="${esc(s.title)}"><img loading="lazy" src="${this.imgUrl(s.file, 1200)}" alt="${esc(s.title)}" /></button>${s.credit ? `<figcaption>${this.credit({ file: s.file, caption: '', credit: s.credit })}</figcaption>` : ''}</figure>` : ''}
+        <div class="enc-step-t"><div class="enc-step-time">${esc(s.time)}</div><h3>${this.md(s.title)}</h3><p>${this.md(s.text)}</p>${s.sim ? `<button class="enc-sim" type="button" data-sim="${esc(s.sim)}"><span>▶</span>Verlo en el simulador</button>` : ''}</div>
+      </section>`).join('');
+    return `<div class="enc-story" data-n="${steps.length}"><div class="enc-story-bar">${dots}</div>${panes}<div class="enc-story-nav"><button type="button" data-step-d="-1">← Anterior</button><span class="enc-story-c">1 / ${steps.length}</span><button type="button" data-step-d="1">Siguiente →</button></div></div>`;
   }
 
   private block(b: Block, i: number): string {
@@ -272,12 +363,35 @@ export class Encyclopedia {
       case 'diagram': return `<figure class="enc-fig" data-diagram="${b.id}" data-i="${i}"><div class="enc-slot"></div>${b.caption ? `<figcaption>${this.md(b.caption)}</figcaption>` : ''}</figure>`;
       case 'model': return `<figure class="enc-fig enc-model" data-model="${b.id}" data-params='${esc(JSON.stringify(b.params ?? {})).replace(/'/g, '&#39;')}'><div class="enc-slot enc-mslot"><span>Modelo 3D · ${esc(b.params?.label ?? b.id)}</span></div>${b.caption ? `<figcaption>${this.md(b.caption)}</figcaption>` : ''}</figure>`;
       case 'sim': return `<button class="enc-sim" type="button" data-sim="${esc(b.preset)}"><span>▶</span>${esc(b.label ?? `Simular ${b.preset} en el mapa`)}</button>`;
+      case 'img': return this.figure(b, !!b.wide);
+      case 'gallery': return this.gallery(b.items);
+      case 'math': return `<div class="enc-math"><div class="enc-f">${this.tex(b.f)}</div>${b.caption ? `<p class="enc-math-c">${this.md(b.caption)}</p>` : ''}${b.vars?.length ? `<dl>${b.vars.map(([k, v]) => `<dt>${this.tex(k)}</dt><dd>${this.md(v)}</dd>`).join('')}</dl>` : ''}</div>`;
+      case 'sources': return `<ol class="enc-src">${b.items.map((x) => `<li>${this.md(x)}</li>`).join('')}</ol>`;
+      case 'chart': return `<figure class="enc-fig enc-chart" data-chart="${b.id}"><div class="enc-slot"></div>${b.caption ? `<figcaption>${this.md(b.caption)}</figcaption>` : ''}</figure>`;
+      case 'widget': return `<figure class="enc-fig enc-widget" data-widget="${b.id}"><div class="enc-slot"></div>${b.caption ? `<figcaption>${this.md(b.caption)}</figcaption>` : ''}</figure>`;
+      case 'step': return this.storyHtml([b]);
     }
+  }
+
+  /** fórmulas: a^{2}, x_{0}, \frac{a}{b}, \sqrt{x} y letras griegas con \alpha, \Delta… */
+  tex(s: string): string {
+    const G: Record<string, string> = { alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', epsilon: 'ε', eta: 'η', theta: 'θ', lambda: 'λ', mu: 'μ', nu: 'ν', pi: 'π', rho: 'ρ', sigma: 'σ', Sigma: 'Σ', tau: 'τ', phi: 'φ', omega: 'ω', Omega: 'Ω', approx: '≈', int: '∫', times: '×', cdot: '·', propto: '∝', infty: '∞', le: '≤', ge: '≥', to: '→', pm: '±' };
+    let h = esc(s);
+    for (let k = 0; k < 4; k++) {
+      h = h.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '<span class="fr"><span>$1</span><span>$2</span></span>')
+        .replace(/\\sqrt\{([^{}]*)\}/g, '<span class="sq">√<span>$1</span></span>')
+        .replace(/\^\{([^{}]*)\}/g, '<sup>$1</sup>').replace(/_\{([^{}]*)\}/g, '<sub>$1</sub>');
+    }
+    h = h.replace(/\^([A-Za-z0-9.,+−-]+)/g, '<sup>$1</sup>').replace(/_([A-Za-z0-9]+)/g, '<sub>$1</sub>');
+    h = h.replace(/\\([A-Za-z]+)/g, (m, w: string) => G[w] ?? m);
+    return h;
   }
 
   /** marcado mínimo: **negrita**, *cursiva* y [[id|texto]] */
   md(s: string): string {
     let h = esc(s);
+    h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="enc-ext">$1</a>');
+    h = h.replace(/\^\{([^{}]*)\}/g, '<sup>$1</sup>').replace(/_\{([^{}]*)\}/g, '<sub>$1</sub>');
     h = h.replace(/\[\[([a-z0-9-]+)(?:\|([^\]]+))?\]\]/g, (_m, id: string, txt?: string) => {
       const a = this.byId.get(id);
       const label = txt ?? a?.title ?? id;
@@ -295,7 +409,18 @@ export class Encyclopedia {
         const slot = fig.querySelector('.enc-slot') as HTMLElement;
         const live = (fig as unknown as { _m?: Mounted })._m;
         if (e.isIntersecting && !live) {
-          if (fig.dataset.diagram) {
+          if (fig.dataset.chart || fig.dataset.widget) {
+            const kind = fig.dataset.chart ? 'chart' : 'widget';
+            if ((fig as unknown as { _l?: boolean })._l) continue;
+            (fig as unknown as { _l?: boolean })._l = true;
+            import('./widgets').then((w) => {
+              if (!fig.isConnected) return;
+              slot.innerHTML = '';
+              const m = kind === 'chart' ? w.mountChart(fig.dataset.chart as never, slot) : w.mountWidget(fig.dataset.widget as never, slot);
+              (fig as unknown as { _m?: Mounted })._m = m;
+              this.mounted.push(m);
+            });
+          } else if (fig.dataset.diagram) {
             slot.innerHTML = '';
             const m = mountDiagram(fig.dataset.diagram as never, slot);
             (fig as unknown as { _m?: Mounted })._m = m;
@@ -325,6 +450,18 @@ export class Encyclopedia {
     }, { root: this.main, rootMargin: '400px 0px' });
     this.main.querySelectorAll('.enc-fig').forEach((f) => io.observe(f));
     this.observers.push(io);
+  }
+
+  /** foto a pantalla completa */
+  private lightbox(file: string, cap: string) {
+    const box = document.createElement('div');
+    box.className = 'enc-lb';
+    box.innerHTML = `<img src="${this.imgUrl(file, 2400)}" alt="${esc(cap)}" /><div class="enc-lb-c">${esc(cap)} · <a href="${this.imgPage(file)}" target="_blank" rel="noopener">ver en Wikimedia Commons</a></div><button type="button" class="enc-lb-x" title="Cerrar">✕</button>`;
+    const close = () => { box.remove(); window.removeEventListener('keydown', key, true); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } };
+    box.addEventListener('click', (e) => { if (!(e.target as HTMLElement).closest('a')) close(); });
+    window.addEventListener('keydown', key, true);
+    this.el.append(box);
   }
 
   private unmountAll() {

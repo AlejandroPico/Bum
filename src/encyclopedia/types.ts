@@ -9,12 +9,13 @@
  * Nunca cantidades de material, dimensiones de componentes internos ni parámetros de diseño.
  */
 
-export type CatId = 'fund' | 'tipos' | 'hist' | 'efec' | 'acc' | 'cosmos' | 'cat';
+export type CatId = 'fund' | 'tipos' | 'hist' | 'relatos' | 'efec' | 'acc' | 'cosmos' | 'cat';
 
 export const CATEGORIES: { id: CatId; name: string; desc: string }[] = [
   { id: 'fund', name: 'Fundamentos', desc: 'Átomos, radiactividad, fisión, fusión y energía.' },
   { id: 'tipos', name: 'Tipos de armas', desc: 'Cómo funcionan las armas de fisión, termonucleares y convencionales, y sus vectores.' },
   { id: 'hist', name: 'Historia', desc: 'Del descubrimiento de la fisión a los arsenales actuales.' },
+  { id: 'relatos', name: 'Historias guiadas', desc: 'Grandes momentos contados paso a paso, con fotografías, cifras y la simulación en el mapa.' },
   { id: 'efec', name: 'Efectos', desc: 'Bola de fuego, onda expansiva, calor, radiación, lluvia radiactiva y clima.' },
   { id: 'acc', name: 'Accidentes y desastres', desc: 'Accidentes nucleares, incidentes con armas y grandes explosiones.' },
   { id: 'cosmos', name: 'Impactos cósmicos', desc: 'Asteroides, cometas y defensa planetaria.' },
@@ -87,7 +88,28 @@ export type Block =
   | { t: 'diagram'; id: DiagramId; caption?: string }
   | { t: 'compare'; head: string[]; rows: string[][] }
   /** botón "Simular en el mapa" con el nombre EXACTO de un preset del simulador */
-  | { t: 'sim'; preset: string; label?: string };
+  | { t: 'sim'; preset: string; label?: string }
+  /** fotografía de Wikimedia Commons (nombre del archivo sin «File:») */
+  | { t: 'img'; file: string; caption: string; credit?: string; license?: string; wide?: boolean }
+  | { t: 'gallery'; items: ImgRef[] }
+  /**
+   * fórmula. Marcado: a^{2} superíndice, x_{0} subíndice, \frac{a}{b} fracción, \sqrt{x} raíz.
+   * `vars`: significado de cada símbolo.
+   */
+  | { t: 'math'; f: string; caption?: string; vars?: [string, string][] }
+  /** bibliografía; admite enlaces [texto](https://…) */
+  | { t: 'sources'; items: string[] }
+  | { t: 'chart'; id: ChartId; caption?: string }
+  | { t: 'widget'; id: WidgetId; caption?: string }
+  /** paso de una historia guiada (los pasos seguidos se muestran como un relato navegable) */
+  | { t: 'step'; time: string; title: string; text: string; file?: string; credit?: string; sim?: string };
+
+export interface ImgRef { file: string; caption: string; credit?: string; license?: string }
+
+/** gráficos interactivos */
+export type ChartId = 'arsenals' | 'tests-per-year' | 'tests-by-country' | 'yields' | 'doomsday';
+/** pequeñas calculadoras */
+export type WidgetId = 'scaling' | 'decay' | 'energy' | 'asteroid' | 'distance';
 
 export interface Article {
   /** identificador único en minúsculas con guiones (p. ej. "proyecto-manhattan") */
@@ -103,6 +125,8 @@ export interface Article {
   related?: string[];
   /** orden dentro de la categoría (menor primero) */
   order?: number;
+  /** bibliografía propia del artículo (se suma a la de su sección) */
+  sources?: string[];
 }
 
 export interface GlossaryTerm {

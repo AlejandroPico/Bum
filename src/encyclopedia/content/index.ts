@@ -10,3 +10,6 @@ import { ARTICLES as catO } from './catalogo-otros';
 export { GLOSSARY } from './glosario';
 
 export const ALL_ARTICLES: Article[] = [...fund, ...tipos, ...hist, ...efec, ...acc, ...cosmos, ...catN, ...catO];
+export { IMAGES } from './media';
+export { MATH } from './math';
+export { SOURCES } from './sources';
