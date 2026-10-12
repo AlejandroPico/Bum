@@ -7,6 +7,7 @@ import { contours } from 'd3-contour';
 import { densityField, nearestCity } from '../data/cities';
 import { windAt } from './wind';
 import type { Effects, Environment, FalloutContour, Ring, ReleaseInput, VolcanoInput, Isotope } from './types';
+import { LOCALE } from '../i18n/locale';
 
 const KT_J = 4.184e12;
 
@@ -208,7 +209,7 @@ export function computeRelease(sc: ReleaseInput, env: Environment, lat: number, 
   const base = blast ?? null;
   const rings: Ring[] = base ? [...base.rings] : [];
   const notes: string[] = [
-    `${iso.name}: ${Q >= 1e15 ? (Q / 1e15).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' PBq' : (Q / 1e12).toLocaleString('es-ES', { maximumFractionDigits: 2 }) + ' TBq'} dispersados${sc.source === 'dirtybomb' ? ' (≈ 20 % del material, en aerosol)' : ''}, liberados a ${Math.round(H)} m de altura con viento de ${Math.round(W.kmh)} km/h.`,
+    `${iso.name}: ${Q >= 1e15 ? (Q / 1e15).toLocaleString(LOCALE, { maximumFractionDigits: 1 }) + ' PBq' : (Q / 1e12).toLocaleString(LOCALE, { maximumFractionDigits: 2 }) + ' TBq'} dispersados${sc.source === 'dirtybomb' ? ' (≈ 20 % del material, en aerosol)' : ''}, liberados a ${Math.round(H)} m de altura con viento de ${Math.round(W.kmh)} km/h.`,
     iso.note,
     sc.source === 'reactor' && traj ? `Viento hora a hora (previsión de Open-Meteo para ${env.windHourly!.length} h; después se mantiene el último): la emisión se reparte en bocanadas que siguen el viento de cada hora, como ocurrió en Chernóbil.` : sc.source === 'reactor' ? 'Una sola dirección de viento: en un accidente real el viento cambia durante los días de emisión y reparte la contaminación en varias direcciones (en Chernóbil, durante 10 días).' : 'Una bomba sucia apenas mata por radiación: su efecto principal es el pánico, la contaminación y el coste de limpieza.',
   ];
@@ -305,7 +306,7 @@ export function computeVolcano(sc: VolcanoInput, env: Environment, lat: number, 
     rings, fallout,
     casualties: { deaths, injuries: inj, exposed, profile: prof, cityName: nearestCity(lat, lon).city.name },
     notes: [
-      `Erupción de índice VEI ${vei}: unos ${V.toLocaleString('es-ES', { maximumFractionDigits: 1 })} km³ de ceniza y roca, columna eruptiva de ${Math.round(col / 1000)} km.`,
+      `Erupción de índice VEI ${vei}: unos ${V.toLocaleString(LOCALE, { maximumFractionDigits: 1 })} km³ de ceniza y roca, columna eruptiva de ${Math.round(col / 1000)} km.`,
       vei >= 8 ? 'Supererupción: la ceniza cubriría un continente y el enfriamiento global duraría años (como Toba hace 74 000 años o Yellowstone hace 640 000).' : vei === 7 ? 'Como el Tambora (1815), que provocó el «año sin verano».' : 'Erupción muy grande, como el Pinatubo (1991) o el Krakatoa (1883).',
       'Modelo simplificado: el espesor de la ceniza decrece exponencialmente con la distancia (Pyle, 1989) y se alarga con el viento.',
     ],

@@ -6,6 +6,7 @@ import type maplibregl from 'maplibre-gl';
 import type { HeatGrid, HeatKind } from '../physics/heat';
 import { h } from '../ui/dom';
 import { putCanvas, dropLayer } from './canvas-layer';
+import { LOCALE } from '../i18n/locale';
 
 const ID = 'fx-heat';
 
@@ -33,7 +34,7 @@ function rampColor(kind: HeatKind, u: number): [number, number, number] {
 
 const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
 const invMercY = (y: number) => (360 / Math.PI) * Math.atan(Math.exp(y)) - 90;
-const fmtN = (x: number) => (x >= 1e6 ? `${(x / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 1 })} mill.` : Math.round(x).toLocaleString('es-ES'));
+const fmtN = (x: number) => (x >= 1e6 ? `${(x / 1e6).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} mill.` : Math.round(x).toLocaleString(LOCALE));
 
 /** escala logarítmica: valor mínimo representado y máximo */
 function scale(g: HeatGrid) {

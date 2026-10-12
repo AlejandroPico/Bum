@@ -2,6 +2,8 @@ import type { Map as MLMap, GeoJSONSource, ExpressionSpecification } from 'mapli
 import type { Effects, Ring } from '../physics/types';
 import { fmtDist } from '../physics/effects';
 import { BUILDING_COLOR } from './map';
+import { DEC } from '../i18n/locale';
+import { tr } from '../i18n';
 
 type FC = GeoJSON.FeatureCollection;
 const empty = (): FC => ({ type: 'FeatureCollection', features: [] });
@@ -353,7 +355,7 @@ export class Overlays {
         });
         if (S.main) labels.push({
           type: 'Feature',
-          properties: { text: `${r.label} · ${fmtDist(r.radiusM)}`, color: r.color, order: i },
+          properties: { text: `${tr(r.label)} · ${fmtDist(r.radiusM)}`, color: r.color, order: i },
           geometry: { type: 'Point', coordinates: destination(lat, lon, r.radiusM, 180 + (i % 2 ? 18 : -18) * (i % 3)) },
         });
       });
@@ -378,7 +380,7 @@ export class Overlays {
           const reach = Math.min(c.maxDownwindKm * 1000, front);
           if (reach > 500 && this.showFallout && S.main) {
             const to = (fx.windFromDeg + 180) % 360;
-            flab.push({ type: 'Feature', properties: { text: `${c.label} · ${fmtDist(reach)}`, color: c.color }, geometry: { type: 'Point', coordinates: destination(lat, lon, reach, to) } });
+            flab.push({ type: 'Feature', properties: { text: `${tr(c.label)} · ${fmtDist(reach)}`, color: c.color }, geometry: { type: 'Point', coordinates: destination(lat, lon, reach, to) } });
           }
         }
       }
@@ -439,7 +441,7 @@ export class Overlays {
             ring.push(destination(lat, lon, lo, b));
           }
           emp.push({ type: 'Feature', properties: { level: lv, opacity: lv >= 25 ? 0.22 : lv >= 12.5 ? 0.14 : 0.08 }, geometry: { type: 'Polygon', coordinates: [ring] } });
-          if (S.main) labels.push({ type: 'Feature', properties: { text: `EMP > ${String(lv).replace('.', ',')} kV/m`, color: '#4cc9f0', order: 99 }, geometry: { type: 'Point', coordinates: ring[45] } });
+          if (S.main) labels.push({ type: 'Feature', properties: { text: `EMP > ${String(lv).replace('.', DEC)} kV/m`, color: '#4cc9f0', order: 99 }, geometry: { type: 'Point', coordinates: ring[45] } });
         }
       }
     }

@@ -6,6 +6,7 @@
 import type { Effects } from './types';
 import { casualtyProbs } from './effects';
 import { interpTable } from './blast';
+import { LOCALE, DEC } from '../i18n/locale';
 
 export type Level = 'extremo' | 'grave' | 'riesgo' | 'bajo' | 'fuera';
 
@@ -37,9 +38,9 @@ export function localOffset(gzLat: number, gzLon: number, lat: number, lon: numb
   return { e: d * Math.sin(bearing * rad), n: d * Math.cos(bearing * rad), d, bearing };
 }
 
-const fmtS = (s: number) => (s < 90 ? `${Math.max(1, Math.round(s))} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1).replace('.', ',')} h`);
-const fmtH = (h: number) => (h < 1.5 ? `${Math.max(5, Math.round(h * 60))} min` : h < 48 ? `${h.toFixed(h < 10 ? 1 : 0).replace('.', ',')} h` : `${(h / 24).toFixed(1).replace('.', ',')} días`);
-const n1 = (x: number, d = 1) => x.toLocaleString('es-ES', { maximumFractionDigits: d });
+const fmtS = (s: number) => (s < 90 ? `${Math.max(1, Math.round(s))} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1).replace('.', DEC)} h`);
+const fmtH = (h: number) => (h < 1.5 ? `${Math.max(5, Math.round(h * 60))} min` : h < 48 ? `${h.toFixed(h < 10 ? 1 : 0).replace('.', DEC)} h` : `${(h / 24).toFixed(1).replace('.', DEC)} días`);
+const n1 = (x: number, d = 1) => x.toLocaleString(LOCALE, { maximumFractionDigits: d });
 const ORDER: Level[] = ['fuera', 'bajo', 'riesgo', 'grave', 'extremo'];
 const worst = (a: Level, b: Level) => (ORDER.indexOf(a) >= ORDER.indexOf(b) ? a : b);
 

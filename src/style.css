@@ -799,7 +799,11 @@ body.ui-collapsed #heat-legend { left: 16px; }
 #tour-bars .tb-top { top: 0; transform-origin: top; }
 #tour-bars .tb-bot { bottom: 0; transform-origin: bottom; }
 body.touring #tour-bars .tb-top, body.touring #tour-bars .tb-bot { transform: scaleY(1); }
-.tour-exit { position: absolute; top: calc(4.5vh - 14px); right: 18px; height: 28px; padding: 0 12px; border: 0; background: transparent; color: rgba(255, 255, 255, 0.55); font: 500 12px var(--font); cursor: pointer; pointer-events: auto; opacity: 0; transition: opacity 0.6s, color 0.2s; }
+.tour-btns { position: absolute; top: calc(4.5vh - 14px); right: 18px; display: flex; gap: 6px; pointer-events: auto; }
+.tour-voice { height: 28px; padding: 0 12px; border: 0; background: transparent; color: rgba(255, 255, 255, 0.45); font: 500 12px var(--font); cursor: pointer; opacity: 0; transition: opacity 0.6s, color 0.2s; }
+.tour-voice.on { color: #ffb27a; }
+body.touring .tour-voice { opacity: 1; }
+.tour-exit { position: relative; height: 28px; padding: 0 12px; border: 0; background: transparent; color: rgba(255, 255, 255, 0.55); font: 500 12px var(--font); cursor: pointer; pointer-events: auto; opacity: 0; transition: opacity 0.6s, color 0.2s; }
 body.touring .tour-exit { opacity: 1; }
 body:not(.touring) .tour-exit { pointer-events: none; }
 .tour-exit:hover { color: #fff; }
@@ -859,3 +863,8 @@ body.lite #view-pop { backdrop-filter: none !important; -webkit-backdrop-filter:
 
 /* ---------- 1.7: vuelo del arma ---------- */
 .flight-dot { width: 10px; height: 10px; background: #fff3d6; box-shadow: 0 0 0 2px #ff6a1a, 0 0 12px 4px rgba(255, 106, 26, 0.7); border-radius: 50%; pointer-events: none; }
+.enc-lang { margin: 0 20px 10px; font: 400 11px/1.4 var(--font); color: var(--faint); }
+.enc-lang:empty { display: none; }
+body:not(.touring) .tour-btns, body:not(.touring) .tour-btns button { pointer-events: none !important; }
+/* textos más largos en otros idiomas: los botones de opciones pueden partir la línea */
+.seg button { white-space: normal; line-height: 1.2; }

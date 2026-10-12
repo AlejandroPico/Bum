@@ -7,12 +7,13 @@ import { fmtDist, fmtEnergy, compass } from '../physics/effects';
 import { interpTable, PSI, peakWind, decibels } from '../physics/blast';
 import { fmtNum } from './dom';
 import type { Effects, Ring } from '../physics/types';
+import { LOCALE, DEC } from '../i18n/locale';
 
 export interface StatRow { k: string; v: string; hint?: string; strong?: boolean }
 export interface StatSection { tab: 'pop' | 'phys' | 'rad' | 'cmp'; title: string; rows: StatRow[]; note?: string }
 
 const KT_J = 4.184e12;
-const n1 = (x: number, d = 1) => x.toLocaleString('es-ES', { maximumFractionDigits: d });
+const n1 = (x: number, d = 1) => x.toLocaleString(LOCALE, { maximumFractionDigits: d });
 const pct = (x: number) => `${n1(x * 100, x < 0.01 ? 2 : 1)} %`;
 const sci = (x: number) => {
   if (!isFinite(x)) return '—';
@@ -145,7 +146,7 @@ export function buildStats(fx: Effects): StatSection[] {
   }
   S.push({ tab: 'phys', title: 'Bola de fuego y nube', rows: fb });
   if (fx.missile) {
-    const M = fx.missile, n0 = (x: number) => Math.round(x).toLocaleString('es-ES');
+    const M = fx.missile, n0 = (x: number) => Math.round(x).toLocaleString(LOCALE);
     const dur = (m: number) => (m >= 90 ? `${Math.floor(m / 60)} h ${Math.round(m % 60)} min` : `${n0(m)} min`);
     const P = M.profile ?? 'ballistic';
     const rows: StatRow[] = [
@@ -156,7 +157,7 @@ export function buildStats(fx: Effects): StatSection[] {
     ];
     if (P === 'ballistic') rows.push({ k: 'Apogeo', v: `${n0(M.apogeeKm)} km`, hint: 'altura máxima de la trayectoria, por encima de la Estación Espacial' });
     else rows.push({ k: P === 'hgv' ? 'Altura de planeo' : 'Altura de vuelo', v: (M.cruiseKm ?? 0) >= 1 ? `≈ ${n0(M.cruiseKm!)} km` : `≈ ${n0((M.cruiseKm ?? 0) * 1000)} m`, hint: P === 'hgv' ? 'muy por debajo de un misil balístico: los radares de alerta lo ven tarde' : P === 'cruise' ? 'por debajo del horizonte de los radares de tierra' : '' });
-    rows.push({ k: P === 'ballistic' ? 'Velocidad de reentrada' : 'Velocidad final', v: `${M.reentryKms.toFixed(1).replace('.', ',')} km/s`, hint: `unas ${n0((M.reentryKms * 1000) / 340)} veces la velocidad del sonido` });
+    rows.push({ k: P === 'ballistic' ? 'Velocidad de reentrada' : 'Velocidad final', v: `${M.reentryKms.toFixed(1).replace('.', DEC)} km/s`, hint: `unas ${n0((M.reentryKms * 1000) / 340)} veces la velocidad del sonido` });
     if (M.mirv) rows.push({ k: 'Ojivas en un solo misil', v: `${M.mirv}`, hint: 'el «bus» las suelta en el espacio y cada una cae sobre su objetivo (MIRV)' });
     else if ((M.targets ?? 1) > 1) rows.push({ k: 'Misiles', v: `${M.targets}`, hint: P === 'ballistic' ? 'objetivos demasiado separados para un solo misil' : 'uno por objetivo' });
     rows.push({ k: 'Tiempo de aviso', v: `≈ ${dur(M.warningMin)}`, hint: P === 'ballistic' ? 'desde que los satélites detectan el lanzamiento' : P === 'hgv' ? 'los satélites ven el cohete, pero el planeador se pierde bajo el horizonte de los radares' : 'desde que un radar puede verlo' });

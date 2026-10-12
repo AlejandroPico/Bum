@@ -1,4 +1,5 @@
 import { h, ICONS, fmtTime, setRangeFill } from './dom';
+import { DEC } from '../i18n/locale';
 
 export interface TimelineEvents {
   onPlayPause(): void;
@@ -96,7 +97,7 @@ export class Timeline {
       this.range.value = String(Math.round(Math.min(1, Math.max(0, this.toS(t))) * 1000));
       setRangeFill(this.range);
     }
-    const rt = rate >= 1 ? `×${Math.round(rate)}` : `×${rate.toFixed(2).replace('.', ',')}`;
+    const rt = rate >= 1 ? `×${Math.round(rate)}` : `×${rate.toFixed(2).replace('.', DEC)}`;
     this.time.innerHTML = `T${t < 0 ? '' : '+'}${fmtTime(t)}<small>tiempo real ${rt}</small>`;
     this.play.innerHTML = playing ? ICONS.pause : ICONS.play;
   }

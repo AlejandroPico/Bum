@@ -8,6 +8,8 @@ import { fmtEnergy } from '../physics/effects';
 import type { NuclearInput, AsteroidInput, Environment, BurstMode, TargetType, Scenario, ReleaseInput, VolcanoInput, Isotope, DamInput, SolarInput, WarInput } from '../physics/types';
 import { ISOTOPES } from '../physics/other';
 import type { ThemeChoice } from './theme';
+import { LOCALE, DEC } from '../i18n/locale';
+import { LANGS, systemLang, langPref, setLangPref, tr, lang } from '../i18n';
 
 export interface ViewOptions {
   domes: boolean; rings: boolean; fallout: boolean; damage: boolean; fires: boolean; sound: boolean; cinematic: boolean; labels: boolean;
@@ -18,6 +20,10 @@ export interface ViewOptions {
   /** tiempo real dibujado en el mapa (nubes, lluvia, niebla) y radar de precipitación */
   weather: boolean;
   radar: boolean;
+  /** narración por voz en el recorrido cinematográfico */
+  narration: boolean;
+  /** al detonar, empezar directamente con el recorrido cinematográfico */
+  autoTour: boolean;
   basemap: string;
   fxOpacity: number;
   forceDay: boolean;
@@ -66,7 +72,7 @@ export function defaultState(): AppState {
     ast: { kind: 'asteroid', name: 'Tunguska (Siberia, 1908)', diameterM: 60, densityKgM3: 3000, velocityKms: 15, angleDeg: 35, target: 'sediment', waterDepthM: 0, azimuth: 250, surface: 'auto' },
     env: { windFromDeg: 270, windKmh: 24, visibilityKm: 25, humidity: 65, hour: 12, outdoorPct: null },
     target: { lat: 40.4168, lon: -3.7038, label: 'Madrid' },
-    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1, basemap: 'relieve', fxOpacity: 1, forceDay: false, terrain3d: true, buildings: true, mapLabels: true, autoQ: true, post: true, realPop: true, tests: false, theme: 'auto', reduceFlash: false, heat: 'off', weather: true, radar: false },
+    view: { domes: true, rings: true, fallout: true, damage: true, fires: true, sound: true, cinematic: true, labels: true, globe: false, marks: true, quality: 1, basemap: 'relieve', fxOpacity: 1, forceDay: false, terrain3d: true, buildings: true, mapLabels: true, autoQ: true, post: true, realPop: true, tests: false, theme: 'auto', reduceFlash: false, heat: 'off', weather: true, radar: false, narration: false, autoTour: false },
     live: true,
     launch: '',
     flightProfile: 'auto',
@@ -156,7 +162,9 @@ function compassInput(value: number, onChange: (deg: number) => void, label = 'v
   return { el: svg as unknown as HTMLElement, set };
 }
 
-const dirName = (deg: number) => ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+// abreviaturas de la rosa de los vientos en cada idioma
+const ROSE: Record<string, string[]> = { en: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], de: ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'] };
+const dirName = (deg: number) => (ROSE[lang] ?? ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'])[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 
 export class Sidebar {
   el: HTMLElement;
@@ -343,7 +351,7 @@ export class Sidebar {
         ? (sd >= 120 ? 'Contenida: sin bola de fuego ni lluvia radiactiva apreciable; terremoto y cráter de subsidencia.' : sd > 25 ? 'Poco profunda: gran cráter de excavación y lluvia radiactiva muy intensa (como Sedan, 1962).' : 'Casi en superficie: cráter y lluvia radiactiva intensa.')
         : (sd > 400 ? 'Profunda: sin columna; onda de choque en el agua y olas.' : 'Columna de agua, oleada de base radiactiva y olas (como Baker, 1946).'));
       nk.heightM = Math.min(2e6, Math.max(0, +hIn.value || 0));
-      hVal.textContent = nk.heightM >= 1000 ? `${(nk.heightM / 1000).toLocaleString('es-ES')} km` : `${nk.heightM} m`;
+      hVal.textContent = nk.heightM >= 1000 ? `${(nk.heightM / 1000).toLocaleString(LOCALE)} km` : `${nk.heightM} m`;
     };
     presetSel.addEventListener('change', () => {
       if (!presetSel.value) { presetNote.style.display = 'none'; nk.name = 'Arma personalizada'; return; }
@@ -396,9 +404,9 @@ export class Sidebar {
       const targets = multi ? S.multi.strikes.map((x) => ({ lat: x.lat, lon: x.lon })) : [{ lat: S.target.lat, lon: S.target.lon }];
       const F = planFlight(prof, s, targets);
       const dur = F.flightMin >= 90 ? `${Math.floor(F.flightMin / 60)} h ${Math.round(F.flightMin % 60)} min` : `${Math.round(F.flightMin)} min`;
-      const alt = F.profile === 'ballistic' ? `apogeo ${Math.round(F.apogeeKm).toLocaleString('es-ES')} km` : F.profile === 'hgv' ? `planeo a unos ${F.cruiseKm} km de altura` : F.profile === 'cruise' ? 'a unos 60 m del suelo' : 'a unos 11 km de altura';
+      const alt = F.profile === 'ballistic' ? `apogeo ${Math.round(F.apogeeKm).toLocaleString(LOCALE)} km` : F.profile === 'hgv' ? `planeo a unos ${F.cruiseKm} km de altura` : F.profile === 'cruise' ? 'a unos 60 m del suelo' : 'a unos 11 km de altura';
       const mv = F.mirv ? ` · un solo misil con ${F.mirv} ojivas (MIRV)` : multi && F.profile === 'ballistic' ? ' · objetivos demasiado separados para un solo misil: uno por objetivo' : '';
-      launchNote.textContent = `${s.note} ${F.name}: ${Math.round(F.rangeKm).toLocaleString('es-ES')} km · vuelo de unos ${dur} · ${alt}${mv}.`;
+      launchNote.textContent = `${s.note} ${F.name}: ${Math.round(F.rangeKm).toLocaleString(LOCALE)} km · vuelo de unos ${dur} · ${alt}${mv}.`;
     };
     launchSel.addEventListener('change', () => { S.launch = launchSel.value; updLaunch(); });
     profSel.addEventListener('change', () => { S.flightProfile = profSel.value as AppState['flightProfile']; updLaunch(); });
@@ -462,9 +470,9 @@ export class Sidebar {
     const azVal = h('b', {}, `${as.azimuth}° (${dirName(as.azimuth)})`);
     const updAst = () => {
       as.diameterM = Math.pow(10, +dR.value); setRangeFill(dR);
-      dVal.textContent = as.diameterM >= 1000 ? `${(as.diameterM / 1000).toLocaleString('es-ES', { maximumFractionDigits: 2 })} km` : `${Math.round(as.diameterM)} m`;
+      dVal.textContent = as.diameterM >= 1000 ? `${(as.diameterM / 1000).toLocaleString(LOCALE, { maximumFractionDigits: 2 })} km` : `${Math.round(as.diameterM)} m`;
       as.densityKgM3 = Math.min(23000, Math.max(300, +densIn.value || 3000));
-      as.velocityKms = +vR.value; setRangeFill(vR); vVal.textContent = `${as.velocityKms.toFixed(1).replace('.', ',')} km/s`;
+      as.velocityKms = +vR.value; setRangeFill(vR); vVal.textContent = `${as.velocityKms.toFixed(1).replace('.', DEC)} km/s`;
       as.angleDeg = +angR.value; setRangeFill(angR); angVal.textContent = `${as.angleDeg}°`;
       if (as.surface !== 'auto') as.waterDepthM = as.target === 'water' ? Math.min(11000, Math.max(1, +depthIn.value || 1000)) : 0;
       depthField.style.display = as.surface === 'water' ? '' : 'none';
@@ -487,7 +495,7 @@ export class Sidebar {
     // fuera de rango: se corrige al salir del campo
     const clampField = (el: HTMLInputElement, a: number, b: number, what: string) => el.addEventListener('change', () => {
       const v = +el.value;
-      if (!Number.isFinite(v) || v < a || v > b) { el.value = String(Math.min(b, Math.max(a, Number.isFinite(v) ? v : a))); toast(`${what}: valor ajustado al rango ${a.toLocaleString('es-ES')}–${b.toLocaleString('es-ES')}`); updAst(); }
+      if (!Number.isFinite(v) || v < a || v > b) { el.value = String(Math.min(b, Math.max(a, Number.isFinite(v) ? v : a))); toast(`${what}: valor ajustado al rango ${a.toLocaleString(LOCALE)}–${b.toLocaleString(LOCALE)}`); updAst(); }
     });
     clampField(densIn, 300, 23000, 'Densidad (kg/m³)');
     clampField(depthIn, 1, 11000, 'Profundidad (m)');
@@ -594,7 +602,7 @@ export class Sidebar {
       if (fromInputs) { O.dam.volumeHm3 = Math.round(Math.pow(10, +damV.value)); O.dam.heightM = +damH.value; O.solar.dstNt = -Math.abs(+solD.value); }
       else { damV.value = String(Math.log10(Math.max(1, O.dam.volumeHm3))); damH.value = String(O.dam.heightM); solD.value = String(Math.abs(O.solar.dstNt)); }
       setRangeFill(damV); setRangeFill(damH); setRangeFill(solD);
-      damVv.textContent = `${O.dam.volumeHm3.toLocaleString('es-ES')} hm³`; damHv.textContent = `${Math.round(O.dam.heightM)} m`; solDv.textContent = `${Math.round(O.solar.dstNt)} nT`;
+      damVv.textContent = `${O.dam.volumeHm3.toLocaleString(LOCALE)} hm³`; damHv.textContent = `${Math.round(O.dam.heightM)} m`; solDv.textContent = `${Math.round(O.solar.dstNt)} nT`;
       durF.style.display = O.type === 'reactor' ? '' : 'none';
       kgF.style.display = O.type === 'dirtybomb' ? '' : 'none';
       if (!fromInputs) fillPresets();
@@ -604,7 +612,7 @@ export class Sidebar {
         O.volcano.vei = +veiR.value;
       } else { isoSel.value = R.isotope; actR.value = String(Math.log10(R.activityTBq)); hgtIn.value = String(R.heightM); durIn.value = String(R.durationH ?? 240); kgIn.value = String(R.explosiveKg ?? 10); veiR.value = String(O.volcano.vei); }
       setRangeFill(actR); setRangeFill(veiR);
-      actVal.textContent = R.activityTBq >= 1000 ? `${(R.activityTBq / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} PBq` : `${R.activityTBq.toLocaleString('es-ES', { maximumFractionDigits: 3 })} TBq`;
+      actVal.textContent = R.activityTBq >= 1000 ? `${(R.activityTBq / 1000).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} PBq` : `${R.activityTBq.toLocaleString(LOCALE, { maximumFractionDigits: 3 })} TBq`;
       veiVal.textContent = `VEI ${O.volcano.vei}`;
     };
     oPreset.addEventListener('change', () => {
@@ -676,7 +684,7 @@ export class Sidebar {
       const hh = Math.floor(E.hour) % 24, mm = Math.round((E.hour % 1) * 60);
       hrVal.textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
       setRangeFill(outR);
-      E.rainMmH = +rainR.value; setRangeFill(rainR); rainVal.textContent = E.rainMmH > 0 ? `${String(E.rainMmH).replace('.', ',')} mm/h` : 'sin lluvia';
+      E.rainMmH = +rainR.value; setRangeFill(rainR); rainVal.textContent = E.rainMmH > 0 ? `${String(E.rainMmH).replace('.', DEC)} mm/h` : 'sin lluvia';
       const autoOut = E.hour >= 7 && E.hour <= 20 ? 25 : 8;
       if (E.outdoorPct == null) outR.value = String(autoOut), setRangeFill(outR);
       outVal.textContent = E.outdoorPct == null ? `auto · ${autoOut} %` : `${E.outdoorPct} %`;
@@ -702,7 +710,7 @@ export class Sidebar {
       E.windProfile = w.profile;
       E.windHourly = w.hourly ?? null;
       const top = w.profile[w.profile.length - 1];
-      wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} %${w.rainMmH > 0 ? ` · lluvia ${String(w.rainMmH).replace('.', ',')} mm/h` : ''} · viento a ${(top.zM / 1000).toFixed(0)} km: ${Math.round(top.kmh)} km/h desde ${dirName(top.fromDeg)}. La nube y la lluvia radiactiva usan el perfil de viento hasta la altura real de la nube${w.hourly ? ` y la previsión hora a hora de las próximas ${w.hourly.length} h` : ''}.`;
+      wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} %${w.rainMmH > 0 ? ` · lluvia ${String(w.rainMmH).replace('.', DEC)} mm/h` : ''} · viento a ${(top.zM / 1000).toFixed(0)} km: ${Math.round(top.kmh)} km/h desde ${dirName(top.fromDeg)}. La nube y la lluvia radiactiva usan el perfil de viento hasta la altura real de la nube${w.hourly ? ` y la previsión hora a hora de las próximas ${w.hourly.length} h` : ''}.`;
     };
     this.loadWeather = async (quiet = false) => {
       wxBtn.disabled = true; wxBtn.classList.add('busy');
@@ -732,7 +740,15 @@ export class Sidebar {
     this.setQuality = (v: string) => qual.set(v);
     this.projSeg = seg<string>([['flat', 'Plano 2D'], ['globe', 'Globo 3D']], V.globe ? 'globe' : 'flat', (v) => { V.globe = v === 'globe'; this.ev.onProjection(V.globe); });
     // la visualización vive en su propio menú de la barra de arriba (botón del ojo)
+    // idioma: el del sistema o uno elegido (los nombres de los idiomas no se traducen)
+    const langSel = h('select', { 'data-i18n-skip': '' }) as HTMLSelectElement;
+    const sys = LANGS.find((x) => x.id === systemLang())!;
+    langSel.append(h('option', { value: 'auto' }, `${tr('Automático')} · ${sys.name}`));
+    for (const L of LANGS) langSel.append(h('option', { value: L.id }, L.name));
+    langSel.value = langPref();
+    langSel.addEventListener('change', () => setLangPref(langSel.value as 'auto'));
     this.viewEl = h('div', { class: 'view-body' },
+      h('div', { class: 'lp-h' }, 'Idioma'), langSel,
       h('div', { class: 'lp-h' }, 'Mapa'), this.projSeg.el,
       h('div', { class: 'lp-h' }, 'Qué se ve'),
       h('div', { class: 'toggles' },
@@ -745,6 +761,8 @@ export class Sidebar {
         toggle('Etiquetas', V.labels, (v) => { V.labels = v; this.ev.onView(); }),
         toggle('Sonido', V.sound, (v) => { V.sound = v; this.ev.onView(); }),
         toggle('Cámara cinemática', V.cinematic, (v) => { V.cinematic = v; this.ev.onView(); }),
+        toggle('Narración por voz', V.narration, (v) => { V.narration = v; this.ev.onView(); }),
+        toggle('Empezar con el recorrido', V.autoTour, (v) => { V.autoTour = v; this.ev.onView(); }),
         toggle('Post-procesado', V.post, (v) => { V.post = v; this.ev.onView(); }),
       ),
       h('div', { class: 'lp-h' }, h('span', {}, 'Calidad '), this.qualVal), qual.el,

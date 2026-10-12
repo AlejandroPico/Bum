@@ -82,6 +82,8 @@ Otros comandos:
 - **¿Estoy a salvo?** (botón del escudo): tu ubicación o cualquier punto del mapa; qué efectos le llegarían, cuándo llegan la onda y la lluvia radiactiva, la dosis según el refugio, la probabilidad de morir o resultar herido y consejos de protección civil.
 - **Mapa partido** (pestaña *Comparar*): un segundo escenario en el mismo lugar con un divisor arrastrable.
 - **Vuelo del arma**: 19 bases de lanzamiento públicas y cuatro tipos de vuelo (misil balístico, planeador hipersónico como el Avangard, misil de crucero a ras de suelo y bombardero), elegidos según el arma o a mano; el vuelo forma parte de la línea de tiempo (unos 12 s a ×1, con pausa y velocidad) y, con varios objetivos cercanos, un solo misil suelta varias ojivas (MIRV).
+- **Idiomas**: castellano, català, English, français, Deutsch, português e italiano, según el idioma del sistema o elegido en el menú del ojo (la enciclopedia, por ahora, en castellano).
+- **Recorrido narrado**: opción de narración por voz en el recorrido cinematográfico, que se detiene en cada parte para explicarla.
 - **Preparación**: antes de empezar se calculan los efectos y se descargan el mapa, el relieve y los edificios de cada plano de la cámara, para que la animación vaya fluida.
 - **Viento hora a hora**: la previsión de las próximas 48 h por niveles mueve la nube y la lluvia radiactiva a medida que cambia el viento.
 - **Sombra del relieve** y **recuento de edificios** por nivel de daño (los del mapa a la vista y, en el servidor, los de cada zona en OpenStreetMap).

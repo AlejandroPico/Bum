@@ -1,3 +1,4 @@
+import { LOCALE, DEC } from '../i18n/locale';
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, any> = {}, ...children: (Node | string | null | undefined | false)[]): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -23,16 +24,16 @@ export function setRangeFill(r: HTMLInputElement) {
 export function fmtNum(n: number): string {
   if (!isFinite(n)) return '—';
   const a = Math.abs(n);
-  if (a >= 1e9) return `${(n / 1e9).toLocaleString('es-ES', { maximumFractionDigits: 2 })} mil mill.`;
-  if (a >= 1e6) return `${(n / 1e6).toLocaleString('es-ES', { maximumFractionDigits: 2 })} mill.`;
-  if (a >= 1e4) return Math.round(n).toLocaleString('es-ES');
-  return Math.round(n).toLocaleString('es-ES');
+  if (a >= 1e9) return `${(n / 1e9).toLocaleString(LOCALE, { maximumFractionDigits: 2 })} mil mill.`;
+  if (a >= 1e6) return `${(n / 1e6).toLocaleString(LOCALE, { maximumFractionDigits: 2 })} mill.`;
+  if (a >= 1e4) return Math.round(n).toLocaleString(LOCALE);
+  return Math.round(n).toLocaleString(LOCALE);
 }
 
 export function fmtTime(s: number): string {
   const neg = s < 0;
   s = Math.abs(s);
-  if (s < 60) return `${neg ? '−' : ''}${s.toFixed(s < 10 ? 2 : 1).replace('.', ',')} s`;
+  if (s < 60) return `${neg ? '−' : ''}${s.toFixed(s < 10 ? 2 : 1).replace('.', DEC)} s`;
   if (s >= 48 * 3600) { const d = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600); return `${neg ? '−' : ''}${d} d ${String(hh).padStart(2, '0')} h`; }
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
   const pad = (x: number) => String(x).padStart(2, '0');

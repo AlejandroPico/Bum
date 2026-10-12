@@ -2,6 +2,7 @@ import type { Article, Block, CatId, GlossaryTerm, ImgRef } from './types';
 import { CATEGORIES } from './types';
 import { slug } from './slug';
 import type { VidRef } from './content/videos';
+import { lang } from '../i18n';
 
 /**
  * Enciclopedia de Bum: panel a pantalla completa con índice por categorías, buscador,
@@ -57,10 +58,13 @@ export class Encyclopedia {
       <aside class="enc-side">
         <div class="enc-brand"><span class="enc-book"></span><div><b>Enciclopedia</b><small>Armas nucleares, efectos e impactos</small></div></div>
         <div class="enc-search"><input type="search" placeholder="Buscar en la enciclopedia…" spellcheck="false" /><button type="button" class="enc-navbtn" aria-expanded="false">Índice</button></div>
-        <nav class="enc-nav"></nav>
+        <p class="enc-lang"></p>
+        <nav class="enc-nav" data-i18n-skip></nav>
       </aside>
-      <main class="enc-main"></main>
+      <main class="enc-main" data-i18n-skip></main>
       <div class="enc-top"><button class="enc-back" type="button" title="Atrás">←</button><button class="enc-close" type="button" title="Cerrar (Esc)">✕</button></div>`;
+    // los artículos sólo están en castellano por ahora: se avisa en los demás idiomas
+    if (lang !== 'es') (this.el.querySelector('.enc-lang') as HTMLElement).textContent = 'Los artículos de la enciclopedia todavía están sólo en castellano.';
     this.nav = this.el.querySelector('.enc-nav')!;
     this.main = this.el.querySelector('.enc-main')!;
     this.search = this.el.querySelector('.enc-search input')!;

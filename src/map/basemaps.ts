@@ -1,4 +1,5 @@
 import type { Map as MLMap, LayerSpecification } from 'maplibre-gl';
+import { lang } from '../i18n';
 
 /**
  * Mapas base intercambiables. Se insertan por debajo del sombreado y de las capas del
@@ -54,7 +55,7 @@ export function setBasemap(map: MLMap, id: BasemapId, before = 'hillshade') {
     map.addLayer({ id: BASE_RASTER_LAYER, type: 'raster', source: src, paint: sat ? { 'raster-saturation': -0.18, 'raster-contrast': 0.12, 'raster-brightness-max': 0.92, 'raster-fade-duration': 200 } : { 'raster-fade-duration': 200 } }, beforeId);
   } else {
     const c = VEC[id as 'politico' | 'oscuro'];
-    const name = ['coalesce', ['get', 'name:es'], ['get', 'name']] as unknown as string;
+    const name = ['coalesce', ['get', `name:${lang}`], ['get', 'name']] as unknown as string;
     const layers: LayerSpecification[] = [
       { id: 'vb-bg', type: 'background', paint: { 'background-color': c.bg } },
       { id: 'vb-land', type: 'fill', source: 'omt', 'source-layer': 'landuse', paint: { 'fill-color': c.land, 'fill-opacity': 0.6 } },

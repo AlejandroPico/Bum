@@ -1,5 +1,7 @@
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import { TEST_SITES, NOTABLE_TESTS, TOTAL_TESTS, type NotableTest } from '../data/tests';
+import { LOCALE } from '../i18n/locale';
+import { tr } from '../i18n';
 
 /**
  * Capa «Pruebas nucleares»: un círculo por polígono de pruebas (área ∝ número de ensayos) y un
@@ -17,8 +19,8 @@ export class TestsLayer {
   install() {
     const m = this.map;
     if (m.getSource('tests-sites')) return;
-    m.addSource('tests-sites', { type: 'geojson', data: { type: 'FeatureCollection', features: TEST_SITES.map((s, i) => ({ type: 'Feature', properties: { i, name: s.name, count: s.count }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } })) } });
-    m.addSource('tests-notable', { type: 'geojson', data: { type: 'FeatureCollection', features: NOTABLE_TESTS.map((t, i) => ({ type: 'Feature', properties: { i, name: t.name }, geometry: { type: 'Point', coordinates: [t.lon, t.lat] } })) } });
+    m.addSource('tests-sites', { type: 'geojson', data: { type: 'FeatureCollection', features: TEST_SITES.map((s, i) => ({ type: 'Feature', properties: { i, name: tr(s.name), count: s.count }, geometry: { type: 'Point', coordinates: [s.lon, s.lat] } })) } });
+    m.addSource('tests-notable', { type: 'geojson', data: { type: 'FeatureCollection', features: NOTABLE_TESTS.map((t, i) => ({ type: 'Feature', properties: { i, name: tr(t.name) }, geometry: { type: 'Point', coordinates: [t.lon, t.lat] } })) } });
     const vis = this.visible ? 'visible' : 'none';
     m.addLayer({ id: 'tests-sites', type: 'circle', source: 'tests-sites', layout: { visibility: vis }, paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, ['+', 3, ['*', 0.55, ['sqrt', ['get', 'count']]]], 6, ['+', 6, ['*', 1.4, ['sqrt', ['get', 'count']]]]],
@@ -51,7 +53,7 @@ export class TestsLayer {
     el.className = 'test-pop';
     if (top.layer.id === 'tests-notable') {
       const t = NOTABLE_TESTS[i];
-      el.innerHTML = `<div class="tp-k">Prueba nuclear · ${t.date}</div><h3>${t.name}</h3><div class="tp-y">${t.yieldKt >= 1000 ? (t.yieldKt / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' Mt' : t.yieldKt.toLocaleString('es-ES') + ' kt'}</div><p>${t.note}</p>`;
+      el.innerHTML = `<div class="tp-k">Prueba nuclear · ${t.date}</div><h3>${t.name}</h3><div class="tp-y">${t.yieldKt >= 1000 ? (t.yieldKt / 1000).toLocaleString(LOCALE, { maximumFractionDigits: 1 }) + ' Mt' : t.yieldKt.toLocaleString(LOCALE) + ' kt'}</div><p>${t.note}</p>`;
       const row = document.createElement('div'); row.className = 'tp-row';
       const sim = document.createElement('button'); sim.type = 'button'; sim.className = 'btn-line'; sim.textContent = 'Simular aquí';
       sim.onclick = () => { this.popup?.remove(); this.onSimulate(t); };
@@ -60,7 +62,7 @@ export class TestsLayer {
       row.append(sim, book); el.append(row);
     } else {
       const s = TEST_SITES[i];
-      el.innerHTML = `<div class="tp-k">${s.country} · ${s.years}</div><h3>${s.name}</h3><div class="tp-y">${s.count.toLocaleString('es-ES')} prueba${s.count > 1 ? 's' : ''}</div><p>${s.note}</p><p class="tp-n">De ${TOTAL_TESTS.toLocaleString('es-ES')} pruebas nucleares en el mundo (1945–2017).</p>`;
+      el.innerHTML = `<div class="tp-k">${s.country} · ${s.years}</div><h3>${s.name}</h3><div class="tp-y">${s.count.toLocaleString(LOCALE)} prueba${s.count > 1 ? 's' : ''}</div><p>${s.note}</p><p class="tp-n">De ${TOTAL_TESTS.toLocaleString(LOCALE)} pruebas nucleares en el mundo (1945–2017).</p>`;
     }
     this.popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'bum-popup' }).setLngLat(e.lngLat).setDOMContent(el).addTo(this.map);
     return true;

@@ -9,6 +9,7 @@ import { effectiveWind, windAt } from './wind';
 import { densityField, nearestCity } from '../data/cities';
 import { computeRelease, computeVolcano } from './other';
 import type { Effects, Environment, Ring, Scenario, Casualties, NuclearInput, AsteroidInput } from './types';
+import { LOCALE, DEC } from '../i18n/locale';
 
 const EARTH_R = 6371e3;
 const CAL_J_M2 = 41840; // 1 cal/cm² en J/m²
@@ -48,10 +49,10 @@ function solveDecreasing(f: (r: number) => number, target: number, lo = 0.1, hi 
 const toGround = (slant: number, h: number) => (slant > h ? Math.sqrt(slant * slant - h * h) : 0);
 
 export function fmtEnergy(kt: number): string {
-  if (kt >= 1e6) return `${(kt / 1e6).toLocaleString('es-ES', { maximumFractionDigits: kt >= 1e8 ? 0 : 2 })} Gt`;
-  if (kt >= 1000) return `${(kt / 1000).toLocaleString('es-ES', { maximumFractionDigits: 2 })} Mt`;
-  if (kt >= 1) return `${kt.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kt`;
-  return `${(kt * 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} t`;
+  if (kt >= 1e6) return `${(kt / 1e6).toLocaleString(LOCALE, { maximumFractionDigits: kt >= 1e8 ? 0 : 2 })} Gt`;
+  if (kt >= 1000) return `${(kt / 1000).toLocaleString(LOCALE, { maximumFractionDigits: 2 })} Mt`;
+  if (kt >= 1) return `${kt.toLocaleString(LOCALE, { maximumFractionDigits: 1 })} kt`;
+  return `${(kt * 1000).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} t`;
 }
 
 /** Limita las entradas a rangos físicamente razonables (evita números absurdos). */
@@ -395,7 +396,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
       if (meff(0) < L.m) continue;
       let lo = 0, hi = 20015;
       for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (meff(mid) >= L.m) lo = mid; else hi = mid; }
-      sr.push({ id: `seis${Math.round(L.m * 10)}`, group: 'seismic', label: L.label, radiusM: lo * 1000, color: '#c084fc', value: `M ef. ≥ ${L.m.toFixed(1).replace('.', ',')}`, desc: L.desc });
+      sr.push({ id: `seis${Math.round(L.m * 10)}`, group: 'seismic', label: L.label, radiusM: lo * 1000, color: '#c084fc', value: `M ef. ≥ ${L.m.toFixed(1).replace('.', DEC)}`, desc: L.desc });
     }
     seismic = { magnitude: M, rings: sr };
     rings.push(...sr);
@@ -437,7 +438,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   // ---------- víctimas ----------
   const casualties = estimateCasualties(lat, lon, rings, { pressurePsiAt, thermalFluenceAt, doseRemAt, Y, isImpact, env, crater, fireballR: contact > 0 ? fireballR : 0 });
 
-  if (fallout.length && (env.rainMmH ?? 0) > 0.3) notes.push(`Llueve (${(env.rainMmH ?? 0).toLocaleString('es-ES', { maximumFractionDigits: 1 })} mm/h): la lluvia arrastra parte de la radiactividad y crea zonas muy contaminadas más cerca de la explosión.`);
+  if (fallout.length && (env.rainMmH ?? 0) > 0.3) notes.push(`Llueve (${(env.rainMmH ?? 0).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} mm/h): la lluvia arrastra parte de la radiactividad y crea zonas muy contaminadas más cerca de la explosión.`);
   if (fallout.length) notes.push(`Viento de ${Math.round(fModel ? fModel.axisKmh : wEff.kmh)} km/h desde ${compass(fModel ? fModel.axisFromDeg : wEff.fromDeg)}${env.windProfile?.length ? ` (media entre el suelo y ${fmtDist(cloud.topM)}, tiempo real)` : ''}: la lluvia radiactiva se extiende hacia ${compass((fModel ? fModel.axisFromDeg : wEff.fromDeg) + 180)}.`);
   // ---------- pulso electromagnético de gran altitud ----------
   let empInfo: Effects['emp'];
@@ -478,7 +479,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     };
     fireInfo = {
       kind: storm ? 'firestorm' : dens > 200 ? 'conflagration' : 'none', ignitionR: ignR, spreadKmh: v, areaAt,
-      reason: storm ? 'Zona urbana densa, gran superficie incendiada a la vez y viento flojo: los incendios se funden en una tormenta de fuego que aspira aire desde todas direcciones (como en Hiroshima o Hamburgo).' : dens > 200 ? `El viento (${Math.round(surf)} km/h) empuja el frente del incendio a ≈ ${v.toFixed(1).replace('.', ',')} km/h a sotavento.` : 'Poca densidad de combustible: incendios dispersos.',
+      reason: storm ? 'Zona urbana densa, gran superficie incendiada a la vez y viento flojo: los incendios se funden en una tormenta de fuego que aspira aire desde todas direcciones (como en Hiroshima o Hamburgo).' : dens > 200 ? `El viento (${Math.round(surf)} km/h) empuja el frente del incendio a ≈ ${v.toFixed(1).replace('.', DEC)} km/h a sotavento.` : 'Poca densidad de combustible: incendios dispersos.',
     };
   }
 
@@ -650,14 +651,14 @@ function interp1(xs: number[], ys: number[], x: number) {
 }
 
 export function fmtDist(m: number): string {
-  if (m >= 1000) return `${(m / 1000).toLocaleString('es-ES', { maximumFractionDigits: m >= 100000 ? 0 : m >= 10000 ? 1 : 2 })} km`;
+  if (m >= 1000) return `${(m / 1000).toLocaleString(LOCALE, { maximumFractionDigits: m >= 100000 ? 0 : m >= 10000 ? 1 : 2 })} km`;
   return `${Math.round(m)} m`;
 }
 
 export function fmtArea(m: number): string {
   const km2 = (Math.PI * m * m) / 1e6;
-  if (km2 >= 100) return `${Math.round(km2).toLocaleString('es-ES')} km²`;
-  return `${km2.toLocaleString('es-ES', { maximumFractionDigits: 2 })} km²`;
+  if (km2 >= 100) return `${Math.round(km2).toLocaleString(LOCALE)} km²`;
+  return `${km2.toLocaleString(LOCALE, { maximumFractionDigits: 2 })} km²`;
 }
 
 export function compass(deg: number): string {

@@ -159,18 +159,40 @@ de efectos al mapa varias veces por segundo durante la lluvia radiactiva.
 Pendiente menor: la trayectoria se dibuja sobre el mapa (con su altura en el rótulo), no como arco en 3D; las ojivas
 de un MIRV llegan a la vez.
 
+## 1.8 — Idiomas y recorrido narrado (publicada)
+
+- [x] 1.8a Idiomas (`src/i18n/`): castellano, catalán, inglés, francés, alemán, portugués (europeo) e italiano. Se toma
+      el del sistema (`navigator.languages`; gallego y euskera → castellano; otros → inglés) o el elegido en el menú del
+      ojo («Idioma»; se guarda en `bum:lang` y recarga). El código sigue escrito en castellano: un observador del
+      documento cambia cada texto y atributo visible por su traducción del catálogo `<idioma>.json` (clave = texto en
+      castellano). Los textos con datos son plantillas («Distancia {0} km»); lo intercalado se traduce a su vez y, si van
+      dos marcadores seguidos, se reparte buscando el corte que deja más trozos traducidos. Cifras en el formato del
+      idioma (`LOCALE`/`DEC` en `i18n/locale.ts`), nombres del mapa en el idioma (`name:<idioma>`), rosa de los vientos
+      localizada. `main.ts` carga el idioma y después `app.ts`. Los artículos de la enciclopedia (`data-i18n-skip`)
+      siguen en castellano, con un aviso.
+- [x] 1.8b Recorrido narrado (`src/narrator.ts`, «Narración por voz» en el menú del ojo y botón «Voz» durante el
+      recorrido): voz del navegador en el idioma activo (elige las voces «naturales»/«neuronales»; frase a frase). La
+      imagen se congela mientras explica cada parte: lanzamiento y vuelo del misil, destello y bola de fuego, llegada de
+      la onda, onda vista desde el aire, radiación inicial, hongo, calor e incendios, lluvia radiactiva y balance. Sin voz
+      en el idioma, subtítulos.
+- [x] 1.8c Traducción de la interfaz (≈ 2.100 textos por idioma) hecha con un extractor de cadenas
+      (`/tmp/claude-0/i18n/extract.mjs` en la sesión; hay que repetirlo y traducir lo nuevo al añadir textos).
+- [x] Además: cámara de persecución del misil en el modo cinemático (detrás de la cabeza, más alta cuanto más alto
+      vuela, también en el recorrido), opción «Empezar con el recorrido» (el recorrido arranca solo al detonar) y la
+      línea de tiempo vuelve a aparecer si algo la ocultó con una simulación en marcha.
+
+Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias entregas); revisar textos nuevos en cada versión.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia.
 
-- [ ] 1.8 Recorrido narrado: voz en español con la síntesis del navegador (sin servidores), sonido de ambiente y
-      planos del vuelo del misil (cámara que lo sigue) y de los ataques múltiples.
 - [ ] 1.9 Defensa antimisiles: interceptores (GMD, Aegis SM-3, Arrow 3, S-500…) desde bases reales, probabilidad de
       interceptación según el tipo de arma (los planeadores y los MIRV la complican) y animación del intento.
-- [ ] 2.0 Las pruebas nucleares en el tiempo: animación de las más de 2.000 pruebas de 1945 a 2017 sobre el mapa, año a
+- [ ] 2.0 Sección histórica: las pruebas nucleares en el tiempo, con botón de reproducir y un destello por prueba: animación de las más de 2.000 pruebas de 1945 a 2017 sobre el mapa, año a
       año, con un contador por país y un sonido por prueba (al estilo de la obra de Isao Hashimoto).
-- [ ] 2.1 Refugio más cercano: estaciones de metro, aparcamientos subterráneos y sótanos públicos de OpenStreetMap
-      cerca de tu punto (en «¿Estoy a salvo?»), con el tiempo andando y si llegarías antes que la onda o la lluvia.
+- [ ] 2.1 Refugio más cercano (dentro de «¿Estoy a salvo?»): estaciones de metro, aparcamientos subterráneos y sótanos públicos de OpenStreetMap
+      cerca de tu punto, con el tiempo andando y si llegarías antes que la onda o la lluvia.
 - [ ] 2.2 Escalada: el contraataque y la respuesta, paso a paso, con los vuelos de los misiles de cada bando y el
       balance acumulado (enlaza con la guerra a gran escala y el invierno nuclear).
 - [ ] 2.3 «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
@@ -179,7 +201,6 @@ Cada una se puede hacer por separado; el orden es una sugerencia.
       sin atender), con los hospitales destruidos marcados en el mapa.
 - [ ] 2.5 Días después: línea de tiempo de las semanas siguientes (síndrome de radiación, agua, electricidad, ayuda
       exterior, regreso a la zona) con lo que se sabe de Hiroshima, Chernóbil y Fukushima.
-- [ ] Varios idiomas (inglés y otros), elegidos según el idioma del sistema.
 
 ## Descartado por ahora
 

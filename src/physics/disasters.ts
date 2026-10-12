@@ -7,6 +7,7 @@ import { contours } from 'd3-contour';
 import { densityField, nearestCity, CITIES } from '../data/cities';
 import type { DamInput, Effects, Environment, FalloutContour, Ring, SolarInput, WarInput } from './types';
 import { WAR_PRESETS, climateSeries } from '../data/war';
+import { LOCALE } from '../i18n/locale';
 
 function base(env: Environment): Pick<Effects, 'thermalFluenceAt' | 'pressurePsiAt' | 'doseRemAt' | 'falloutRateAt' | 'chemical' | 'env' | 'outdoorPct' | 'seismic' | 'shock' | 'groundContact' | 'burstHeightM' | 'fireball' | 'cloud' | 'energyKt' | 'energyJ' | 'windKmh' | 'windFromDeg' | 'noFlash'> {
   return {
@@ -93,7 +94,7 @@ export function computeDam(sc: DamInput, env: Environment, lat: number, lon: num
         }
       }
       for (let k = 0; k < N * N; k++) if (depth[k] > 0.1) { floodKm2 += cellA / 1e6; const i = k % N, j = (k - i) / N; reach = Math.max(reach, Math.hypot(-R + (i + 0.5) * cell, -R + (j + 0.5) * cell)); }
-      notes.push(`La ola de la rotura recorrería unos ${Math.round(reach / 1000)} km por el valle e inundaría ${Math.round(floodKm2).toLocaleString('es-ES')} km² siguiendo el relieve real (modelo digital del terreno de AWS).`);
+      notes.push(`La ola de la rotura recorrería unos ${Math.round(reach / 1000)} km por el valle e inundaría ${Math.round(floodKm2).toLocaleString(LOCALE)} km² siguiendo el relieve real (modelo digital del terreno de AWS).`);
     }
   }
   if (!demOk) notes.push('No se pudo cargar el relieve: la zona inundada no se dibuja con precisión. Comprueba la conexión.');
@@ -135,7 +136,7 @@ export function computeDam(sc: DamInput, env: Environment, lat: number, lon: num
   const flowFrom = cw > 0 ? ((Math.atan2(-ce, -cn) * 180) / Math.PI + 360) % 360 : 0;
   const flowKmh = maxT > 0 ? Math.max(3, reach / 1000 / maxT) : 10;
   const rings: Ring[] = [{ id: 'dam', group: 'crater', label: 'Presa', radiusM: Math.max(150, H * 2), color: '#60a5fa', desc: 'Lugar de la rotura.' }];
-  notes.unshift(`Rotura de una presa de ${Math.round(H)} m con ${Math.round(sc.volumeHm3).toLocaleString('es-ES')} hm³ embalsados: caudal punta de unos ${Math.round(Qp).toLocaleString('es-ES')} m³/s (${Math.round(Qp / 430).toLocaleString('es-ES')} veces el caudal medio del Ebro en su desembocadura).`);
+  notes.unshift(`Rotura de una presa de ${Math.round(H)} m con ${Math.round(sc.volumeHm3).toLocaleString(LOCALE)} hm³ embalsados: caudal punta de unos ${Math.round(Qp).toLocaleString(LOCALE)} m³/s (${Math.round(Qp / 430).toLocaleString(LOCALE)} veces el caudal medio del Ebro en su desembocadura).`);
   notes.push('Modelo simplificado: la ola se atenúa con la distancia y llena las zonas más bajas que su nivel. Las presas reales tienen planes de emergencia con avisos y evacuación aguas abajo.');
   return {
     ...base(env),
@@ -198,10 +199,10 @@ export function computeSolar(sc: SolarInput, env: Environment, lat: number, lon:
 // ======================================================================== guerra e invierno nuclear
 export function computeWar(sc: WarInput, env: Environment, lat: number, lon: number): Effects {
   const p = WAR_PRESETS.find((x) => x.id === sc.preset) ?? WAR_PRESETS[0];
-  const n0 = (x: number) => Math.round(x).toLocaleString('es-ES');
+  const n0 = (x: number) => Math.round(x).toLocaleString(LOCALE);
   const notes = [
     `${p.note} Explosiones: ${n0(p.warheads)} ojivas de ${n0(p.yieldKt)} kt (${n0((p.warheads * p.yieldKt) / 1000)} Mt en total). En el mapa se marcan ${p.targets.length} objetivos representativos.`,
-    `Los incendios de las ciudades elevarían unos ${n0(p.sootTg)} millones de toneladas de hollín a la estratosfera, donde el sol lo calienta y lo mantiene años. La temperatura media del planeta bajaría unos ${p.coolingC.toLocaleString('es-ES')} °C y las lluvias un ${p.precipPct} %.`,
+    `Los incendios de las ciudades elevarían unos ${n0(p.sootTg)} millones de toneladas de hollín a la estratosfera, donde el sol lo calienta y lo mantiene años. La temperatura media del planeta bajaría unos ${p.coolingC.toLocaleString(LOCALE)} °C y las lluvias un ${p.precipPct} %.`,
     `Con menos luz, frío y menos lluvia caerían las cosechas, la pesca y la ganadería: las calorías disponibles en el mundo bajarían alrededor de un ${p.caloriesPct} % a los 3–5 años. Unos ${n0(p.famineDeathsM)} millones de personas podrían morir de hambre, muchas más que por las explosiones (${n0(p.directDeathsM)} millones).`,
     'Los países que no participan en la guerra sufrirían igualmente la hambruna: el invierno nuclear es planetario. Cifras de Xia et al. (2022) y Toon et al. (2019); los casos intermedios de calorías se han interpolado.',
   ];

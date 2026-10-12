@@ -1,5 +1,6 @@
 import maplibregl, { type StyleSpecification, type Map as MLMap } from 'maplibre-gl';
 import { dimBase } from './basemaps';
+import { lang } from '../i18n';
 
 export const SOURCES = {
   satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -101,7 +102,7 @@ function style(): StyleSpecification {
         'source-layer': 'place',
         filter: ['in', ['get', 'class'], ['literal', ['city', 'town', 'capital', 'state', 'country']]],
         layout: {
-          'text-field': ['coalesce', ['get', 'name:es'], ['get', 'name']],
+          'text-field': ['coalesce', ['get', `name:${lang}`], ['get', 'name']],
           'text-font': ['Noto Sans Regular'],
           'text-size': ['interpolate', ['linear'], ['zoom'], 4, 11, 10, 14, 14, 16],
           'text-letter-spacing': 0.06,

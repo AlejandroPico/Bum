@@ -4,8 +4,10 @@ import { buildStats, type StatSection } from './stats';
 import type { Effects } from '../physics/types';
 import { INFRA, type InfraResult, type BuildingCounts } from '../data/osm';
 import type { TerrainShadow } from '../physics/terrain';
+import { LOCALE, DEC } from '../i18n/locale';
+import { tr } from '../i18n';
 
-const n1 = (x: number, d = 1) => x.toLocaleString('es-ES', { maximumFractionDigits: d });
+const n1 = (x: number, d = 1) => x.toLocaleString(LOCALE, { maximumFractionDigits: d });
 const dur = (s: number) => { if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min`; if (s < 86400 * 2) { const hh = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return m ? `${hh} h ${m} min` : `${hh} h`; } return `${n1(s / 86400, s < 86400 * 10 ? 1 : 0)} días`; };
 
 export interface ResultsEvents {
@@ -154,14 +156,15 @@ export class ResultsPanel {
     const kicker = sc.kind === 'war' ? 'Guerra nuclear e invierno nuclear' : sc.kind === 'dam' ? 'Rotura de presa' : sc.kind === 'solar' ? 'Tormenta geomagnética' : sc.kind === 'release' ? (sc.source === 'dirtybomb' ? 'Bomba sucia' : 'Accidente nuclear') : sc.kind === 'volcano' ? 'Erupción volcánica' : sc.kind === 'nuclear'
       ? fx.chemical ? 'Explosión convencional' : 'Detonación nuclear'
       : fx.asteroid?.fate === 'airburst' ? 'Explosión aérea de asteroide' : 'Impacto de asteroide';
-    const burst = sc.kind === 'war' ? `${fx.war?.sides.join(' · ')}` : sc.kind === 'dam' ? `${Math.round(sc.heightM)} m · ${sc.volumeHm3.toLocaleString('es-ES')} hm³` : sc.kind === 'solar' ? `Dst ${Math.round(sc.dstNt)} nT` : sc.kind === 'release' ? `${fx.release?.isoName ?? ''}` : sc.kind === 'volcano' ? `VEI ${sc.vei}` : fx.buried ? `${fx.buried.mode === 'underground' ? 'bajo tierra' : 'bajo el agua'} a ${fmtDist(fx.buried.depthM)}` : fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : sc.kind === 'asteroid' && sc.target === 'water' ? `en el océano (${fmtDist(sc.waterDepthM)} de prof.)` : 'en superficie';
+    const burst = sc.kind === 'war' ? `${fx.war?.sides.join(' · ')}` : sc.kind === 'dam' ? `${Math.round(sc.heightM)} m · ${sc.volumeHm3.toLocaleString(LOCALE)} hm³` : sc.kind === 'solar' ? `Dst ${Math.round(sc.dstNt)} nT` : sc.kind === 'release' ? `${fx.release?.isoName ?? ''}` : sc.kind === 'volcano' ? `VEI ${sc.vei}` : fx.buried ? `${fx.buried.mode === 'underground' ? 'bajo tierra' : 'bajo el agua'} a ${fmtDist(fx.buried.depthM)}` : fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : sc.kind === 'asteroid' && sc.target === 'water' ? `en el océano (${fmtDist(sc.waterDepthM)} de prof.)` : 'en superficie';
+    const burstTr = tr(burst);
     const minBtn = h('button', { class: 'icon-btn', title: 'Minimizar', html: ICONS.min, onclick: () => { el.classList.toggle('min'); minBtn.innerHTML = el.classList.contains('min') ? ICONS.max : ICONS.min; } });
-    const hiroTxt = hiro >= 1 ? `×${fmtNum(hiro)} Hiroshima` : `${(hiro * 100).toFixed(hiro < 0.01 ? 2 : 1).replace('.', ',')} % de Hiroshima`;
+    const hiroTxt = hiro >= 1 ? `×${fmtNum(hiro)} Hiroshima` : `${(hiro * 100).toFixed(hiro < 0.01 ? 2 : 1).replace('.', DEC)} % de Hiroshima`;
     const head = h('div', { class: 'res-head' },
       h('div', { class: 'ttl' },
         h('div', { class: 'kicker' }, kicker),
         h('h2', {}, sc.name || fmtEnergy(fx.energyKt)),
-        h('div', { class: 'sub' }, `${fx.energyKt > 0 && sc.kind !== 'release' && sc.kind !== 'volcano' ? fmtEnergy(fx.energyKt) + ' ' : ''}${burst}${sc.kind === 'solar' || sc.kind === 'war' ? ' · todo el planeta' : ` · ${place}`}`),
+        h('div', { class: 'sub' }, `${fx.energyKt > 0 && sc.kind !== 'release' && sc.kind !== 'volcano' ? fmtEnergy(fx.energyKt) + ' ' : ''}${burstTr}${sc.kind === 'solar' || sc.kind === 'war' ? tr(' · todo el planeta') : ` · ${place}`}`),
       ),
       h('button', { class: 'icon-btn', title: 'Ficha en la enciclopedia', html: ICONS.book, onclick: () => this.ev.onBook(sc.name) }),
       h('button', { class: 'icon-btn', title: 'Compartir enlace', html: ICONS.share, onclick: () => this.ev.onShare() }),
@@ -284,8 +287,8 @@ export class ResultsPanel {
       const need = Math.ceil(bCrit / Math.max(1e-12, 3 * ((beta * mi * vi) / M) * years * 3.156e7 / 1000));
       const ok = dx >= bCrit;
       const rows: [string, string, string?][] = [
-        ['Masa del objeto', `${(M / 1e9).toLocaleString('es-ES', { maximumFractionDigits: M > 1e12 ? 0 : 2 })} millones de t`],
-        ['Cambio de velocidad', dv >= 0.01 ? `${n1(dv * 100, 2)} cm/s` : `${(dv * 1000).toLocaleString('es-ES', { maximumFractionDigits: 3 })} mm/s`, `${N} impactador${N > 1 ? 'es' : ''} de 580 kg a 6,1 km/s, β ≈ 3,6`],
+        ['Masa del objeto', `${(M / 1e9).toLocaleString(LOCALE, { maximumFractionDigits: M > 1e12 ? 0 : 2 })} millones de t`],
+        ['Cambio de velocidad', dv >= 0.01 ? `${n1(dv * 100, 2)} cm/s` : `${(dv * 1000).toLocaleString(LOCALE, { maximumFractionDigits: 3 })} mm/s`, `${N} ${N > 1 ? 'impactadores' : 'impactador'} de 580 kg a 6,1 km/s, β ≈ 3,6`],
         ['Desplazamiento en el momento del encuentro', `${fmtNum(dx)} km`, '≈ 3 × Δv × tiempo de aviso (empujón a lo largo de la órbita)'],
         ['Distancia necesaria para fallar', `${fmtNum(bCrit)} km`, 'radio terrestre ampliado por la atracción de la Tierra'],
         ['Resultado', ok ? 'el objeto NO impacta' : 'el objeto impacta igualmente'],
@@ -309,9 +312,9 @@ export class ResultsPanel {
     const step = () => {
       const k = Math.min(1, (performance.now() - t0) / dur);
       const e = k >= 1 ? 1 : 1 - Math.pow(2, -10 * k); // ease-out exponencial
-      for (const [el, v] of items) el.textContent = Math.round(v * e).toLocaleString('es-ES');
+      for (const [el, v] of items) el.textContent = Math.round(v * e).toLocaleString(LOCALE);
       if (k < 1) this.anim = requestAnimationFrame(step);
-      else for (const [el, v] of items) { el.textContent = fmtFull(v); el.title = Math.round(v).toLocaleString('es-ES'); }
+      else for (const [el, v] of items) { el.textContent = fmtFull(v); el.title = Math.round(v).toLocaleString(LOCALE); }
     };
     this.anim = requestAnimationFrame(step);
   }
@@ -333,7 +336,7 @@ export class ResultsPanel {
     add('burn3', 'Quemaduras de 3.er grado');
     add('rad500', 'Radiación letal (500 rem)');
     if (fx.crater) kv.push(['Cráter', `${fmtDist(fx.crater.diameterM)} × ${fmtDist(fx.crater.depthM)}`]);
-    if (fx.seismic) kv.push(['Magnitud sísmica', fx.seismic.magnitude.toFixed(1).replace('.', ',')]);
+    if (fx.seismic) kv.push(['Magnitud sísmica', fx.seismic.magnitude.toFixed(1).replace('.', DEC)]);
     if (fx.tsunami) kv.push(['Ola a 1000 km', fmtDist(fx.tsunami.at1000kmM)]);
     if (fx.fallout.length) {
       const f1 = fx.fallout.find((f) => f.level === 1) ?? fx.fallout[0];
@@ -387,7 +390,7 @@ export class ResultsPanel {
     } else if (fx.dam) {
       const d = fx.dam;
       kv.push(['Altura de la presa', `${Math.round(d.heightM)} m`]);
-      kv.push(['Agua embalsada', `${d.volumeHm3.toLocaleString('es-ES')} hm³`]);
+      kv.push(['Agua embalsada', `${d.volumeHm3.toLocaleString(LOCALE)} hm³`]);
       kv.push(['Caudal punta de la brecha', `${fmtNum(d.peakM3s)} m³/s`]);
       if (d.demOk) {
         kv.push(['Zona inundada', `${fmtNum(d.floodKm2)} km²`]);
@@ -416,7 +419,7 @@ export class ResultsPanel {
     } else if (fx.volcano) {
       const v = fx.volcano;
       kv.push(['Índice de explosividad (VEI)', String(v.vei)]);
-      kv.push(['Volumen expulsado', `${v.volumeKm3.toLocaleString('es-ES', { maximumFractionDigits: v.volumeKm3 < 1 ? 2 : 0 })} km³`]);
+      kv.push(['Volumen expulsado', `${v.volumeKm3.toLocaleString(LOCALE, { maximumFractionDigits: v.volumeKm3 < 1 ? 2 : 0 })} km³`]);
       kv.push(['Columna eruptiva', fmtDist(v.columnM)]);
       kv.push(['Energía térmica', fmtEnergy(fx.energyKt)]);
       kv.push(['Flujos piroclásticos', `${fmtDist(v.pdcR)} · ${fmtArea(v.pdcR)}`]);
@@ -446,7 +449,7 @@ export class ResultsPanel {
         h('span', { class: 'dot', style: { color: r.color } }),
         h('span', { class: 'name' }, r.label),
         h('span', { class: 'r' }, r.global ? 'Global' : fmtDist(r.radiusM)),
-        h('div', { class: 'meta' }, `${r.desc} `, h('i', {}, [GROUP_NAMES[r.group], r.value, r.global ? 'todo el planeta' : fmtArea(r.radiusM)].filter(Boolean).join(' · '))),
+        h('div', { class: 'meta' }, `${r.desc} `, h('i', {}, [GROUP_NAMES[r.group], r.value, r.global ? 'todo el planeta' : fmtArea(r.radiusM)].filter(Boolean).map((x) => tr(String(x))).join(' · '))),
       );
       row.addEventListener('mouseenter', () => this.ev.onHover(r.id));
       row.addEventListener('mouseleave', () => this.ev.onHover(null));
@@ -526,5 +529,5 @@ export class ResultsPanel {
 
 /** cifra completa con separador de miles (hasta 999 millones); por encima, abreviada */
 function fmtFull(v: number) {
-  return v >= 1e9 ? fmtNum(v) : Math.round(v).toLocaleString('es-ES');
+  return v >= 1e9 ? fmtNum(v) : Math.round(v).toLocaleString(LOCALE);
 }
