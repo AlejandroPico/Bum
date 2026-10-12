@@ -646,9 +646,11 @@ function setBlackRainLayer(br: Effects['blackRain'] | undefined, lat: number, lo
     map.addLayer({ id: 'fx-blackrain-line', type: 'line', source: 'fx-blackrain', layout: { visibility: 'none' }, paint: { 'line-color': '#9ca3af', 'line-width': 1, 'line-dasharray': [1, 2], 'line-opacity': 0.7 } }, before);
   }
 }
+let blackRainWant = false;
 function showBlackRain(on: boolean) {
-  // con un mapa de calor a la vista, la lluvia negra lo taparía
-  if (state.view.heat !== 'off') on = false;
+  blackRainWant = on;
+  // con un mapa de calor a la vista, la lluvia negra lo taparía; y se puede ocultar en «Efectos»
+  if (state.view.heat !== 'off' || results.hidden.has('blackrain')) on = false;
   for (const id of ['fx-blackrain', 'fx-blackrain-line']) if (map.getLayer(id) && (map.getLayoutProperty(id, 'visibility') === 'visible') !== on) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
 }
 
@@ -661,8 +663,9 @@ function setShadowLayer(polys: [number, number][][][] | null, lat: number, lon: 
   if (src) { src.setData(fc); return; }
   if (!polys) return;
   map.addSource('fx-shadow', { type: 'geojson', data: fc });
-  map.addLayer({ id: 'fx-shadow', type: 'fill', source: 'fx-shadow', paint: { 'fill-color': '#1e3a5f', 'fill-opacity': 0.38 } }, map.getLayer('fx-labels') ? 'fx-labels' : undefined);
-  map.addLayer({ id: 'fx-shadow-line', type: 'line', source: 'fx-shadow', paint: { 'line-color': '#7dd3fc', 'line-width': 1, 'line-opacity': 0.6, 'line-dasharray': [2, 2] } }, map.getLayer('fx-labels') ? 'fx-labels' : undefined);
+  const vis = results.hidden.has('shadow') ? 'none' : 'visible';
+  map.addLayer({ id: 'fx-shadow', type: 'fill', source: 'fx-shadow', layout: { visibility: vis }, paint: { 'fill-color': '#1e3a5f', 'fill-opacity': 0.38 } }, map.getLayer('fx-labels') ? 'fx-labels' : undefined);
+  map.addLayer({ id: 'fx-shadow-line', type: 'line', source: 'fx-shadow', layout: { visibility: vis }, paint: { 'line-color': '#7dd3fc', 'line-width': 1, 'line-opacity': 0.6, 'line-dasharray': [2, 2] } }, map.getLayer('fx-labels') ? 'fx-labels' : undefined);
 }
 
 // vuelo del arma sobre el mapa: ruta prevista (tenue), tramo recorrido (vivo) y un punto por ojiva
@@ -826,7 +829,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.8';
+const APP_VERSION = '1.8.1';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1034,6 +1037,9 @@ function applyView() {
 function syncHidden() {
   overlays.setHidden(new Set(results.hidden));
   if (run) { run.domes.hidden = new Set(results.hidden); for (const x of run.extras) x.domes.hidden = new Set(results.hidden); }
+  showBlackRain(blackRainWant);
+  const sv = results.hidden.has('shadow') ? 'none' : 'visible';
+  for (const id of ['fx-shadow', 'fx-shadow-line']) if (map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== sv) map.setLayoutProperty(id, 'visibility', sv);
   map.triggerRepaint();
 }
 

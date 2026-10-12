@@ -389,6 +389,7 @@ export class Overlays {
       const scorchR = Math.min(this.revealR, fx.rings.find((r) => r.id === 'burn3')?.radiusM ?? 0);
       if ((doScorch || doBurn) && this.showMarks && this.simT >= this.gateT) {
         const steps: { r: number; color: string; opacity: number }[] = [];
+        const noMarks = this.hidden.has('scorch');
         if (scorchR > 0) {
           steps.push({ r: scorchR, color: '#1a0f08', opacity: 0.35 });
           steps.push({ r: Math.min(scorchR, fx.rings.find((r) => r.id === 'psi5')?.radiusM ?? 0), color: '#120a06', opacity: 0.35 });
@@ -407,7 +408,7 @@ export class Overlays {
           if (ejR > 1) steps.unshift({ r: ejR, color: '#4a3826', opacity: 0.3 });
         }
         if (fx.crater) steps.push({ r: fx.crater.diameterM / 2, color: '#0a0806', opacity: 0.7 });
-        for (const st of steps) if (st.r > 1) sc.push({ type: 'Feature', properties: { color: st.color, opacity: st.opacity }, geometry: { type: 'Polygon', coordinates: circlePolygon(lat, lon, st.r, 120) } });
+        if (!noMarks) for (const st of steps) if (st.r > 1) sc.push({ type: 'Feature', properties: { color: st.color, opacity: st.opacity }, geometry: { type: 'Polygon', coordinates: circlePolygon(lat, lon, st.r, 120) } });
 
         // superficie quemada: el incendio avanza con el viento durante horas
         if (fx.fires && fx.fires.kind !== 'none' && this.showDamage && !this.hidden.has('burn')) {

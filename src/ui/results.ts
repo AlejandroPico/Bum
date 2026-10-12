@@ -62,7 +62,7 @@ export class ResultsPanel {
 
   /** mapa de calor activo (para marcar el botón) */
   private heat: 'off' | 'pop' | 'deaths' | 'fallout' = 'off';
-  setHeat(k: 'off' | 'pop' | 'deaths' | 'fallout') { this.heat = k; if (this.tab === 'pop') this.reshow?.(); }
+  setHeat(k: 'off' | 'pop' | 'deaths' | 'fallout') { this.heat = k; if (this.tab === 'pop' || this.tab === 'eff') this.reshow?.(); }
   private heatBlock(body: HTMLElement, fx: Effects) {
     if (!this.ev.onHeat) return;
     const nuc = !fx.release && !fx.volcano && !fx.dam && !fx.solar && !fx.war;
@@ -83,7 +83,7 @@ export class ResultsPanel {
     if (this.tab === 'pop') this.reshow?.();
   }
   private shadow: TerrainShadow | 'loading' | null = null;
-  setShadow(s: TerrainShadow | 'loading' | null) { this.shadow = s; if (this.tab === 'phys') this.reshow?.(); }
+  setShadow(s: TerrainShadow | 'loading' | null) { this.shadow = s; if (this.tab === 'phys' || this.tab === 'eff') this.reshow?.(); }
   private shadowBlock(body: HTMLElement) {
     const s = this.shadow;
     if (!s) return;
@@ -477,7 +477,34 @@ export class ResultsPanel {
     }
     if (fx.fires && fx.fires.kind !== 'none') extra.push(this.toggleRow('burn', '#ff6a1a', fx.fires.kind === 'firestorm' ? 'Tormenta de fuego' : 'Incendios que avanzan con el viento', '', h('div', { class: 'meta' }, 'Superficie quemada en las horas siguientes a la explosión.')));
     if (fx.emp && fx.emp.peakKVm >= 6) extra.push(this.toggleRow('emp', '#4cc9f0', 'Campo del pulso electromagnético', '', h('div', { class: 'meta' }, 'Zonas con más de 6, 12,5 y 25 kV/m (pulso E1 de gran altitud).')));
+    // marcas que deja la explosión en el suelo (las manchas oscuras concéntricas)
+    const marks = this.groundMarks(fx);
+    if (marks.length) extra.push(this.toggleRow('scorch', '#3a2414', 'Suelo quemado y marcas del terreno', '', h('div', { class: 'meta' },
+      'Manchas concéntricas que quedan en el suelo tras la explosión. ', h('span', { class: 'marks' }, ...marks.map(([c, t]) => h('span', {}, h('b', { style: { background: c } }), t))))));
+    if (fx.blackRain) extra.push(this.toggleRow('blackrain', '#2b2b33', 'Lluvia negra', `${fmtNum(Math.round(fx.blackRain.heavyKm2 + fx.blackRain.lightKm2))} km²`, h('div', { class: 'meta' },
+      `Los dos óvalos grises a sotavento: unos ${fx.blackRain.startMin} minutos después, el humo del incendio forma nubes de tormenta que descargan una lluvia de hollín y polvo radiactivo, como en Hiroshima. El óvalo oscuro es la lluvia intensa (${fmtNum(Math.round(fx.blackRain.heavyKm2))} km²); el claro, la débil (${fmtNum(Math.round(fx.blackRain.lightKm2))} km²). Aparece a su hora en la línea de tiempo.`)));
+    const sh = this.shadow;
+    if (sh && sh !== 'loading' && sh.areaKm2 > 0) extra.push(this.toggleRow('shadow', '#1e3a5f', 'Sombra del relieve', fmtArea(sh.areaKm2 * 1e6), h('div', { class: 'meta' },
+      'Zonas azuladas con borde discontinuo: colinas y montañas tapan la bola de fuego y el destello de calor no llega directamente.')));
     if (extra.length) body.append(h('div', { class: 'res-h3' }, 'Otras capas del mapa'), ...extra);
+    // los mismos mapas de calor que en «Mapas y capas»
+    this.heatBlock(body, fx);
+  }
+
+  /** qué marcas del suelo dibuja el mapa en este escenario (color y nombre) */
+  private groundMarks(fx: Effects): [string, string][] {
+    const out: [string, string][] = [];
+    const ring = (id: string) => fx.rings.find((r) => r.id === id)?.radiusM ?? 0;
+    if (ring('burn3') > 0) {
+      out.push(['#050302', 'Zona cero calcinada (bajo la bola de fuego)']);
+      if (ring('psi5') > 0) out.push(['#120a06', 'Suelo arrasado (más de 5 psi)']);
+      out.push(['#1a0f08', 'Suelo chamuscado (quemaduras de tercer grado)']);
+    }
+    if (ring('rad500') > 0 && fx.groundContact > 0 && !fx.chemical) out.push(['#7dff3a', 'Suelo activado por los neutrones']);
+    if (fx.rings.some((r) => r.id === 'surge')) out.push(['#b4f0ff', 'Oleada de base radiactiva']);
+    if (fx.rings.some((r) => r.group === 'ejecta')) out.push(['#4a3826', 'Manto de eyecta']);
+    if (fx.crater) out.push(['#0a0806', 'Cráter']);
+    return out;
   }
 
   /** fila de la pestaña Efectos que se puede activar y desactivar en el mapa */

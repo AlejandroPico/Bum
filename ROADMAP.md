@@ -183,6 +183,15 @@ de un MIRV llegan a la vez.
 
 Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias entregas); revisar textos nuevos en cada versión.
 
+## 1.8.1 — Todas las marcas del mapa en «Efectos» (publicada)
+
+- [x] La pestaña Efectos lista y deja ocultar todo lo que se dibuja en el mapa: además de los anillos, la lluvia
+      radiactiva, el tsunami, los incendios y el pulso, ahora «Suelo quemado y marcas del terreno» (`scorch`: zona cero
+      calcinada, suelo arrasado, suelo chamuscado, suelo activado por neutrones, oleada de base, eyecta y cráter, con su
+      color), «Lluvia negra» (`blackrain`: los dos óvalos a sotavento, intensa y débil, con su superficie) y «Sombra del
+      relieve» (`shadow`). Con todo desactivado en Efectos, el mapa queda limpio.
+- [x] Los botones de mapa de calor (población, víctimas, lluvia radiactiva) también al final de Efectos.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia.

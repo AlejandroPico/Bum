@@ -474,6 +474,9 @@ body.enc-open #sidebar, body.enc-open #results, body.enc-open #timeline { visibi
 .tsu-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font: 500 10.5px var(--mono); color: var(--muted); }
 .tsu-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .tsu-legend b { width: 8px; height: 8px; display: inline-block; }
+.marks { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; font: 500 10.5px var(--mono); color: var(--muted); }
+.marks span { display: inline-flex; align-items: center; gap: 6px; }
+.marks b { width: 9px; height: 9px; display: inline-block; outline: 1px solid rgba(127,127,127,.45); }
 .bum-tip { pointer-events: none; }
 .bum-tip .maplibregl-popup-content { padding: 9px 12px; }
 .bum-tip h3 { margin: 3px 0 2px; font-size: 14px; font-weight: 600; }
