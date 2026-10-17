@@ -158,9 +158,13 @@ export class ParticleSystem {
     n = Math.min(n, b.count);
     this.live = n;
     const m = ctx.mvp.elements;
+    // las partículas se guardan respecto a su explosión: en el ataque múltiple, cada una se desplaza
+    // a su sitio (el sombreador no usa la matriz del modelo)
+    this.mesh.updateWorldMatrix(true, false);
+    const W = this.mesh.matrixWorld.elements, ox = W[12], oy = W[13], oz = W[14];
     for (let i = 0; i < n; i++) {
       this.order[i] = i;
-      const x = b.pos[i * 3], y = b.pos[i * 3 + 1], z = b.pos[i * 3 + 2];
+      const x = b.pos[i * 3] + ox, y = b.pos[i * 3 + 1] + oy, z = b.pos[i * 3 + 2] + oz;
       this.depth[i] = m[3] * x + m[7] * y + m[11] * z + m[15];
     }
     const ord = this.order.subarray(0, n);
@@ -171,7 +175,7 @@ export class ParticleSystem {
     const S = this.sorted;
     for (let k = 0; k < n; k++) {
       const i = ord[k];
-      S.iPos[k * 3] = b.pos[i * 3]; S.iPos[k * 3 + 1] = b.pos[i * 3 + 1]; S.iPos[k * 3 + 2] = b.pos[i * 3 + 2];
+      S.iPos[k * 3] = b.pos[i * 3] + ox; S.iPos[k * 3 + 1] = b.pos[i * 3 + 1] + oy; S.iPos[k * 3 + 2] = b.pos[i * 3 + 2] + oz;
       S.iColor[k * 3] = b.color[i * 3]; S.iColor[k * 3 + 1] = b.color[i * 3 + 1]; S.iColor[k * 3 + 2] = b.color[i * 3 + 2];
       S.iNormal[k * 3] = b.normal[i * 3]; S.iNormal[k * 3 + 1] = b.normal[i * 3 + 1]; S.iNormal[k * 3 + 2] = b.normal[i * 3 + 2];
       S.iSize[k] = b.size[i]; S.iRot[k] = b.rot[i]; S.iAlpha[k] = b.alpha[i]; S.iEmit[k] = b.emit[i]; S.iVar[k] = b.variant[i];

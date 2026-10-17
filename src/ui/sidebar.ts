@@ -554,11 +554,11 @@ export class Sidebar {
       { d: { name: 'Presa de Malpasset (Francia, 1959)', volumeHm3: 49, heightM: 66 }, at: [43.51, 6.756, 'Malpasset'], note: 'La ola arrasó Fréjus: 423 muertos.' },
     ];
     const SOLAR_PRESETS: { s: Omit<SolarInput, 'kind'>; note: string }[] = [
-      { s: { name: 'Evento Carrington (1859)', dstNt: -1200 }, note: 'La mayor tormenta geomagnética registrada: auroras en Cuba y en Hawái, telégrafos en llamas.' },
+      { s: { name: 'Evento Carrington (1859)', dstNt: -1200, arrivalH: 17.6 }, note: 'La mayor tormenta geomagnética registrada: auroras en Cuba y en Hawái, telégrafos en llamas.' },
       { s: { name: 'Gran tormenta de 1921', dstNt: -907 }, note: 'Incendios en centrales telegráficas de Nueva York y Suecia.' },
-      { s: { name: 'Apagón de Quebec (1989)', dstNt: -589 }, note: '6 millones de personas sin luz durante 9 horas.' },
-      { s: { name: 'Tormentas de Halloween (2003)', dstNt: -383 }, note: 'Satélites dañados y apagón en Malmö (Suecia).' },
-      { s: { name: 'Tormenta de mayo de 2024 (Gannon)', dstNt: -412 }, note: 'Auroras vistas en toda España; el GPS de los tractores falló en EE. UU.' },
+      { s: { name: 'Apagón de Quebec (1989)', dstNt: -589, arrivalH: 54 }, note: '6 millones de personas sin luz durante 9 horas.' },
+      { s: { name: 'Tormentas de Halloween (2003)', dstNt: -383, arrivalH: 19 }, note: 'Satélites dañados y apagón en Malmö (Suecia).' },
+      { s: { name: 'Tormenta de mayo de 2024 (Gannon)', dstNt: -412, arrivalH: 42 }, note: 'Auroras vistas en toda España; el GPS de los tractores falló en EE. UU.' },
       { s: { name: 'Supertormenta hipotética', dstNt: -2500 }, note: 'Una tormenta el doble de intensa que la de 1859, en el límite de lo que se cree posible.' },
     ];
     const oType = seg<'reactor' | 'dirtybomb' | 'volcano' | 'dam' | 'solar' | 'war'>([['reactor', 'Accidente nuclear'], ['dirtybomb', 'Bomba sucia'], ['volcano', 'Supervolcán'], ['dam', 'Rotura de presa'], ['solar', 'Tormenta solar'], ['war', 'Guerra nuclear']], O.type, (v) => { O.type = v; updOther(); });
@@ -579,7 +579,16 @@ export class Sidebar {
     const damHv = h('b'), damH = h('input', { type: 'range', min: 10, max: 300, step: 1, value: O.dam.heightM }) as HTMLInputElement;
     const damBox = h('div', {}, field('Agua embalsada', damVv, damV), field('Altura de la presa', damHv, damH),
       h('div', { class: 'note' }, 'La inundación se calcula con el relieve real: el agua baja por el valle desde la presa. Coloca el objetivo justo sobre la presa.'));
-    const warBox = h('div', {}, h('div', { class: 'note' }, 'Se marcan en el mapa ciudades e instalaciones militares representativas de los dos bandos. Lo decisivo es el hollín de los incendios: provoca un invierno nuclear y una hambruna mundial. Mira la pestaña «Resumen» de los resultados.'));
+    // quién lanza primero (la simulación no lo supone: lo elige quien la usa)
+    const firstWrap = h('div', {});
+    const renderFirst = () => {
+      const wp = WAR_PRESETS.find((x) => x.id === O.war.preset) ?? WAR_PRESETS[0];
+      const cur = String(O.war.first ?? wp.first ?? 0) as '0' | '1';
+      const sg = seg<'0' | '1'>([['0', wp.sides[0]], ['1', wp.sides[1]]], cur, (v) => { O.war.first = +v as 0 | 1; });
+      firstWrap.innerHTML = '';
+      firstWrap.append(field('Lanza primero', null, sg.el));
+    };
+    const warBox = h('div', {}, firstWrap, h('div', { class: 'note' }, 'En el mapa verás los misiles cruzar entre los dos bandos por oleadas, las explosiones sobre ciudades e instalaciones militares representativas y el humo de los incendios extendiéndose. Lo decisivo es ese hollín: provoca un invierno nuclear y una hambruna mundial. Mira la pestaña «Resumen» de los resultados.'));
     const solDv = h('b'), solD = h('input', { type: 'range', min: 100, max: 3000, step: 10, value: Math.abs(O.solar.dstNt) }) as HTMLInputElement;
     const solBox = h('div', {}, field('Intensidad (índice Dst)', solDv, solD),
       h('div', { class: 'note' }, 'Cuanto más negativo es el índice Dst, más intensa es la tormenta y más cerca del ecuador llegan las auroras y las corrientes inducidas. El lugar elegido sólo cambia el punto de vista: la tormenta es planetaria.'));
@@ -595,7 +604,7 @@ export class Sidebar {
     const updOther = (fromInputs = false) => {
       relBox.style.display = O.type === 'volcano' || O.type === 'dam' || O.type === 'solar' || O.type === 'war' ? 'none' : '';
       warBox.style.display = O.type === 'war' ? '' : 'none';
-      if (O.type === 'war') { const wp = WAR_PRESETS.find((x) => x.id === O.war.preset) ?? WAR_PRESETS[0]; oPreset.value = String(WAR_PRESETS.indexOf(wp)); oNote.textContent = wp.note; oNote.style.display = ''; }
+      if (O.type === 'war') { const wp = WAR_PRESETS.find((x) => x.id === O.war.preset) ?? WAR_PRESETS[0]; oPreset.value = String(WAR_PRESETS.indexOf(wp)); oNote.textContent = wp.note; oNote.style.display = ''; renderFirst(); }
       volBox.style.display = O.type === 'volcano' ? '' : 'none';
       damBox.style.display = O.type === 'dam' ? '' : 'none';
       solBox.style.display = O.type === 'solar' ? '' : 'none';
@@ -619,7 +628,7 @@ export class Sidebar {
       if (!oPreset.value) { oNote.style.display = 'none'; return; }
       const p = O.type === 'volcano' ? VOL_PRESETS[+oPreset.value] : REL_PRESETS[+oPreset.value];
       if (O.type === 'dam') { const d = DAM_PRESETS[+oPreset.value]; O.dam = { kind: 'dam', ...d.d }; oNote.textContent = d.note + ' Objetivo movido a la presa.'; this.ev.onTarget(d.at[0], d.at[1], d.at[2], true); oNote.style.display = ''; const keep = oPreset.value; updOther(); oPreset.value = keep; return; }
-      if (O.type === 'war') { const w = WAR_PRESETS[+oPreset.value]; O.war = { kind: 'war', name: w.name, preset: w.id }; oNote.textContent = w.note; oNote.style.display = ''; return; }
+      if (O.type === 'war') { const w = WAR_PRESETS[+oPreset.value]; O.war = { kind: 'war', name: w.name, preset: w.id }; oNote.textContent = w.note; oNote.style.display = ''; renderFirst(); return; }
       if (O.type === 'solar') { const s = SOLAR_PRESETS[+oPreset.value]; O.solar = { kind: 'solar', ...s.s }; oNote.textContent = s.note; oNote.style.display = ''; const keep = oPreset.value; updOther(); oPreset.value = keep; return; }
       if (O.type === 'volcano') { const v = p as typeof VOL_PRESETS[number]; O.volcano = { kind: 'volcano', ...v.v }; }
       else { const r = p as typeof REL_PRESETS[number]; O.release = { kind: 'release', source: r.type, ...r.r }; }
@@ -638,7 +647,7 @@ export class Sidebar {
       oPreset.dispatchEvent(new Event('change'));
       return true;
     };
-    for (const el of [damV, damH, solD]) el.addEventListener('input', () => { updOther(true); oPreset.value = ''; oNote.style.display = 'none'; if (O.type === 'dam') O.dam.name = 'Presa personalizada'; if (O.type === 'solar') O.solar.name = 'Tormenta solar personalizada'; });
+    for (const el of [damV, damH, solD]) el.addEventListener('input', () => { updOther(true); oPreset.value = ''; oNote.style.display = 'none'; if (O.type === 'dam') O.dam.name = 'Presa personalizada'; if (O.type === 'solar') { O.solar.name = 'Tormenta solar personalizada'; O.solar.arrivalH = undefined; } });
     const markO = () => { oPreset.value = ''; oNote.style.display = 'none'; if (O.type === 'volcano') O.volcano.name = 'Erupción personalizada'; else O.release.name = O.type === 'dirtybomb' ? 'Bomba sucia' : 'Liberación radiactiva'; };
     for (const el of [isoSel, actR, hgtIn, durIn, kgIn, veiR]) el.addEventListener('input', () => { updOther(true); markO(); });
     isoSel.addEventListener('change', () => { updOther(true); markO(); });

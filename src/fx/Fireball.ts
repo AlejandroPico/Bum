@@ -150,12 +150,15 @@ export class Fireball implements FxModule {
     u.uAlpha.value = Math.min(1, heat / 0.12) * (1 - swallow * swallow * (3 - 2 * swallow));
     this.sMat.depthWrite = u.uAlpha.value > 0.98;
     u.uCam.value.copy(ctx.camPos);
-    u.uCenter.value.set(0, cy, 0);
+    // centro en coordenadas del mundo (en el ataque múltiple, la explosión está desplazada)
+    this.object.updateWorldMatrix(true, false);
+    const O = this.object.matrixWorld.elements;
+    u.uCenter.value.set(O[12], cy + O[13], O[14]);
 
     const g = this.gMat.uniforms;
     g.uRight.value.copy(ctx.right);
     g.uUp.value.copy(ctx.up);
-    g.uCenter.value.set(0, cy, 0);
+    g.uCenter.value.set(O[12], cy + O[13], O[14]);
     // el halo no debe cubrir media pantalla en explosiones gigantes
     g.uSize.value = R * (P.isImpact || P.fireballR > 20000 ? 1.8 : 3.2 + 4 * Math.max(0, heat - 1));
     g.uHeat.value = heat;

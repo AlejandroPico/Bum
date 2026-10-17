@@ -73,6 +73,8 @@ export interface SolarInput {
   name: string;
   /** índice Dst mínimo (nT, negativo) */
   dstNt: number;
+  /** horas entre la fulguración y la llegada de la eyección de masa coronal (si se conoce) */
+  arrivalH?: number;
 }
 
 /** guerra nuclear a gran escala */
@@ -81,6 +83,8 @@ export interface WarInput {
   name: string;
   /** escenario de WAR_PRESETS */
   preset: string;
+  /** bando que lanza primero (0 o 1); si falta, el del escenario */
+  first?: 0 | 1;
 }
 
 export type Scenario = NuclearInput | AsteroidInput | ReleaseInput | VolcanoInput | DamInput | SolarInput | WarInput;
@@ -213,9 +217,14 @@ export interface Effects {
   /** rotura de presa */
   dam?: { volumeHm3: number; heightM: number; peakM3s: number; floodKm2: number; reachKm: number; popFlooded: number; arrivalAt: (eM: number, nM: number) => number | null; depthAt: (eM: number, nM: number) => number; demOk: boolean };
   /** tormenta solar */
-  solar?: { dstNt: number; auroraMlat: number; bands: { mlat: number; label: string; color: string; risk: string }[]; popHighRisk: number; costUSDtn: [number, number]; mlatAt: (lat: number, lon: number) => number };
+  solar?: { dstNt: number; auroraMlat: number; bands: { mlat: number; label: string; color: string; risk: string }[]; popHighRisk: number; costUSDtn: [number, number]; mlatAt: (lat: number, lon: number) => number;
+    /** horas desde la fulguración: llegada de la eyección, máximo de la tormenta y escala de recuperación */
+    arrivalH: number; peakH: number; recoveryH: number;
+    /** índice Dst (nT) a los t segundos de la fulguración */
+    dstAt: (tS: number) => number };
   /** guerra a gran escala e invierno nuclear */
-  war?: { preset: string; sides: [string, string]; warheads: number; yieldKt: number; sootTg: number; directDeathsM: number; famineDeathsM: number; coolingC: number; precipPct: number; caloriesPct: number; targets: [number, number, string][]; series: { t: number; dT: number; dP: number }[] };
+  war?: { preset: string; sides: [string, string]; warheads: number; yieldKt: number; sootTg: number; directDeathsM: number; famineDeathsM: number; coolingC: number; precipPct: number; caloriesPct: number; targets: [number, number, string][]; series: { t: number; dT: number; dP: number }[];
+    hit: [[number, number, string][], [number, number, string][]]; launch: [[number, number, string][], [number, number, string][]]; first: 0 | 1; shareA: number; estimated: boolean };
   /** trayectoria del misil (si se eligió una base de lanzamiento) */
   missile?: { site: string; country: string; rangeKm: number; flightMin: number; apogeeKm: number; reentryKms: number; warningMin: number; boostMin: number; profile?: 'ballistic' | 'hgv' | 'cruise' | 'aircraft'; profileName?: string; cruiseKm?: number; mirv?: number; targets?: number };
   /** hora de llegada (h) de la lluvia radiactiva a un punto */

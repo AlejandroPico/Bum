@@ -47,8 +47,9 @@ export class Timeline {
   /** muestra u oculta el botón del recorrido cinematográfico */
   setTour(available: boolean) { this.tourBtn.style.display = available ? '' : 'none'; }
 
-  configure(tStart: number, tEnd: number, events: { t: number; label: string }[], entryFrac = 0.12) {
+  configure(tStart: number, tEnd: number, events: { t: number; label: string }[], entryFrac = 0.12, t0 = 0.02) {
     this.entryFrac = entryFrac;
+    this.t0 = t0;
     this.tStart = tStart;
     this.tEnd = tEnd;
     this.evList = [...events].sort((a, b) => a.t - b.t);
@@ -75,19 +76,23 @@ export class Timeline {
     }
   }
 
+  /** segundos que se suman al reloj mostrado (en la guerra, el tiempo desde el primer lanzamiento) */
+  offset = 0;
   private entryFrac = 0.12;
+  /** escala logarítmica: los primeros t0 segundos ocupan un tramo parecido al de cada década siguiente */
+  private t0 = 0.02;
   private get entry() { return this.tStart < 0 ? this.entryFrac : 0; }
   toT(s: number): number {
     const E = this.entry;
     if (E && s < E) return this.tStart * (1 - s / E);
     const u = E ? (s - E) / (1 - E) : s;
-    const t0 = 0.02, k = Math.log(this.tEnd / t0 + 1);
+    const t0 = this.t0, k = Math.log(this.tEnd / t0 + 1);
     return t0 * (Math.exp(k * u) - 1);
   }
   toS(t: number): number {
     const E = this.entry;
     if (t < 0) return E ? E * (1 - t / this.tStart) : 0;
-    const t0 = 0.02, k = Math.log(this.tEnd / t0 + 1);
+    const t0 = this.t0, k = Math.log(this.tEnd / t0 + 1);
     const u = Math.log(t / t0 + 1) / k;
     return E + u * (1 - E);
   }
@@ -98,7 +103,8 @@ export class Timeline {
       setRangeFill(this.range);
     }
     const rt = rate >= 1 ? `×${Math.round(rate)}` : `×${rate.toFixed(2).replace('.', DEC)}`;
-    this.time.innerHTML = `T${t < 0 ? '' : '+'}${fmtTime(t)}<small>tiempo real ${rt}</small>`;
+    const tt = t + this.offset;
+    this.time.innerHTML = `T${tt < 0 ? '' : '+'}${fmtTime(tt)}<small>tiempo real ${rt}</small>`;
     this.play.innerHTML = playing ? ICONS.pause : ICONS.play;
   }
 }

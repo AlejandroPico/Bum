@@ -871,3 +871,12 @@ body.lite #view-pop { backdrop-filter: none !important; -webkit-backdrop-filter:
 body:not(.touring) .tour-btns, body:not(.touring) .tour-btns button { pointer-events: none !important; }
 /* textos más largos en otros idiomas: los botones de opciones pueden partir la línea */
 .seg button { white-space: normal; line-height: 1.2; }
+
+/* guerra nuclear: marcha del intercambio sobre el mapa, sin caja */
+#war-hud { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: none; text-align: center; display: flex; flex-direction: column; gap: 3px; max-width: min(560px, 90vw); text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 12px rgba(0,0,0,.6); color: #fff; }
+#war-hud.hidden { display: none; }
+#war-hud b { font: 600 15px var(--sans, system-ui); letter-spacing: .01em; }
+#war-hud span { font: 500 11.5px var(--mono); color: #ffd28a; }
+body.rp-open:not(.rp-min) #war-hud { left: calc(50% - 160px); }
+body:not(.ui-collapsed) #war-hud { margin-left: 160px; }
+@media (max-width: 760px) { #war-hud { top: 58px; margin-left: 0 !important; left: 50% !important; } #war-hud b { font-size: 13px; } }

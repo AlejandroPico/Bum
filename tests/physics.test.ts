@@ -19,7 +19,7 @@ import { assessPoint, localOffset } from '../src/physics/safety';
 import { ballistic, greatCircleKm, greatCirclePath } from '../src/data/launch';
 import { computeTerrainShadow } from '../src/physics/terrain';
 import { geomagLat, auroraBoundary } from '../src/physics/disasters';
-import { WAR_PRESETS, climateSeries } from '../src/data/war';
+import { warSchedule, WAR_PRESETS, climateSeries } from '../src/data/war';
 import { heatGrid } from '../src/physics/heat';
 import { planFlight, profileFor, legAt } from '../src/data/flight';
 import { combinedCasualties } from '../src/physics/effects';
@@ -314,7 +314,16 @@ section('Guerra nuclear e invierno nuclear');
   range('Año del enfriamiento máximo', peak.t, 1, 3, 'Coupe et al. 2019: máximo en el 2.º–3.er año');
   check('Enfriamiento máximo con 150 Tg (°C)', -peak.dT, 9, 0.12, 'Coupe et al. 2019: ≈ 9 °C');
   truthy('Diez años después sigue haciendo frío (> 2 °C)', (s.find((x) => Math.abs(x.t - 10) < 0.05)?.dT ?? 0) < -2);
-  truthy('Más hollín, más hambre (orden de los escenarios)', WAR_PRESETS.every((p, i, a) => i === 0 || p.famineDeathsM >= a[i - 1].famineDeathsM));
+  const bySoot = [...WAR_PRESETS].sort((a, b) => a.sootTg - b.sootTg);
+  truthy('Más hollín, más hambre (en todos los escenarios)', bySoot.every((p, i, a) => i === 0 || p.famineDeathsM >= a[i - 1].famineDeathsM));
+  for (const p of WAR_PRESETS) {
+    const ms = warSchedule(p, p.first ?? 0);
+    truthy(`${p.id}: un misil por objetivo y cada uno llega después de salir`, ms.length === p.hit[0].length + p.hit[1].length && ms.every((m) => m.tImpact > m.tLaunch + 200));
+    truthy(`${p.id}: cada bando ataca el territorio del otro`, ms.every((m) => p.hit[1 - m.side].some((t) => t[0] === m.to[0] && t[1] === m.to[1])));
+  }
+  const us = warSchedule(WAR_PRESETS.find((p) => p.id === 'usru-150')!, 0);
+  const firstHit = Math.min(...us.filter((m) => m.side === 0).map((m) => m.tImpact));
+  truthy('EE. UU.–Rusia: la respuesta sale antes de que lleguen las primeras ojivas', us.some((m) => m.side === 1 && m.tLaunch < firstHit));
 }
 
 

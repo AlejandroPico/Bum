@@ -181,7 +181,20 @@ export function computeSolar(sc: SolarInput, env: Environment, lat: number, lon:
   // coste: Lloyd's (2013) para EE. UU. con una tormenta como la de 1859: 0,6–2,6 billones de dólares
   const cost: [number, number] = [Math.round(0.6 * scale * 2.5 * 10) / 10, Math.round(2.6 * scale * 2.5 * 10) / 10];
   const here = geomagLat(lat, lon);
+  // cronología: la eyección (CME) viaja a 1000–2500 km/s; las más rápidas son las más violentas
+  const vKms = 400 + 1.4 * Math.abs(dst);
+  const arrivalH = sc.arrivalH ?? Math.max(12, Math.min(80, 1.496e8 / vKms / 3600));
+  const mainH = 4 + Math.min(8, Math.abs(dst) / 250);
+  const peakH = arrivalH + mainH, recoveryH = 10 + Math.abs(dst) / 120;
+  const dstAt = (tS: number) => {
+    const h = tS / 3600;
+    if (h < arrivalH) return 0;
+    if (h < peakH) { const u = (h - arrivalH) / mainH; return dst * (u * u * (3 - 2 * u)) + 25 * Math.max(0, 1 - u * 6); }
+    return dst * Math.exp(-(h - peakH) / recoveryH);
+  };
+  const hh = (x: number) => (x < 48 ? `${Math.round(x)} horas` : `${(x / 24).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} días`);
   const notes = [
+    `Cómo se desarrolla: la fulguración se ve a los 8 minutos (es lo que tarda la luz del Sol) y sus rayos X cortan la radio de onda corta en la cara de día de la Tierra. Entre media hora y una hora después llegan protones muy rápidos que se cuelan por los polos (peligro para satélites y vuelos polares). La nube de plasma (la eyección de masa coronal) llega a las ${hh(arrivalH)}: ahí empieza la tormenta geomagnética, que alcanza su máximo a las ${hh(peakH)} y se calma en uno o dos días.`,
     `Tormenta geomagnética con Dst ≈ ${Math.round(dst)} nT: las auroras se verían hasta unos ${Math.round(A)}° de latitud geomagnética${Math.abs(here) >= A ? ' (también en el lugar elegido)' : ''}.`,
     'Las corrientes inducidas en el suelo recorren las líneas de alta tensión y pueden quemar grandes transformadores, que tardan meses en sustituirse. En marzo de 1989, una tormenta mucho menor dejó sin luz Quebec durante 9 horas.',
     'Se perderían o dañarían satélites, el GPS daría errores de decenas de metros y las radiocomunicaciones de onda corta caerían durante horas o días. En 1859 los telégrafos echaron chispas y algunos funcionaron sin baterías.',
@@ -192,7 +205,7 @@ export function computeSolar(sc: SolarInput, env: Environment, lat: number, lon:
     scenario: sc, rings: [], fallout: [],
     casualties: { deaths: 0, injuries: 0, exposed: popHigh, profile: emptyProfile(), cityName: nearestCity(lat, lon).city.name },
     notes,
-    solar: { dstNt: dst, auroraMlat: A, bands, popHighRisk: popHigh, costUSDtn: cost, mlatAt: geomagLat },
+    solar: { dstNt: dst, auroraMlat: A, bands, popHighRisk: popHigh, costUSDtn: cost, mlatAt: geomagLat, arrivalH, peakH, recoveryH, dstAt },
   } as Effects;
 }
 
@@ -204,7 +217,10 @@ export function computeWar(sc: WarInput, env: Environment, lat: number, lon: num
     `${p.note} Explosiones: ${n0(p.warheads)} ojivas de ${n0(p.yieldKt)} kt (${n0((p.warheads * p.yieldKt) / 1000)} Mt en total). En el mapa se marcan ${p.targets.length} objetivos representativos.`,
     `Los incendios de las ciudades elevarían unos ${n0(p.sootTg)} millones de toneladas de hollín a la estratosfera, donde el sol lo calienta y lo mantiene años. La temperatura media del planeta bajaría unos ${p.coolingC.toLocaleString(LOCALE)} °C y las lluvias un ${p.precipPct} %.`,
     `Con menos luz, frío y menos lluvia caerían las cosechas, la pesca y la ganadería: las calorías disponibles en el mundo bajarían alrededor de un ${p.caloriesPct} % a los 3–5 años. Unos ${n0(p.famineDeathsM)} millones de personas podrían morir de hambre, muchas más que por las explosiones (${n0(p.directDeathsM)} millones).`,
-    'Los países que no participan en la guerra sufrirían igualmente la hambruna: el invierno nuclear es planetario. Cifras de Xia et al. (2022) y Toon et al. (2019); los casos intermedios de calorías se han interpolado.',
+    p.estimated
+      ? 'Los países que no participan en la guerra sufrirían igualmente la hambruna: el invierno nuclear es planetario. Este caso no está en los estudios publicados: las cifras de hollín, clima y hambre son una estimación orientativa de Bum por comparación con los casos de Xia et al. (2022) y Toon et al. (2019).'
+      : 'Los países que no participan en la guerra sufrirían igualmente la hambruna: el invierno nuclear es planetario. Cifras de Xia et al. (2022) y Toon et al. (2019); los casos intermedios de calorías se han interpolado.',
+    'En el mapa, cada línea es un misil hacia uno de los objetivos representativos (en realidad serían muchos más): primero lanza un bando, el otro detecta el ataque y responde antes de que lleguen las ojivas, y siguen segundas oleadas. Quién empieza se elige en el panel; la simulación no supone quién lo haría.',
   ];
   return {
     ...base(env),
@@ -212,6 +228,6 @@ export function computeWar(sc: WarInput, env: Environment, lat: number, lon: num
     energyKt: p.warheads * p.yieldKt, energyJ: p.warheads * p.yieldKt * 4.184e12,
     casualties: { deaths: p.directDeathsM * 1e6, injuries: p.famineDeathsM * 1e6, exposed: 0, profile: emptyProfile(), cityName: nearestCity(lat, lon).city.name },
     notes,
-    war: { preset: p.id, sides: p.sides, warheads: p.warheads, yieldKt: p.yieldKt, sootTg: p.sootTg, directDeathsM: p.directDeathsM, famineDeathsM: p.famineDeathsM, coolingC: p.coolingC, precipPct: p.precipPct, caloriesPct: p.caloriesPct, targets: p.targets, series: climateSeries(p) },
+    war: { preset: p.id, sides: p.sides, warheads: p.warheads, yieldKt: p.yieldKt, sootTg: p.sootTg, directDeathsM: p.directDeathsM, famineDeathsM: p.famineDeathsM, coolingC: p.coolingC, precipPct: p.precipPct, caloriesPct: p.caloriesPct, targets: p.targets, series: climateSeries(p), hit: p.hit, launch: p.launch, first: sc.first ?? p.first ?? 0, shareA: p.shareA ?? 0.5, estimated: !!p.estimated },
   } as Effects;
 }

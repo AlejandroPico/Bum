@@ -192,6 +192,26 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       relieve» (`shadow`). Con todo desactivado en Efectos, el mapa queda limpio.
 - [x] Los botones de mapa de calor (población, víctimas, lluvia radiactiva) también al final de Efectos.
 
+## 1.8.2 — Revisión: día y noche, vuelo, ataque múltiple, tormenta solar y guerra (publicada)
+
+- [x] Día y noche reales en el planeta (`src/map/daynight.ts`): punto subsolar por la fecha y la hora (con el tema
+      automático, la hora real más el tiempo simulado; con un tema fijo, esa hora en la longitud del objetivo). En el
+      globo visto de lejos, la luz de MapLibre se orienta hacia el Sol (antes la sombra salía girada: noche en un
+      hemisferio y día en el otro); en el mapa plano, sombra de la noche con los crepúsculos (se desvanece al acercarse).
+- [x] Durante el vuelo del misil sólo se rotulan países, capitales y grandes ciudades.
+- [x] Ataque múltiple: los hongos, el humo de los incendios y la bola de fuego de cada detonación se dibujaban todos
+      en la primera (las partículas no usaban la posición de su explosión). También la lluvia negra en todas y el
+      final de la simulación según la detonación más larga.
+- [x] Tormenta solar con cronología: rayos X a los 8 min (apagón de radio en la cara de día), protones por los polos
+      y, al llegar la eyección (17,6 h en 1859, 54 h en 1989…), el óvalo auroral baja hacia el ecuador y vuelve a subir;
+      rótulos en el mapa y capas explicadas y ocultables en Efectos.
+- [x] Guerra nuclear con vida (`src/map/war-layer.ts`, `warSchedule` en `data/war.ts`): misiles por oleadas entre los
+      dos bandos (primer ataque, respuesta antes de que lleguen las ojivas, segundas oleadas), destellos y brasas en
+      cada objetivo, zonas de daño, humo y un velo de hollín que en días rodea el planeta; rótulo con la fase y las
+      ojivas detonadas; reloj desde el primer lanzamiento; «Lanza primero» elegible. Escenarios nuevos (estimaciones
+      propias por comparación con Xia et al. 2022): Corea del Norte–Corea del Sur, Corea del Norte–Japón, China–EE. UU.
+      y Rusia–OTAN en Europa. Vista desde encima del polo para EE. UU.–Rusia.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia.

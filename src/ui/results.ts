@@ -156,7 +156,7 @@ export class ResultsPanel {
     const kicker = sc.kind === 'war' ? 'Guerra nuclear e invierno nuclear' : sc.kind === 'dam' ? 'Rotura de presa' : sc.kind === 'solar' ? 'Tormenta geomagnética' : sc.kind === 'release' ? (sc.source === 'dirtybomb' ? 'Bomba sucia' : 'Accidente nuclear') : sc.kind === 'volcano' ? 'Erupción volcánica' : sc.kind === 'nuclear'
       ? fx.chemical ? 'Explosión convencional' : 'Detonación nuclear'
       : fx.asteroid?.fate === 'airburst' ? 'Explosión aérea de asteroide' : 'Impacto de asteroide';
-    const burst = sc.kind === 'war' ? `${fx.war?.sides.join(' · ')}` : sc.kind === 'dam' ? `${Math.round(sc.heightM)} m · ${sc.volumeHm3.toLocaleString(LOCALE)} hm³` : sc.kind === 'solar' ? `Dst ${Math.round(sc.dstNt)} nT` : sc.kind === 'release' ? `${fx.release?.isoName ?? ''}` : sc.kind === 'volcano' ? `VEI ${sc.vei}` : fx.buried ? `${fx.buried.mode === 'underground' ? 'bajo tierra' : 'bajo el agua'} a ${fmtDist(fx.buried.depthM)}` : fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : sc.kind === 'asteroid' && sc.target === 'water' ? `en el océano (${fmtDist(sc.waterDepthM)} de prof.)` : 'en superficie';
+    const burst = sc.kind === 'war' ? `${fx.war?.sides.map((x) => tr(x)).join(' · ')}` : sc.kind === 'dam' ? `${Math.round(sc.heightM)} m · ${sc.volumeHm3.toLocaleString(LOCALE)} hm³` : sc.kind === 'solar' ? `Dst ${Math.round(sc.dstNt)} nT` : sc.kind === 'release' ? `${fx.release?.isoName ?? ''}` : sc.kind === 'volcano' ? `VEI ${sc.vei}` : fx.buried ? `${fx.buried.mode === 'underground' ? 'bajo tierra' : 'bajo el agua'} a ${fmtDist(fx.buried.depthM)}` : fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : sc.kind === 'asteroid' && sc.target === 'water' ? `en el océano (${fmtDist(sc.waterDepthM)} de prof.)` : 'en superficie';
     const burstTr = tr(burst);
     const minBtn = h('button', { class: 'icon-btn', title: 'Minimizar', html: ICONS.min, onclick: () => { el.classList.toggle('min'); minBtn.innerHTML = el.classList.contains('min') ? ICONS.max : ICONS.min; } });
     const hiroTxt = hiro >= 1 ? `×${fmtNum(hiro)} Hiroshima` : `${(hiro * 100).toFixed(hiro < 0.01 ? 2 : 1).replace('.', DEC)} % de Hiroshima`;
@@ -442,6 +442,8 @@ export class ResultsPanel {
   }
 
   private effects(body: HTMLElement, fx: Effects) {
+    if (fx.solar) return this.solarEffects(body, fx);
+    if (fx.war) return this.warEffects(body, fx);
     // de dentro hacia fuera: del efecto más severo (bola de fuego) al más leve
     const sorted = [...fx.rings].sort((a, b) => (a.global ? 1 : 0) - (b.global ? 1 : 0) || a.radiusM - b.radiusM);
     for (const r of sorted) {
@@ -489,6 +491,36 @@ export class ResultsPanel {
     if (extra.length) body.append(h('div', { class: 'res-h3' }, 'Otras capas del mapa'), ...extra);
     // los mismos mapas de calor que en «Mapas y capas»
     this.heatBlock(body, fx);
+  }
+
+  /** tormenta solar: lo que va apareciendo en el mapa, en orden, y cuándo */
+  private solarEffects(body: HTMLElement, fx: Effects) {
+    const S = fx.solar!;
+    const hh = (x: number) => (x < 48 ? `${Math.round(x)} h` : `${n1(x / 24, 1)} días`);
+    body.append(h('div', { class: 'sec-note' }, 'El mapa sigue la tormenta en el tiempo: dale al play o mueve la línea de tiempo para ver cada fase. Cada capa se puede ocultar con un clic.'));
+    body.append(
+      this.toggleRow('sol-radio', '#60a5fa', 'Apagón de radio en la cara de día', 'a los 8 min', h('div', { class: 'meta' }, 'Los rayos X de la fulguración llegan a la velocidad de la luz y alteran la ionosfera en la mitad de la Tierra donde es de día: la radio de onda corta (aviones, barcos, radioaficionados) se corta durante una o dos horas.')),
+      this.toggleRow('sol-proton', '#a78bfa', 'Protones por los polos', '30 min – 2 días', h('div', { class: 'meta' }, 'Partículas muy rápidas que el campo magnético canaliza hacia los polos: dañan satélites, obligan a desviar los vuelos que cruzan el Ártico y apagan la radio en los casquetes polares.')),
+      this.toggleRow('sol-zones', '#ef4444', 'Zonas de riesgo para la red eléctrica', `máximo a las ${hh(S.peakH)}`, h('div', { class: 'meta' }, `Cuando llega la eyección de masa coronal (a las ${hh(S.arrivalH)}), el campo magnético terrestre se sacude e induce corrientes en el suelo y en las líneas eléctricas largas. Las bandas bajan hacia el ecuador al crecer la tormenta y vuelven a subir al calmarse.`,
+        h('span', { class: 'marks' }, ...([['#ef4444', 'Bajo el óvalo auroral: transformadores en peligro'], ['#f97316', 'Borde de las auroras: riesgo alto'], ['#facc15', 'Latitudes medias: fallos puntuales']] as const).map(([c, t]) => h('span', {}, h('b', { style: { background: c } }), t))))),
+      this.toggleRow('sol-aurora', '#4ade80', 'Hasta dónde se ven las auroras', `${Math.round(S.auroraMlat)}° geomagn.`, h('div', { class: 'meta' }, 'Línea verde: el borde del óvalo auroral. Al norte (y al sur, en el otro hemisferio) de ella se verían auroras de noche. La latitud geomagnética se mide desde el polo magnético, por eso la línea está inclinada respecto a los paralelos.')),
+    );
+    body.append(h('div', { class: 'sec-note' }, 'No hay daño directo a las personas en tierra: el peligro está en los apagones largos y en lo que dependen de la electricidad (agua, hospitales, comunicaciones, pagos).'));
+  }
+
+  /** guerra nuclear: qué se ve en el mapa y cuándo */
+  private warEffects(body: HTMLElement, fx: Effects) {
+    const W = fx.war!;
+    const A = W.first, B = 1 - A;
+    body.append(h('div', { class: 'sec-note' }, 'El mapa cuenta la guerra en el tiempo: dale al play o mueve la línea de tiempo. Cada capa se puede ocultar con un clic.'));
+    body.append(
+      this.toggleRow('war-arcs', '#ff6a3d', 'Misiles en vuelo', 'primeros 40 min', h('div', { class: 'meta' }, `Cada línea es un misil hacia uno de los objetivos representativos (en realidad irían muchos más). `,
+        h('span', { class: 'marks' }, h('span', {}, h('b', { style: { background: '#ff6a3d' } }), tr(W.sides[0])), h('span', {}, h('b', { style: { background: '#38bdf8' } }), tr(W.sides[1]))),
+        h('div', {}, `${tr(W.sides[A])} lanza primero; ${tr(W.sides[B])} detecta el ataque con sus satélites y radares y responde en unos minutos, antes de que lleguen las ojivas. Después vienen segundas oleadas desde submarinos y desde las bases que quedan. Un misil intercontinental tarda unos 30 minutos; uno de alcance medio, menos de 10.`))),
+      this.toggleRow('war-zones', '#ef4444', 'Explosiones y zonas de daño', `${fmtNum(W.warheads)} × ${fmtNum(W.yieldKt)} kt`, h('div', { class: 'meta' }, 'Cada llegada es un destello que deja una brasa (la ciudad o la base en llamas) y las zonas de daño de una ojiva: ',
+        h('span', { class: 'marks' }, ...([['#ef4444', 'Daño grave (5 psi)'], ['#f97316', 'Quemaduras de 3.er grado'], ['#facc15', 'Rotura de cristales (1 psi)']] as const).map(([c, t]) => h('span', {}, h('b', { style: { background: c } }), t))))),
+      this.toggleRow('war-smoke', '#4a4038', 'Humo de los incendios y velo de hollín', `${fmtNum(W.sootTg)} millones de t`, h('div', { class: 'meta' }, 'De las ciudades en llamas sube humo durante horas; las tormentas de fuego lo elevan hasta la estratosfera, donde el viento lo extiende en una o dos semanas alrededor del planeta. Ese velo es el que tapa el sol y provoca el invierno nuclear de la pestaña Resumen.')),
+    );
   }
 
   /** qué marcas del suelo dibuja el mapa en este escenario (color y nombre) */
