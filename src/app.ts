@@ -21,7 +21,7 @@ import type { Domes } from './fx/Domes';
 import type { Fires } from './fx/Fires';
 import { Audio } from './fx/audio';
 import type { FrameCtx } from './fx/types';
-import { computeEffects, combinedCasualties, fmtEnergy } from './physics/effects';
+import { computeEffects, combinedCasualties, fmtEnergy, fmtDist } from './physics/effects';
 import { heatGrid, type HeatKind } from './physics/heat';
 import { HeatLayer } from './map/heat';
 import { Tour } from './tour';
@@ -31,7 +31,7 @@ import type { Weather } from './ui/geo';
 import { assessPoint, type SafetyReport } from './physics/safety';
 import { nearestCity, haversineKm, setRealPopulation } from './data/cities';
 import { loadRealPopulation } from './data/worldpop';
-import { fetchInfrastructure, fetchBuildingCounts } from './data/osm';
+import { fetchInfrastructure, fetchBuildingCounts, fetchShelters, SHELTER_KINDS, type Shelter } from './data/osm';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
 import { WarLayer } from './map/war-layer';
@@ -1024,7 +1024,56 @@ function buildSafePop() {
   for (const it of R.items) list.append(h('div', { class: `sp-it lv-${it.level}` }, h('div', {}, h('b', {}, it.label), h('span', {}, it.value)), h('p', {}, it.detail)));
   if (!R.items.length) list.append(h('p', { class: 'sp-note' }, 'Ningún efecto calculado llega a este punto.'));
   safePop.append(list, h('div', { class: 'sp-h2' }, 'Qué hacer'), h('ul', { class: 'sp-adv' }, ...R.advice.map((a) => h('li', {}, a))),
+    ...shelterBlock(R),
     h('p', { class: 'sp-note' }, 'Estimación orientativa con los mismos modelos del simulador. En una emergencia real, sigue siempre las instrucciones de las autoridades.'));
+}
+
+// refugio más cercano: metro, aparcamientos subterráneos y refugios de OpenStreetMap, andando
+let shelters: { key: string; list: Shelter[] | null | 'loading' } = { key: '', list: null };
+let shelterMarkers: maplibregl.Marker[] = [];
+const SHELTER_COLORS: Record<Shelter['kind'], string> = { metro: '#38bdf8', bunker: '#a78bfa', parking: '#4ade80', 'parking-ms': '#facc15' };
+function clearShelterMarkers() { for (const m of shelterMarkers) m.remove(); shelterMarkers = []; }
+/** tiempo andando (s): el camino real es un 30 % más largo que la línea recta, a 5 km/h */
+const walkS = (m: number) => (m * 1.3) / 1.39;
+function shelterBlock(R: SafetyReport): HTMLElement[] {
+  if (!safePoint) return [];
+  const P = safePoint;
+  const key = `${P.lat.toFixed(4)},${P.lon.toFixed(4)}`;
+  if (shelters.key !== key) {
+    shelters = { key, list: 'loading' };
+    clearShelterMarkers();
+    fetchShelters(P.lat, P.lon).then((l) => {
+      if (shelters.key !== key) return;
+      shelters.list = l;
+      for (const sh of (l ?? []).slice(0, 8)) {
+        const el = h('div', { class: 'shelter-mk', title: `${tr(SHELTER_KINDS[sh.kind].label)}${sh.name ? ' · ' + sh.name : ''}`, style: { background: SHELTER_COLORS[sh.kind] } });
+        shelterMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([sh.lon, sh.lat]).addTo(map));
+      }
+      if (!safePop.classList.contains('hidden')) buildSafePop();
+    }, () => { if (shelters.key === key) shelters.list = null; });
+  }
+  const out: HTMLElement[] = [h('div', { class: 'sp-h2' }, 'Refugio más cercano')];
+  const L = shelters.list;
+  if (L === 'loading') { out.push(h('p', { class: 'sp-note' }, 'Buscando estaciones de metro, aparcamientos subterráneos y refugios en OpenStreetMap…')); return out; }
+  if (!L) { out.push(h('p', { class: 'sp-note' }, 'No se pudo consultar OpenStreetMap (servidor ocupado o sin conexión).')); return out; }
+  if (!L.length) { out.push(h('p', { class: 'sp-note' }, 'No hay metro, aparcamientos subterráneos ni refugios señalados en 2,5 km. Lo más protegido a tu alcance es un sótano o el centro de un edificio grande de hormigón, lejos de las ventanas.')); return out; }
+  const fmtM = (t: number) => (t < 90 ? `${Math.max(1, Math.round(t / 60))} min` : t < 5400 ? `${Math.round(t / 60)} min` : `${(t / 3600).toFixed(1).replace('.', DEC)} h`);
+  const box = h('div', { class: 'sp-items' });
+  for (const sh of L.slice(0, 5)) {
+    const tw = walkS(sh.distM), K = SHELTER_KINDS[sh.kind];
+    let verdict: string, lv: string;
+    if (R.shockS != null && tw < R.shockS) { verdict = 'Llegarías antes que la onda expansiva'; lv = 'bajo'; }
+    else if (R.falloutH != null && tw < R.falloutH * 3600) { verdict = `Después de la onda, llegarías antes de que empiece la lluvia radiactiva (en ${fmtM(R.falloutH * 3600)})`; lv = 'riesgo'; }
+    else if (R.falloutH == null && R.shockS == null) { verdict = 'Aquí no llegan efectos graves: no hace falta salir'; lv = 'fuera'; }
+    else if (R.falloutH == null) { verdict = 'No da tiempo antes de la onda, pero aquí no cae lluvia radiactiva: después no hace falta encerrarse; aléjate de los incendios'; lv = 'riesgo'; }
+    else { verdict = 'No llegarías a tiempo: quédate en el sitio más protegido de donde estés'; lv = 'grave'; }
+    const it = h('div', { class: `sp-it lv-${lv} sh-it`, title: 'Ver en el mapa', onclick: (ev: MouseEvent) => { ev.stopPropagation(); map.easeTo({ center: [sh.lon, sh.lat], zoom: Math.max(map.getZoom(), 15.5), duration: 900 }); } },
+      h('div', {}, h('b', {}, h('i', { class: 'sh-dot', style: { background: SHELTER_COLORS[sh.kind] } }), sh.name || tr(K.label)), h('span', {}, `${fmtDist(sh.distM)} · ${fmtM(tw)} andando`)),
+      h('p', {}, `${tr(K.label)}: ${tr(K.pf)}. ${tr(verdict)}.`));
+    box.append(it);
+  }
+  out.push(box, h('p', { class: 'sp-note' }, 'Ante una explosión, primero ponte a cubierto donde estés hasta que pase la onda. Después, si un sitio bajo tierra queda a pocos minutos, ve antes de que empiece la lluvia radiactiva y quédate dentro al menos 24 horas. Datos de OpenStreetMap: puede que falten refugios o que no estén abiertos.'));
+  return out;
 }
 
 // tema: día, tarde, noche o automático
@@ -1057,7 +1106,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.11';
+const APP_VERSION = '1.12';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1417,6 +1466,7 @@ function clearRun() {
   resetFov();
   setMissilePath(null); clearFlightUI(); setFlightLabels(false); missileFx = null;
   weatherLayer.setSimTime(0);
+  clearShelterMarkers(); shelters = { key: '', list: null };
   setShadowLayer(null, 0, 0);
   setBlackRainLayer([]); showBlackRain(false);
   setSolarLayer(null);

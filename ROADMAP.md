@@ -252,6 +252,14 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       bando: ojivas recibidas y muertes por las explosiones (proporcionales a las cifras del escenario). Botones ◀ ⏯ ▶
       para ir de fase en fase y quedarse en cada una.
 
+## 1.12 — Refugio más cercano (publicada)
+
+- [x] En «¿Estoy a salvo?», los refugios a menos de 2,5 km del punto según OpenStreetMap (`fetchShelters`): bocas y
+      estaciones de metro, aparcamientos subterráneos y de varias plantas, refugios y búnkeres abiertos. Para cada uno,
+      la distancia, el tiempo andando (camino un 30 % más largo que la línea recta, a 5 km/h), su protección orientativa
+      frente a la radiación (FEMA 2010) y si llegarías antes que la onda o antes de que empiece la lluvia radiactiva.
+      Se marcan en el mapa y, al pulsarlos, la cámara va hasta ellos.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
@@ -259,8 +267,6 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 - [ ] Defensa antimisiles (en duda): interceptores desde bases reales, probabilidad de interceptación según el tipo de
       arma y animación del intento.
 
-- [ ] Refugio más cercano (dentro de «¿Estoy a salvo?»): estaciones de metro, aparcamientos subterráneos y sótanos públicos de OpenStreetMap
-      cerca de tu punto, con el tiempo andando y si llegarías antes que la onda o la lluvia.
 - [ ] «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
       fuego sobre tu horizonte, según dónde estés.
 - [ ] Hospitales y sanidad: camas y hospitales de la zona frente al número de heridos y quemados (cuántos quedarían

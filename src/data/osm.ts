@@ -85,3 +85,48 @@ export async function fetchBuildingCounts(lat: number, lon: number, zones: { id:
   }
   return null;
 }
+
+/**
+ * Refugios cercanos de OpenStreetMap: estaciones y bocas de metro, aparcamientos subterráneos y de
+ * varias plantas y búnkeres o refugios antiaéreos señalados. Con el factor de protección orientativo
+ * de cada tipo frente a la radiación de la lluvia radiactiva (FEMA, «Key Planning Factors», 2010).
+ */
+export interface Shelter { name: string; kind: 'metro' | 'parking' | 'parking-ms' | 'bunker'; lat: number; lon: number; distM: number }
+export const SHELTER_KINDS: Record<Shelter['kind'], { label: string; pf: string; good: number }> = {
+  metro: { label: 'Metro (subterráneo)', pf: 'protección muy alta (factor > 100)', good: 3 },
+  bunker: { label: 'Refugio o búnker', pf: 'protección muy alta, si está abierto', good: 3 },
+  parking: { label: 'Aparcamiento subterráneo', pf: 'protección alta (factor 50–200 en las plantas bajas)', good: 2 },
+  'parking-ms': { label: 'Aparcamiento de varias plantas', pf: 'protección media (factor 10–40 en el centro de las plantas intermedias)', good: 1 },
+};
+export async function fetchShelters(lat: number, lon: number, radiusM = 2500): Promise<Shelter[] | null> {
+  const a = `(around:${Math.round(radiusM)},${lat.toFixed(5)},${lon.toFixed(5)})`;
+  const body = `[out:json][timeout:25];(node[railway=subway_entrance]${a};nwr[station=subway]${a};nwr[amenity=parking][parking~"^(underground|multi-storey)$"]${a};nwr[building=bunker]${a};nwr[military=bunker]${a};nwr[amenity=shelter][shelter_type=public_shelter]${a};);out center tags 300;`;
+  let data: { elements: { lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] } | null = null;
+  for (const url of ENDPOINTS) {
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 30000);
+      const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: body }), signal: ctl.signal });
+      clearTimeout(t);
+      if (!r.ok) continue;
+      data = await r.json();
+      break;
+    } catch { /* siguiente servidor */ }
+  }
+  if (!data) return null;
+  const cos = Math.cos((lat * Math.PI) / 180);
+  const out: Shelter[] = [];
+  for (const e of data.elements) {
+    const la = e.lat ?? e.center?.lat, lo = e.lon ?? e.center?.lon, g = e.tags ?? {};
+    if (la === undefined || lo === undefined) continue;
+    const kind: Shelter['kind'] = g.railway === 'subway_entrance' || g.station === 'subway' ? 'metro' : g.amenity === 'parking' ? (g.parking === 'underground' ? 'parking' : 'parking-ms') : 'bunker';
+    // las bocas de metro sin nombre toman el de su estación más tarde; los búnkeres históricos en ruinas no sirven
+    if (kind === 'bunker' && (g.ruins === 'yes' || g.abandoned === 'yes' || g.access === 'no')) continue;
+    out.push({ name: g.name ?? g.ref ?? '', kind, lat: la, lon: lo, distM: Math.hypot((la - lat) * 110570, (lo - lon) * 111320 * cos) });
+  }
+  // una entrada por sitio: las bocas de una misma estación se agrupan (la más cercana)
+  out.sort((x, y) => x.distM - y.distM);
+  const seen: Shelter[] = [];
+  for (const s of out) if (!seen.some((t) => t.kind === s.kind && Math.hypot((t.lat - s.lat) * 110570, (t.lon - s.lon) * 111320 * cos) < 150)) seen.push(s);
+  return seen;
+}
