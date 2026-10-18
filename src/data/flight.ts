@@ -53,12 +53,16 @@ export interface FlightPlan {
   cruiseKm?: number;
   /** número de ojivas del mismo misil (MIRV) */
   mirv?: number;
+  /** segundos que tarda en estallar cada objetivo respecto al primero (las ojivas MIRV llegan escalonadas) */
+  delays: number[];
   legs: FlightLeg[];
   /** fase del vuelo en una fracción f */
   phase(f: number): string;
 }
 
 const RAD = Math.PI / 180;
+/** separación entre las llegadas de las ojivas de un mismo misil (s) */
+export const MIRV_GAP_S = 7;
 function bearingDeg(la1: number, lo1: number, la2: number, lo2: number) {
   const y = Math.sin((lo2 - lo1) * RAD) * Math.cos(la2 * RAD);
   const x = Math.cos(la1 * RAD) * Math.sin(la2 * RAD) - Math.sin(la1 * RAD) * Math.cos(la2 * RAD) * Math.cos((lo2 - lo1) * RAD);
@@ -162,7 +166,9 @@ export function planFlight(profile: FlightProfile, site: { lat: number; lon: num
     const k = Math.round(bus.pts.length * fs);
     bus.pts = bus.pts.slice(0, k + 1); bus.alt = bus.alt.slice(0, k + 1);
     targets.forEach((t, i) => {
-      mk(sep[1], sep[0], t.lat, t.lon, fs, 1, i, fs, 1, i, 0);
+      // el bus suelta las ojivas de una en una: llegan con unos segundos de diferencia
+      const f1 = 1 + (i * MIRV_GAP_S) / (flightMin * 60);
+      mk(sep[1], sep[0], t.lat, t.lon, fs, f1, i, fs, 1, i, 0);
       const L = legs[legs.length - 1];
       L.alt = L.alt.map((_, j) => altitude('ballistic', fs + (1 - fs) * (j / (L.alt.length - 1)), apogeeKm, 0, 0));
     });
@@ -175,7 +181,8 @@ export function planFlight(profile: FlightProfile, site: { lat: number; lon: num
     if (profile === 'cruise') return f < 0.02 ? 'Lanzamiento' : f < 0.97 ? 'Vuelo rasante' : 'Ataque';
     return f < 0.06 ? 'Despegue' : f < 0.98 ? 'Vuelo de crucero' : 'Lanzamiento de la bomba';
   };
-  return { profile, name: PROFILE_NAMES[profile], rangeKm, flightMin, apogeeKm, reentryKms, boostMin, warningMin, cruiseKm, mirv: mirv ? targets.length : undefined, legs, phase };
+  const delays = targets.map((_, i) => (mirv ? i * MIRV_GAP_S : 0));
+  return { profile, name: PROFILE_NAMES[profile], rangeKm, flightMin, apogeeKm, reentryKms, boostMin, warningMin, cruiseKm, mirv: mirv ? targets.length : undefined, legs, phase, delays };
 }
 
 /** posición y altura de un tramo en la fracción global f (null si el tramo aún no ha empezado) */

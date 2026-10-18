@@ -76,6 +76,14 @@ export class FxLayer implements CustomLayerInterface {
     tr._calculateNearFarZIfNeeded.__bum = true;
   }
 
+  /** posición en pantalla (px CSS) de un punto local de la escena, o null si queda detrás de la cámara */
+  project(v: THREE.Vector3): { x: number; y: number } | null {
+    const p = new THREE.Vector4(v.x, v.y, v.z, 1).applyMatrix4(this.mvp);
+    if (p.w <= 0) return null;
+    const c = this.map.getCanvas();
+    return { x: ((p.x / p.w + 1) / 2) * c.clientWidth, y: ((1 - p.y / p.w) / 2) * c.clientHeight };
+  }
+
   setOrigin(lng: number, lat: number, alt: number) {
     this.origin = { lng, lat, alt };
     const mc = maplibregl.MercatorCoordinate.fromLngLat([lng, lat], alt);

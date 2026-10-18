@@ -395,6 +395,13 @@ export class ResultsPanel {
       if (d.demOk) {
         kv.push(['Zona inundada', `${fmtNum(d.floodKm2)} km²`]);
         kv.push(['Alcance de la ola', `${fmtNum(d.reachKm)} km`]);
+        if (d.hydraulic) {
+          const hh = (x: number) => (x < 1 ? `${Math.round(x * 60)} min` : `${n1(x, 1)} h`);
+          kv.push(['Profundidad máxima del agua', `${fmtNum(Math.round(d.maxDepthM ?? 0))} m`]);
+          kv.push(['Apertura de la brecha', hh(d.breachH ?? 0)]);
+          kv.push(['Vaciado del embalse', hh(d.drainH ?? 0)]);
+          kv.push(['Modelo', 'hidráulico (aguas someras sobre el relieve)']);
+        } else kv.push(['Modelo', 'estimación rápida (calculando el hidráulico…)']);
         for (const z of zones) kv.push([z.label, `${fmtNum(z.areaKm2)} km²`]);
         kv.push(['Población en la zona inundada', fmtNum(d.popFlooded)]);
         kv.push(['Víctimas estimadas', `≈ ${fmtNum(fx.casualties.deaths)}`]);

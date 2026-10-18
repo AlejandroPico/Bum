@@ -750,7 +750,7 @@ body.reduce-flash .enc-fig [filter] { filter: none !important; }
 .bld-r b { display: block; font-size: 12.5px; color: var(--text); font-weight: 600; }
 .bld-r span { font-size: 11.5px; color: var(--muted); }
 .bld-r strong { font: 600 15px var(--mono); color: var(--hi); white-space: nowrap; }
-.missile-lbl { background: rgba(7, 9, 13, .82); color: #fff; padding: 5px 9px; font-size: 11px; line-height: 1.3; pointer-events: none; border-left: 2px solid #ff6a1a; white-space: nowrap; }
+.missile-lbl { position: absolute; left: 0; top: 0; z-index: 4; background: rgba(7, 9, 13, .82); color: #fff; padding: 5px 9px; font-size: 11px; line-height: 1.3; pointer-events: none; border-left: 2px solid #ff6a1a; white-space: nowrap; }
 .missile-lbl b { display: block; font: 600 13px var(--mono); color: #ffd28a; }
 .missile-lbl span { color: #c9d1dd; }
 .winter-wrap { margin: 10px 0 6px; }

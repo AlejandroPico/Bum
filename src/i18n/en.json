@@ -2193,5 +2193,18 @@
  "explosión": "explosion",
  "Historia de las pruebas.": "History of the tests.",
  "Las más de 2.000 explosiones nucleares de 1945 a 2017 sobre el mapa del mundo, mes a mes, con un destello y un pitido por prueba, el contador de cada país y los momentos clave de la carrera nuclear.": "The more than 2,000 nuclear explosions from 1945 to 2017 on the world map, month by month, with a flash and a beep for each test, a counter for each country and the key moments of the nuclear arms race.",
- "Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.": "Nuclear accidents such as Chernobyl or Fukushima, dirty bombs, supervolcanoes such as Yellowstone, major dam failures, solar storms like the one in 1859 and large-scale nuclear wars, with the missiles crossing between both sides, and their nuclear winter."
+ "Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.": "Nuclear accidents such as Chernobyl or Fukushima, dirty bombs, supervolcanoes such as Yellowstone, major dam failures, solar storms like the one in 1859 and large-scale nuclear wars, with the missiles crossing between both sides, and their nuclear winter.",
+ "Calculando cómo avanza el agua por el valle…": "Working out how the water moves down the valley…",
+ "Brecha abierta": "Breach open",
+ "Embalse vacío": "Reservoir empty",
+ "Inundación calculada con el modelo hidráulico": "Flood calculated with the hydraulic model",
+ "Cálculo hidráulico sobre el relieve real: la brecha se abre en {0} y el embalse se vacía en unas {1}. El agua avanza unos {2} km valle abajo e inunda {3} km², con hasta {4} m de profundidad.": "Hydraulic calculation over the real terrain: the breach opens in {0} and the reservoir empties in about {1}. The water travels some {2} km down the valley and floods {3} km², up to {4} m deep.",
+ "Modelo de aguas someras «inercial local» (Bates et al. 2010, el de LISFLOOD-FP) con rozamiento de Manning, en una rejilla del modelo digital del terreno: la ola se encauza por los valles, se frena en los llanos y rellena las depresiones. No incluye puentes, diques ni el cauce del río, y la resolución de la rejilla limita el detalle. Las presas reales tienen planes de emergencia con avisos y evacuación aguas abajo.": "Shallow-water “local inertial” model (Bates et al. 2010, the one used by LISFLOOD-FP) with Manning friction, on a grid of the digital terrain model: the wave is channelled along the valleys, slows down on the plains and fills the hollows. It does not include bridges, levees or the river channel, and the grid resolution limits the detail. Real dams have emergency plans with warnings and evacuation downstream.",
+ "Profundidad máxima del agua": "Maximum water depth",
+ "Apertura de la brecha": "Breach opening",
+ "Vaciado del embalse": "Reservoir emptying",
+ "hidráulico (aguas someras sobre el relieve)": "hydraulic (shallow water over the terrain)",
+ "estimación rápida (calculando el hidráulico…)": "quick estimate (computing the hydraulic one…)",
+ "{0} min": "{0} min",
+ "{0} h": "{0} h"
 }

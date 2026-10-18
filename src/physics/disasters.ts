@@ -40,6 +40,7 @@ export function computeDam(sc: DamInput, env: Environment, lat: number, lon: num
   const depth = new Float32Array(N * N);
   const arrival = new Float32Array(N * N).fill(-1);
   let floodKm2 = 0, reach = 0, demOk = false;
+  let grid: NonNullable<NonNullable<Effects['dam']>['grid']> | undefined;
   if (dem) {
     const elev = new Float32Array(N * N);
     let valid = 0;
@@ -55,6 +56,7 @@ export function computeDam(sc: DamInput, env: Environment, lat: number, lon: num
       const c0 = Math.floor(N / 2), rr = Math.max(2, Math.ceil(1500 / cell));
       let zb = Infinity, bi = c0, bj = c0;
       for (let j = c0 - rr; j <= c0 + rr; j++) for (let i = c0 - rr; i <= c0 + rr; i++) { const z = elev[j * N + i]; if (z < zb) { zb = z; bi = i; bj = j; } }
+      grid = { elev, N, cell, R, si: bi, sj: bj, V };
       const hw = H * 0.75; // altura útil de la ola junto a la presa
       /** altura de la ola sobre el fondo del valle a la distancia d recorrida */
       const wave = (d: number) => hw * Math.exp(-d / Ld) + 1;
@@ -99,9 +101,32 @@ export function computeDam(sc: DamInput, env: Environment, lat: number, lon: num
   }
   if (!demOk) notes.push('No se pudo cargar el relieve: la zona inundada no se dibuja con precisión. Comprueba la conexión.');
 
+  const P = damProducts(depth, arrival, N, cell, R, lat, lon);
+  ({ floodKm2, reach } = P);
+  const rings: Ring[] = [{ id: 'dam', group: 'crater', label: 'Presa', radiusM: Math.max(150, H * 2), color: '#60a5fa', desc: 'Lugar de la rotura.' }];
+  notes.unshift(`Rotura de una presa de ${Math.round(H)} m con ${Math.round(sc.volumeHm3).toLocaleString(LOCALE)} hm³ embalsados: caudal punta de unos ${Math.round(Qp).toLocaleString(LOCALE)} m³/s (${Math.round(Qp / 430).toLocaleString(LOCALE)} veces el caudal medio del Ebro en su desembocadura).`);
+  notes.push('Modelo simplificado: la ola se atenúa con la distancia y llena las zonas más bajas que su nivel. Las presas reales tienen planes de emergencia con avisos y evacuación aguas abajo.');
+  return {
+    ...base(env),
+    scenario: sc, rings, fallout: P.fallout, windKmh: P.flowKmh, windFromDeg: P.flowFrom,
+    casualties: { deaths: P.deaths, injuries: P.inj, exposed: P.popF, profile: emptyProfile(), cityName: nearestCity(lat, lon).city.name },
+    notes,
+    dam: { volumeHm3: sc.volumeHm3, heightM: H, peakM3s: Qp, floodKm2, reachKm: reach / 1000, popFlooded: P.popF, arrivalAt: P.arrivalAt, depthAt: P.depthAt, demOk, grid },
+  } as Effects;
+}
+
+
+/**
+ * Productos de una inundación calculada en la rejilla: contornos por profundidad, superficie, alcance,
+ * población afectada y víctimas (Jonkman, 2007), dirección y velocidad media del frente.
+ */
+export function damProducts(depth: Float32Array, arrival: Float32Array, N: number, cell: number, R: number, lat: number, lon: number) {
   // contornos por profundidad del agua
   const levels: [number, string, string][] = [[5, 'Agua > 5 m (arrastra edificios)', '#1d4ed8'], [1, 'Agua 1–5 m', '#3b82f6'], [0.1, 'Agua < 1 m', '#93c5fd']];
   const fallout: FalloutContour[] = [];
+  let floodKm2 = 0, reach = 0;
+  const cellA = cell * cell;
+  for (let k = 0; k < N * N; k++) if (depth[k] > 0.1) { floodKm2 += cellA / 1e6; const i = k % N, j = (k - i) / N; reach = Math.max(reach, Math.hypot(-R + (i + 0.5) * cell, -R + (j + 0.5) * cell)); }
   if (floodKm2 > 0) {
     const cs = contours().size([N, N]).thresholds(levels.map((l) => l[0]))(Array.from(depth));
     for (const c of cs) {
@@ -135,16 +160,39 @@ export function computeDam(sc: DamInput, env: Environment, lat: number, lon: num
   for (let k = 0; k < N * N; k++) if (depth[k] > 0.1) { const i = k % N, j = (k - i) / N; ce += (-R + (i + 0.5) * cell) * depth[k]; cn += (-R + (j + 0.5) * cell) * depth[k]; cw += depth[k]; maxT = Math.max(maxT, arrival[k]); }
   const flowFrom = cw > 0 ? ((Math.atan2(-ce, -cn) * 180) / Math.PI + 360) % 360 : 0;
   const flowKmh = maxT > 0 ? Math.max(3, reach / 1000 / maxT) : 10;
-  const rings: Ring[] = [{ id: 'dam', group: 'crater', label: 'Presa', radiusM: Math.max(150, H * 2), color: '#60a5fa', desc: 'Lugar de la rotura.' }];
-  notes.unshift(`Rotura de una presa de ${Math.round(H)} m con ${Math.round(sc.volumeHm3).toLocaleString(LOCALE)} hm³ embalsados: caudal punta de unos ${Math.round(Qp).toLocaleString(LOCALE)} m³/s (${Math.round(Qp / 430).toLocaleString(LOCALE)} veces el caudal medio del Ebro en su desembocadura).`);
-  notes.push('Modelo simplificado: la ola se atenúa con la distancia y llena las zonas más bajas que su nivel. Las presas reales tienen planes de emergencia con avisos y evacuación aguas abajo.');
-  return {
-    ...base(env),
-    scenario: sc, rings, fallout, windKmh: flowKmh, windFromDeg: flowFrom,
-    casualties: { deaths, injuries: inj, exposed: popF, profile: emptyProfile(), cityName: nearestCity(lat, lon).city.name },
-    notes,
-    dam: { volumeHm3: sc.volumeHm3, heightM: H, peakM3s: Qp, floodKm2, reachKm: reach / 1000, popFlooded: popF, arrivalAt: (e, n) => { const a = sample(arrival, e, n); return a > 0 ? a : null; }, depthAt: (e, n) => sample(depth, e, n), demOk },
-  } as Effects;
+  return { fallout, floodKm2, reach, popF, deaths, inj, flowFrom, flowKmh, arrivalAt: (e: number, n: number) => { const a = sample(arrival, e, n); return a > 0 ? a : null; }, depthAt: (e: number, n: number) => sample(depth, e, n) };
+}
+
+
+/**
+ * Sustituye la estimación rápida de una rotura de presa por el resultado del cálculo hidráulico
+ * (`simulateDamBreak`) y devuelve una función con la inundación en cada instante (para el mapa).
+ */
+export function applyDamSim(fx: Effects, lat: number, lon: number, out: { maxDepth: Float32Array; arrivalH: Float32Array; snaps: { tS: number; depth: Float32Array }[]; endS: number; drainS: number; breachS: number }) {
+  const D = fx.dam!, g = D.grid!;
+  const P = damProducts(out.maxDepth, out.arrivalH, g.N, g.cell, g.R, lat, lon);
+  let maxDepthM = 0;
+  for (const v of out.maxDepth) if (v > maxDepthM) maxDepthM = v;
+  fx.fallout = P.fallout;
+  fx.windKmh = P.flowKmh; fx.windFromDeg = P.flowFrom;
+  fx.casualties = { ...fx.casualties, deaths: P.deaths, injuries: P.inj, exposed: P.popF };
+  Object.assign(D, { floodKm2: P.floodKm2, reachKm: P.reach / 1000, popFlooded: P.popF, arrivalAt: P.arrivalAt, depthAt: P.depthAt, hydraulic: true, drainH: out.drainS / 3600, breachH: out.breachS / 3600, maxDepthM });
+  const hh = (x: number) => (x < 1 ? `${Math.round(x * 60)} min` : x < 48 ? `${x.toLocaleString(LOCALE, { maximumFractionDigits: 1 })} h` : `${(x / 24).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} días`);
+  fx.notes = fx.notes.filter((n) => !/^La ola de la rotura recorrería|^Modelo simplificado/.test(n));
+  fx.notes.splice(1, 0,
+    `Cálculo hidráulico sobre el relieve real: la brecha se abre en ${hh(out.breachS / 3600)} y el embalse se vacía en unas ${hh(out.drainS / 3600)}. El agua avanza unos ${Math.round(P.reach / 1000)} km valle abajo e inunda ${Math.round(P.floodKm2).toLocaleString(LOCALE)} km², con hasta ${Math.round(maxDepthM)} m de profundidad.`,
+    'Modelo de aguas someras «inercial local» (Bates et al. 2010, el de LISFLOOD-FP) con rozamiento de Manning, en una rejilla del modelo digital del terreno: la ola se encauza por los valles, se frena en los llanos y rellena las depresiones. No incluye puentes, diques ni el cauce del río, y la resolución de la rejilla limita el detalle. Las presas reales tienen planes de emergencia con avisos y evacuación aguas abajo.');
+  // contornos de cada foto, calculados la primera vez que se piden
+  const cache = new Map<number, FalloutContour[]>();
+  return (tS: number): FalloutContour[] => {
+    if (tS === Infinity) return P.fallout;
+    let k = -1;
+    for (let i = 0; i < out.snaps.length; i++) if (out.snaps[i].tS <= tS) k = i;
+    if (k < 0) return [];
+    let c = cache.get(k);
+    if (!c) { c = damProducts(out.snaps[k].depth, out.arrivalH, g.N, g.cell, g.R, lat, lon).fallout; cache.set(k, c); }
+    return c;
+  };
 }
 
 // ======================================================================== tormenta solar

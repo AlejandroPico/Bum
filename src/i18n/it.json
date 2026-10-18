@@ -2157,5 +2157,18 @@
  "explosión": "esplosione",
  "Historia de las pruebas.": "Storia dei test.",
  "Las más de 2.000 explosiones nucleares de 1945 a 2017 sobre el mapa del mundo, mes a mes, con un destello y un pitido por prueba, el contador de cada país y los momentos clave de la carrera nuclear.": "Le oltre 2.000 esplosioni nucleari dal 1945 al 2017 sulla mappa del mondo, mese per mese, con un lampo e un bip per ogni test, il contatore di ogni paese e i momenti chiave della corsa nucleare.",
- "Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.": "Incidenti nucleari come Černobyl’ o Fukushima, bombe sporche, supervulcani come Yellowstone, crolli di grandi dighe, tempeste solari come quella del 1859 e guerre nucleari su vasta scala, con i missili che si incrociano tra le due parti e il loro inverno nucleare."
+ "Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.": "Incidenti nucleari come Černobyl’ o Fukushima, bombe sporche, supervulcani come Yellowstone, crolli di grandi dighe, tempeste solari come quella del 1859 e guerre nucleari su vasta scala, con i missili che si incrociano tra le due parti e il loro inverno nucleare.",
+ "Calculando cómo avanza el agua por el valle…": "Calcolo di come avanza l’acqua lungo la valle…",
+ "Brecha abierta": "Breccia aperta",
+ "Embalse vacío": "Bacino vuoto",
+ "Inundación calculada con el modelo hidráulico": "Inondazione calcolata con il modello idraulico",
+ "Cálculo hidráulico sobre el relieve real: la brecha se abre en {0} y el embalse se vacía en unas {1}. El agua avanza unos {2} km valle abajo e inunda {3} km², con hasta {4} m de profundidad.": "Calcolo idraulico sul rilievo reale: la breccia si apre in {0} e il bacino si svuota in circa {1}. L’acqua avanza per circa {2} km a valle e inonda {3} km², fino a {4} m di profondità.",
+ "Modelo de aguas someras «inercial local» (Bates et al. 2010, el de LISFLOOD-FP) con rozamiento de Manning, en una rejilla del modelo digital del terreno: la ola se encauza por los valles, se frena en los llanos y rellena las depresiones. No incluye puentes, diques ni el cauce del río, y la resolución de la rejilla limita el detalle. Las presas reales tienen planes de emergencia con avisos y evacuación aguas abajo.": "Modello ad acque basse «inerziale locale» (Bates et al. 2010, quello di LISFLOOD-FP) con attrito di Manning, su una griglia del modello digitale del terreno: l’onda si incanala nelle valli, rallenta nelle pianure e riempie le depressioni. Non include ponti, argini né l’alveo del fiume, e la risoluzione della griglia limita il dettaglio. Le dighe reali hanno piani di emergenza con allerte ed evacuazione a valle.",
+ "Profundidad máxima del agua": "Profondità massima dell’acqua",
+ "Apertura de la brecha": "Apertura della breccia",
+ "Vaciado del embalse": "Svuotamento del bacino",
+ "hidráulico (aguas someras sobre el relieve)": "idraulico (acque basse sul rilievo)",
+ "estimación rápida (calculando el hidráulico…)": "stima rapida (calcolo idraulico in corso…)",
+ "{0} min": "{0} min",
+ "{0} h": "{0} h"
 }

@@ -12,4 +12,5 @@ export { Domes } from './Domes';
 export { Fires } from './Fires';
 export { Bolide } from './Bolide';
 export { VolumeCloud } from './VolumeCloud';
+export { Missile } from './Missile';
 export { createPuffAtlas, createCloudNoise3D } from './textures';

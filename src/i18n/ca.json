@@ -2134,5 +2134,18 @@
  "explosión": "explosió",
  "Historia de las pruebas.": "Història de les proves.",
  "Las más de 2.000 explosiones nucleares de 1945 a 2017 sobre el mapa del mundo, mes a mes, con un destello y un pitido por prueba, el contador de cada país y los momentos clave de la carrera nuclear.": "Les més de 2.000 explosions nuclears de 1945 a 2017 sobre el mapa del món, mes a mes, amb un llampec i un xiulet per prova, el comptador de cada país i els moments clau de la cursa nuclear.",
- "Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.": "Accidents nuclears com els de Txernòbil o Fukushima, bombes brutes, supervolcans com el de Yellowstone, ruptures de grans preses, tempestes solars com la de 1859 i guerres nuclears a gran escala, amb els míssils creuant entre els dos bàndols i el seu hivern nuclear."
+ "Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.": "Accidents nuclears com els de Txernòbil o Fukushima, bombes brutes, supervolcans com el de Yellowstone, ruptures de grans preses, tempestes solars com la de 1859 i guerres nuclears a gran escala, amb els míssils creuant entre els dos bàndols i el seu hivern nuclear.",
+ "Calculando cómo avanza el agua por el valle…": "Calculant com avança l’aigua per la vall…",
+ "Brecha abierta": "Bretxa oberta",
+ "Embalse vacío": "Embassament buit",
+ "Inundación calculada con el modelo hidráulico": "Inundació calculada amb el model hidràulic",
+ "Cálculo hidráulico sobre el relieve real: la brecha se abre en {0} y el embalse se vacía en unas {1}. El agua avanza unos {2} km valle abajo e inunda {3} km², con hasta {4} m de profundidad.": "Càlcul hidràulic sobre el relleu real: la bretxa s’obre en {0} i l’embassament es buida en unes {1}. L’aigua avança uns {2} km vall avall i inunda {3} km², amb fins a {4} m de fondària.",
+ "Modelo de aguas someras «inercial local» (Bates et al. 2010, el de LISFLOOD-FP) con rozamiento de Manning, en una rejilla del modelo digital del terreno: la ola se encauza por los valles, se frena en los llanos y rellena las depresiones. No incluye puentes, diques ni el cauce del río, y la resolución de la rejilla limita el detalle. Las presas reales tienen planes de emergencia con avisos y evacuación aguas abajo.": "Model d’aigües someres «inercial local» (Bates et al. 2010, el de LISFLOOD-FP) amb fregament de Manning, en una graella del model digital del terreny: l’onada s’encaixa per les valls, es frena a les planes i omple les depressions. No inclou ponts, dics ni la llera del riu, i la resolució de la graella limita el detall. Les preses reals tenen plans d’emergència amb avisos i evacuació aigües avall.",
+ "Profundidad máxima del agua": "Fondària màxima de l’aigua",
+ "Apertura de la brecha": "Obertura de la bretxa",
+ "Vaciado del embalse": "Buidatge de l’embassament",
+ "hidráulico (aguas someras sobre el relieve)": "hidràulic (aigües someres sobre el relleu)",
+ "estimación rápida (calculando el hidráulico…)": "estimació ràpida (calculant l’hidràulic…)",
+ "{0} min": "{0} min",
+ "{0} h": "{0} h"
 }

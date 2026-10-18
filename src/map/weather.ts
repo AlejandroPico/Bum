@@ -11,7 +11,7 @@ import { cacheGet, cacheSet } from '../ui/geo';
 import { putCanvas, dropLayer } from './canvas-layer';
 
 export interface LocalWx { rainMmH: number; visibilityKm: number; cloudPct: number; tempC: number | null; windFromDeg: number; windKmh: number }
-interface CloudGrid { lat: number; lon: number; n: number; stepKm: number; cover: number[]; low: number[]; rain: number[]; temp: number[]; vis: number[] }
+interface CloudGrid { lat: number; lon: number; n: number; stepKm: number; cover: number[]; low: number[]; rain: number[]; temp: number[]; vis: number[]; /** viento a la altura de las nubes (700 hPa, ≈ 3 km): hacia el este y hacia el norte, km/h */ windE?: number; windN?: number }
 
 const CID = 'wx-clouds', RID = 'wx-radar';
 const N = 9, STEP_KM = 140;
@@ -50,7 +50,7 @@ function noise(): Float32Array {
 
 async function fetchCloudGrid(lat: number, lon: number): Promise<CloudGrid | null> {
   const cLat = Math.round(lat * 2) / 2, cLon = Math.round(lon * 2) / 2;
-  const key = `bum:wxg1:${cLat},${cLon}`;
+  const key = `bum:wxg2:${cLat},${cLon}`;
   const hit = cacheGet<CloudGrid>(key, 20 * 60 * 1000);
   if (hit) return hit;
   const lats: number[] = [], lons: number[] = [];
@@ -59,7 +59,7 @@ async function fetchCloudGrid(lat: number, lon: number): Promise<CloudGrid | nul
     lats.push(+(cLat + ((N - 1) / 2 - j) * STEP_KM / 110.57).toFixed(3));
     lons.push(+(((cLon + (i - (N - 1) / 2) * STEP_KM / (111.32 * cos)) + 540) % 360 - 180).toFixed(3));
   }
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats.join(',')}&longitude=${lons.join(',')}&current=cloud_cover,cloud_cover_low,precipitation,temperature_2m,visibility&timezone=GMT`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats.join(',')}&longitude=${lons.join(',')}&current=cloud_cover,cloud_cover_low,precipitation,temperature_2m,visibility,wind_speed_700hPa,wind_direction_700hPa&timezone=GMT`;
   const ctl = new AbortController();
   const to = setTimeout(() => ctl.abort(), 12000);
   try {
@@ -69,11 +69,16 @@ async function fetchCloudGrid(lat: number, lon: number): Promise<CloudGrid | nul
     const arr = Array.isArray(js) ? js : [js];
     if (arr.length !== N * N) return null;
     const g: CloudGrid = { lat: cLat, lon: cLon, n: N, stepKm: STEP_KM, cover: [], low: [], rain: [], temp: [], vis: [] };
+    let we = 0, wn = 0, nw = 0;
     for (const p of arr) {
       const c = p.current ?? {};
       g.cover.push(+(c.cloud_cover ?? 0) / 100); g.low.push(+(c.cloud_cover_low ?? 0) / 100);
       g.rain.push(+(c.precipitation ?? 0)); g.temp.push(+(c.temperature_2m ?? 15)); g.vis.push(+(c.visibility ?? 30000) / 1000);
+      // el viento «viene de» una dirección: las nubes van hacia la contraria
+      const ws = +(c.wind_speed_700hPa ?? NaN), wd = +(c.wind_direction_700hPa ?? NaN);
+      if (Number.isFinite(ws) && Number.isFinite(wd)) { const to = ((wd + 180) * Math.PI) / 180; we += ws * Math.sin(to); wn += ws * Math.cos(to); nw++; }
     }
+    if (nw) { g.windE = we / nw; g.windN = wn / nw; }
     cacheSet(key, g);
     return g;
   } catch { return null; } finally { clearTimeout(to); }
@@ -96,6 +101,12 @@ export class WeatherLayer {
   private radarTimer = 0;
   onUpdate: (() => void) | null = null;
   private _lite = false;
+  /** desplazamiento de las nubes con el viento (km hacia el este y el norte) y el del último dibujo */
+  private drift = { e: 0, n: 0 };
+  private drawn = { e: NaN, n: NaN };
+  private loadedAt = 0;
+  private simS = 0;
+  private lastDraw = 0;
   /** modo ligero: lluvia a menos resolución, con menos gotas y a 30 fotogramas por segundo */
   get lite() { return this._lite; }
   set lite(v: boolean) { if (v !== this._lite) { this._lite = v; this.resize(); } }
@@ -141,8 +152,24 @@ export class WeatherLayer {
     this.loading = true;
     try {
       const g = await fetchCloudGrid(lat, lon);
-      if (g) { this.grid = g; this.drawClouds(); this.onUpdate?.(); }
+      if (g) { this.grid = g; this.loadedAt = performance.now(); this.drift = { e: 0, n: 0 }; this.drawClouds(); this.onUpdate?.(); }
     } finally { this.loading = false; }
+  }
+  /** tiempo simulado (s) desde la detonación: las nubes avanzan con el viento lo que corresponda */
+  setSimTime(tS: number) { this.simS = Math.max(0, tS); this.advance(); }
+  /** mueve las nubes según el viento y el tiempo pasado (real desde que se cargaron, más el simulado) */
+  advance() {
+    const g = this.grid;
+    if (!g || !this.enabled) return;
+    const we = g.windE ?? (this.local ? this.local.windKmh * 1.5 * Math.sin(((this.local.windFromDeg + 180) * Math.PI) / 180) : 0);
+    const wn = g.windN ?? (this.local ? this.local.windKmh * 1.5 * Math.cos(((this.local.windFromDeg + 180) * Math.PI) / 180) : 0);
+    // pasadas unas horas, la rejilla de nubes ya no sirve (la previsión cambia): se queda a medio camino
+    const hours = Math.min(8, (performance.now() - this.loadedAt) / 3.6e6 + this.simS / 3600);
+    this.drift = { e: we * hours, n: wn * hours };
+    // se vuelve a dibujar cuando se han movido algo más de un píxel del lienzo (o como mucho 4 veces por segundo)
+    const kmPx = (g.n * g.stepKm) / (this._lite ? 256 : 512);
+    const now = performance.now();
+    if ((!Number.isFinite(this.drawn.e) || Math.hypot(this.drift.e - this.drawn.e, this.drift.n - this.drawn.n) > kmPx * 1.2) && now - this.lastDraw > 250) this.drawClouds();
   }
   /** al mirar lejos de la rejilla cargada, se pide otra para la nueva zona */
   private maybeReload() {
@@ -159,7 +186,12 @@ export class WeatherLayer {
     const cos = Math.max(0.15, Math.cos((g.lat * Math.PI) / 180));
     const north = Math.min(84, g.lat + half / 110.57), south = Math.max(-84, g.lat - half / 110.57);
     const west = g.lon - half / (111.32 * cos), east = g.lon + half / (111.32 * cos);
-    const W = 512, H = 512, nz = noise(), S = 256;
+    const W = this._lite ? 256 : 512, H = W, nz = noise(), S = 256;
+    this.drawn = { ...this.drift }; this.lastDraw = performance.now();
+    const dLat = this.drift.n / 110.57, dLon = this.drift.e / (111.32 * cos);
+    // el ruido (la forma de las nubes) se mueve con ellas: desplazamiento en píxeles del lienzo
+    const pxE = (this.drift.e / (2 * half)) * W, pxN = (this.drift.n / (2 * half)) * H;
+    const kx = 512 / W;
     const cv = this.cloudCanvas;
     if (cv.width !== W) { cv.width = W; cv.height = H; }
     const ctx = cv.getContext('2d')!;
@@ -172,10 +204,13 @@ export class WeatherLayer {
       const lat = invMercY(yN + ((y + 0.5) / H) * (yS - yN));
       for (let x = 0; x < W; x++) {
         const lon = west + ((x + 0.5) / W) * (east - west);
-        const c = this.sample(g.cover, lat, lon) ?? 0;
-        const lowC = this.sample(g.low, lat, lon) ?? 0;
+        // lo que hay ahora en (lat, lon) es lo que estaba viento arriba hace un rato
+        const c = this.sample(g.cover, lat - dLat, lon - dLon) ?? 0;
+        const lowC = this.sample(g.low, lat - dLat, lon - dLon) ?? 0;
         // textura: dos escalas del ruido, desplazadas para que no se repitan a la vista
-        const u = (x * 1.7) % S | 0, v = (y * 1.7) % S | 0, u2 = (x * 0.55 + 91) % S | 0, v2 = (y * 0.55 + 37) % S | 0;
+        const xs = (x - pxE / kx) * kx, ys = (y + pxN / kx) * kx;
+        const md = (a: number) => ((a % S) + S) % S | 0;
+        const u = md(xs * 1.7), v = md(ys * 1.7), u2 = md(xs * 0.55 + 91), v2 = md(ys * 0.55 + 37);
         const tex = nz[v * S + u] * 0.45 + nz[v2 * S + u2] * 0.55;
         const th = 1 - c;
         let d = Math.max(0, Math.min(1, (tex - th + 0.14) / 0.3));

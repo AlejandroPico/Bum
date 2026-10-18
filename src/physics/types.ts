@@ -215,7 +215,13 @@ export interface Effects {
   /** lluvia negra: hollín y polvo radiactivo arrastrados por la lluvia tras una gran tormenta de fuego */
   blackRain?: { heavy: [number, number][]; light: [number, number][]; heavyKm2: number; lightKm2: number; startMin: number };
   /** rotura de presa */
-  dam?: { volumeHm3: number; heightM: number; peakM3s: number; floodKm2: number; reachKm: number; popFlooded: number; arrivalAt: (eM: number, nM: number) => number | null; depthAt: (eM: number, nM: number) => number; demOk: boolean };
+  dam?: { volumeHm3: number; heightM: number; peakM3s: number; floodKm2: number; reachKm: number; popFlooded: number; arrivalAt: (eM: number, nM: number) => number | null; depthAt: (eM: number, nM: number) => number; demOk: boolean;
+    /** rejilla del relieve para el cálculo hidráulico (en segundo plano) */
+    grid?: { elev: Float32Array; N: number; cell: number; R: number; si: number; sj: number; V: number };
+    /** el cálculo hidráulico ya ha sustituido a la estimación rápida */
+    hydraulic?: boolean;
+    /** horas que tarda en vaciarse el embalse y en formarse la brecha (cálculo hidráulico) */
+    drainH?: number; breachH?: number; maxDepthM?: number };
   /** tormenta solar */
   solar?: { dstNt: number; auroraMlat: number; bands: { mlat: number; label: string; color: string; risk: string }[]; popHighRisk: number; costUSDtn: [number, number]; mlatAt: (lat: number, lon: number) => number;
     /** horas desde la fulguración: llegada de la eyección, máximo de la tormenta y escala de recuperación */

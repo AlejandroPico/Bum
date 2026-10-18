@@ -19,6 +19,7 @@ import { assessPoint, localOffset } from '../src/physics/safety';
 import { ballistic, greatCircleKm, greatCirclePath } from '../src/data/launch';
 import { computeTerrainShadow } from '../src/physics/terrain';
 import { geomagLat, auroraBoundary } from '../src/physics/disasters';
+import { simulateDamBreak } from '../src/physics/dambreak';
 import { warSchedule, WAR_PRESETS, climateSeries } from '../src/data/war';
 import { heatGrid } from '../src/physics/heat';
 import { planFlight, profileFor, legAt } from '../src/data/flight';
@@ -361,6 +362,7 @@ section('Vuelo del arma');
   truthy('W88 vuela en misil balístico', profileFor('W88 (EE. UU.)') === 'ballistic');
   const mv = planFlight('ballistic', koz, [{ lat: 40.42, lon: -3.7 }, { lat: 41.39, lon: 2.17 }, { lat: 39.47, lon: -0.38 }]);
   truthy('Tres ciudades españolas: un solo misil con tres ojivas', mv.mirv === 3 && mv.legs.length === 4, `(mirv ${mv.mirv}, tramos ${mv.legs.length})`);
+  truthy('Las ojivas MIRV llegan una tras otra, cada una a su objetivo', mv.delays[0] === 0 && mv.delays[1] > 0 && mv.delays[2] > mv.delays[1] && mv.legs.filter((L) => L.target >= 0).every((L) => L.f1 >= 1));
   const far = planFlight('ballistic', koz, [{ lat: 40.42, lon: -3.7 }, { lat: 40.71, lon: -74 }]);
   truthy('Madrid y Nueva York: un misil por objetivo', !far.mirv && far.legs.length === 2);
   const end = legAt(b.legs[0], 1)!;
@@ -374,10 +376,6 @@ truthy('fmtDist(2850) = 2,85 km', fmtDist(2850) === '2,85 km', `→ ${fmtDist(28
 truthy('fmtEnergy(15) contiene «kt»', /kt/.test(fmtEnergy(15)), `→ ${fmtEnergy(15)}`);
 truthy('fmtEnergy(50000) contiene «Mt»', /Mt/.test(fmtEnergy(50000)), `→ ${fmtEnergy(50000)}`);
 
-console.log(`\n${pass} correctas, ${fail} fallidas`);
-if (fail) { console.log('\nFallos:\n' + failures.map((f) => '  · ' + f).join('\n')); (globalThis as unknown as { process: { exit(c: number): void } }).process.exit(1); }
-
-
 section('Historia de las pruebas nucleares');
 {
   const H = (await import('../src/data/tests-history.json')).default as unknown as { regions: string[]; tests: [number, number, number, number, number, number, number, string, number][] };
@@ -389,3 +387,22 @@ section('Historia de las pruebas nucleares');
   truthy('por países: EE. UU. 1032, URSS 714, Reino Unido 45, Francia 210, China 45, India 3, Pakistán 2, Corea del Norte 6', by.join() === '1032,714,45,210,45,3,2,6');
   truthy('Trinity es la primera y Hiroshima y Nagasaki van después', H.tests[0][7] === 'Trinity' && H.tests[1][5] === 4 && H.tests[2][5] === 4);
 }
+
+section('Rotura de presa: cálculo hidráulico');
+{
+  const N = 120, cell = 250;
+  const elev = new Float32Array(N * N);
+  // valle en V que baja hacia el sur; al norte de la presa, el terreno es más alto (el embalse)
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const x = (i - N / 2) * cell, y = (j - N / 2) * cell; elev[j * N + i] = 200 + y * 0.004 + Math.abs(x) * 0.03 + (y > 0 ? 300 : 0); }
+  const r = simulateDamBreak({ elev, N, cell, si: N / 2, sj: N / 2 - 2, V: 1e8, H: 60, Qp: 0.607 * Math.pow(1e8, 0.295) * Math.pow(60, 1.24) });
+  let up = 0, down = 0;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (r.maxDepth[j * N + i] > 0.1) { if (j > N / 2 + 2) up++; else down++; }
+  truthy('el agua baja por el valle y no remonta hacia el embalse', down > 50 && up === 0, `abajo ${down}, arriba ${up}`);
+  const aNear = r.arrivalH[(N / 2 - 6) * N + N / 2], aFar = r.arrivalH[(N / 2 - 30) * N + N / 2];
+  truthy('llega antes cerca de la presa que lejos', aNear >= 0 && aFar > aNear, `${aNear.toFixed(2)} h / ${aFar.toFixed(2)} h`);
+  truthy('fotos de la inundación en el tiempo', r.snaps.length >= 5 && r.snaps.every((s, i, a) => i === 0 || s.tS >= a[i - 1].tS));
+}
+
+console.log(`\n${pass} correctas, ${fail} fallidas`);
+if (fail) { console.log('\nFallos:\n' + failures.map((f) => '  · ' + f).join('\n')); (globalThis as unknown as { process: { exit(c: number): void } }).process.exit(1); }
+

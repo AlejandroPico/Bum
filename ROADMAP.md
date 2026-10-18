@@ -228,6 +228,23 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       completadas y nombres legibles de las zonas, más las 6 pruebas de Corea del Norte con rendimientos estimados.
       Se genera con un script de Python (ver notas de traspaso).
 
+## 1.10 — Misil en 3D, nubes con viento, presas con cálculo hidráulico y mapa partido completo (publicada)
+
+- [x] Vuelo del arma en 3D (`src/fx/Missile.ts`): el arco por el aire o por el espacio a su altura real (en el mapa
+      plano con coordenadas Mercator; en el globo, con la curvatura), con la estela recorrida, la llama del cohete y el
+      brillo de reentrada; sobre el suelo queda sólo la «sombra» de la trayectoria. El rótulo del reloj va pegado a la
+      cabeza en 3D y la cámara de persecución tiene en cuenta la altura.
+- [x] Ojivas MIRV escalonadas (`MIRV_GAP_S`, 7 s): cada una llega a su objetivo unos segundos después de la anterior
+      y estalla con todos sus efectos a su hora (bola de fuego, onda, hongo, anillos, radiación, suelo quemado, lluvia
+      radiactiva, lluvia negra): los módulos 3D van con retraso (`Delayed`) y el mapa lleva un reloj por detonación
+      (`Overlays.enterSet`), también con su propio avance de la onda en cualquier ataque múltiple.
+- [x] Nubes del tiempo real que avanzan con el viento a 700 hPa (≈ 3 km), en tiempo real y con el tiempo simulado.
+- [x] Rotura de presas con cálculo hidráulico (`src/physics/dambreak.ts`, en un worker): aguas someras en la
+      aproximación inercial local (Bates et al. 2010, LISFLOOD-FP) con rozamiento de Manning sobre la rejilla del relieve,
+      hidrograma de la brecha (Froehlich 2008) hasta vaciar el embalse; fotos de la inundación en el tiempo para el mapa,
+      profundidad máxima y hora de llegada para las víctimas. Mientras calcula, se ve la estimación rápida.
+- [x] Mapa partido: el escenario B con sus efectos 3D y al mismo reloj y luz que A.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.

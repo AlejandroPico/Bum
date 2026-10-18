@@ -2202,5 +2202,18 @@
  "explosión": "Explosion",
  "Historia de las pruebas.": "Geschichte der Tests.",
  "Las más de 2.000 explosiones nucleares de 1945 a 2017 sobre el mapa del mundo, mes a mes, con un destello y un pitido por prueba, el contador de cada país y los momentos clave de la carrera nuclear.": "Die über 2.000 Atomexplosionen von 1945 bis 2017 auf der Weltkarte, Monat für Monat, mit einem Blitz und einem Piepton pro Test, dem Zähler jedes Landes und den Schlüsselmomenten des nuklearen Wettrüstens.",
- "Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.": "Atomunfälle wie Tschernobyl oder Fukushima, schmutzige Bomben, Supervulkane wie Yellowstone, Brüche großer Staudämme, Sonnenstürme wie der von 1859 und große Atomkriege, bei denen die Raketen zwischen beiden Seiten hin und her fliegen, mit ihrem nuklearen Winter."
+ "Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.": "Atomunfälle wie Tschernobyl oder Fukushima, schmutzige Bomben, Supervulkane wie Yellowstone, Brüche großer Staudämme, Sonnenstürme wie der von 1859 und große Atomkriege, bei denen die Raketen zwischen beiden Seiten hin und her fliegen, mit ihrem nuklearen Winter.",
+ "Calculando cómo avanza el agua por el valle…": "Berechnung, wie das Wasser durch das Tal fließt…",
+ "Brecha abierta": "Bresche offen",
+ "Embalse vacío": "Stausee leer",
+ "Inundación calculada con el modelo hidráulico": "Überflutung mit dem hydraulischen Modell berechnet",
+ "Cálculo hidráulico sobre el relieve real: la brecha se abre en {0} y el embalse se vacía en unas {1}. El agua avanza unos {2} km valle abajo e inunda {3} km², con hasta {4} m de profundidad.": "Hydraulische Berechnung auf dem echten Gelände: Die Bresche öffnet sich in {0}, der Stausee leert sich in etwa {1}. Das Wasser fließt rund {2} km talabwärts und überflutet {3} km², bis zu {4} m tief.",
+ "Modelo de aguas someras «inercial local» (Bates et al. 2010, el de LISFLOOD-FP) con rozamiento de Manning, en una rejilla del modelo digital del terreno: la ola se encauza por los valles, se frena en los llanos y rellena las depresiones. No incluye puentes, diques ni el cauce del río, y la resolución de la rejilla limita el detalle. Las presas reales tienen planes de emergencia con avisos y evacuación aguas abajo.": "Flachwassermodell in „lokal-inertialer“ Näherung (Bates et al. 2010, wie in LISFLOOD-FP) mit Manning-Reibung auf einem Raster des digitalen Geländemodells: Die Welle wird durch die Täler geleitet, bremst in den Ebenen ab und füllt die Senken. Brücken, Deiche und das Flussbett sind nicht enthalten, und die Rasterauflösung begrenzt die Genauigkeit. Echte Talsperren haben Notfallpläne mit Warnungen und Evakuierung flussabwärts.",
+ "Profundidad máxima del agua": "Maximale Wassertiefe",
+ "Apertura de la brecha": "Öffnung der Bresche",
+ "Vaciado del embalse": "Entleerung des Stausees",
+ "hidráulico (aguas someras sobre el relieve)": "hydraulisch (Flachwasser über dem Gelände)",
+ "estimación rápida (calculando el hidráulico…)": "Schnellschätzung (hydraulische Berechnung läuft…)",
+ "{0} min": "{0} Min.",
+ "{0} h": "{0} Std."
 }

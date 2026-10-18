@@ -1,5 +1,5 @@
 import type { Map as MLMap, GeoJSONSource, ExpressionSpecification } from 'maplibre-gl';
-import type { Effects, Ring } from '../physics/types';
+import type { Effects, Ring, FalloutContour } from '../physics/types';
 import { fmtDist } from '../physics/effects';
 import { BUILDING_COLOR } from './map';
 import { DEC } from '../i18n/locale';
@@ -269,7 +269,32 @@ export class Overlays {
   }
 
   /** detonaciones adicionales de un ataque múltiple */
-  extras: { fx: Effects; lat: number; lon: number }[] = [];
+  /**
+   * detonaciones adicionales (ataque múltiple u ojivas MIRV): `delay` segundos después de la
+   * principal, con su propio avance de la onda (`reveal`), su fin de la bola de fuego (`gateT`) y el
+   * comienzo de su lluvia radiactiva (`falloutDelayS`)
+   */
+  extras: { fx: Effects; lat: number; lon: number; delay?: number; reveal?: (t: number) => number; gateT?: number; falloutDelayS?: number }[] = [];
+  /** inundación calculada (rotura de presa): contornos en cada instante y una clave que cambia con ellos */
+  flood: { at: (t: number) => FalloutContour[]; key: (t: number) => string } | null = null;
+  /** vuelve a dibujarlo todo (cuando cambian los datos de los efectos) */
+  invalidate() { this.keys = {}; this.refresh(); }
+  /** pasa el reloj y el avance de la onda a los de una detonación adicional (y devuelve los de la principal) */
+  private enterSet(S: { main: boolean; delay?: number; reveal?: (t: number) => number; gateT?: number; falloutDelayS?: number }) {
+    if (S.main) return null;
+    const saved = { simT: this.simT, revealR: this.revealR, falloutT: this.falloutT, gateT: this.gateT, falloutDelayS: this.falloutDelayS };
+    const t = this.simT === Infinity ? Infinity : this.simT - (S.delay ?? 0);
+    this.simT = t;
+    if (S.reveal) this.revealR = t === Infinity ? Infinity : S.reveal(t);
+    this.falloutT = t === Infinity ? Infinity : Math.max(0, t) / 3600;
+    if (S.gateT !== undefined) this.gateT = S.gateT;
+    if (S.falloutDelayS !== undefined) this.falloutDelayS = S.falloutDelayS;
+    return saved;
+  }
+  private leaveSet(saved: { simT: number; revealR: number; falloutT: number; gateT: number; falloutDelayS: number } | null) {
+    if (!saved) return;
+    this.simT = saved.simT; this.revealR = saved.revealR; this.falloutT = saved.falloutT; this.gateT = saved.gateT; this.falloutDelayS = saved.falloutDelayS;
+  }
 
   /** firma de lo que hay dibujado en cada grupo de capas: sólo se reenvía lo que cambia */
   private keys: Record<string, string> = {};
@@ -310,11 +335,14 @@ export class Overlays {
     const id0 = `${this.current.lat},${this.current.lon},${this.current.fx.energyKt},${sets.length}`;
     let kRings = '', kFall = '', kScorch = '', kBurn = '';
     for (const S of sets) {
+      const sv = this.enterSet(S);
       kRings += S.fx.rings.map((r) => (this.reached(r, S.fx) >= r.radiusM * 0.98 ? 1 : 0)).join('') + ';';
-      kFall += (this.falloutT * 3600 > this.falloutDelayS ? Overlays.qz(this.falloutFront(S.fx)) : '-') + ';';
+      kFall += (S.main && this.flood ? `fl${this.flood.key(this.simT)}` : this.falloutT * 3600 > this.falloutDelayS ? Overlays.qz(this.falloutFront(S.fx)) : '-') + ';';
       const ej = S.fx.rings.filter((r) => r.group === 'ejecta').sort((a, b) => a.radiusM - b.radiusM).pop();
       kScorch += `${Overlays.qz(Math.min(this.revealR, S.fx.rings.find((r) => r.id === 'burn3')?.radiusM ?? 0))},${ej ? Overlays.qz(Math.min(ej.radiusM, this.reached(ej, S.fx))) : ''},${this.simT >= this.gateT ? 1 : 0};`;
       if (S.fx.fires) kBurn += (this.simT === Infinity ? 'inf' : Math.round(Math.min(12, this.simT / 3600) * 20)) + ';';
+      kScorch += this.simT >= this.gateT ? '+' : '-';
+      this.leaveSet(sv);
     }
     const want: Record<string, string> = {
       rings: `${id0}|${flags}|${this.highlight}|${kRings}`,
@@ -336,6 +364,7 @@ export class Overlays {
     const emp: GeoJSON.Feature[] = [];
     const burn: GeoJSON.Feature[] = [];
     for (const S of sets) {
+      const sv = this.enterSet(S);
       const { fx, lat, lon } = S;
       const visible = doRings ? fx.rings.filter((r) => !this.hidden.has(r.id) && this.showRings && !r.global) : [];
       // de mayor a menor para que los pequeños queden encima
@@ -361,10 +390,12 @@ export class Overlays {
       });
 
       // lluvia radiactiva (se revela a medida que avanza el viento)
-      if (doFall && (this.showFallout || this.showMarks) && !this.hidden.has('fallout') && this.falloutT * 3600 > this.falloutDelayS) {
+      const flood = S.main ? this.flood : null;
+      if (doFall && (this.showFallout || this.showMarks) && !this.hidden.has('fallout') && (flood || this.falloutT * 3600 > this.falloutDelayS)) {
         // las partículas empiezan a caer cuando la nube ya ha subido y se ha extendido
-        const front = this.falloutFront(fx);
-        for (const c of fx.fallout) {
+        // (la inundación calculada ya trae su extensión en cada instante)
+        const front = flood ? Infinity : this.falloutFront(fx);
+        for (const c of flood ? flood.at(this.simT) : fx.fallout) {
           if (this.hidden.has(`fo:${c.level}`)) continue;
           for (const poly of c.polygons) {
             const coords = poly.map((ring) => ring.map(([e, n]) => {
@@ -445,6 +476,7 @@ export class Overlays {
           if (S.main) labels.push({ type: 'Feature', properties: { text: `EMP > ${String(lv).replace('.', DEC)} kV/m`, color: '#4cc9f0', order: 99 }, geometry: { type: 'Point', coordinates: ring[45] } });
         }
       }
+      this.leaveSet(sv);
     }
     const fc = (f: GeoJSON.Feature[]): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: f });
     if (doRings) {
