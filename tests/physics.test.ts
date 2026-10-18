@@ -444,6 +444,35 @@ section('Lluvia radiactiva: modelo de partículas (tipo HYSPLIT)');
   truthy('Con lluvia cae más actividad cerca de la zona cero', near(wet) > near(e) * 1.2, `(${fmt(near(wet))} frente a ${fmt(near(e))} R/h)`);
 }
 
+section('Arsenales del mundo y reconstrucciones históricas');
+{
+  const { ARSENALS, ARS_Y0 } = await import('../src/data/arsenals');
+  const tot = (y: number) => ARSENALS.reduce((s, c) => s + c.n[y - ARS_Y0], 0);
+  truthy('Máximo mundial en 1986 (unas 64 000 cabezas)', tot(1986) > 60000 && tot(1986) === Math.max(...Array.from({ length: 82 }, (_, i) => tot(ARS_Y0 + i))), `(${tot(1986)})`);
+  truthy('En 1945 sólo Estados Unidos', ARSENALS.every((c) => c.id === 'USA' || c.n[0] === 0));
+  truthy('Sudáfrica desmanteló sus bombas', ARSENALS.find((c) => c.id === 'ZAF')!.n.at(-1) === 0);
+  const { HISTORIC } = await import('../src/data/historic');
+  const { NUKE_PRESETS, ASTEROID_PRESETS } = await import('../src/data/presets');
+  let ok = 0, rows = 0, match = 0;
+  for (const c of HISTORIC) {
+    let sc: Scenario | null = null;
+    for (const g of NUKE_PRESETS) for (const it of g.items) if (it.name === c.preset) sc = { kind: 'nuclear', ...it } as Scenario;
+    const a = ASTEROID_PRESETS.find((x) => x.name === c.preset);
+    if (a) sc = { kind: 'asteroid', ...a } as Scenario;
+    if (!sc) continue;
+    ok++;
+    const fx = computeEffects(sc, { ...ENV, ...c.env } as never, c.lat, c.lon);
+    for (const r of c.rows) {
+      const v = r.model(fx, c);
+      if (v != null && Number.isFinite(v)) rows++;
+      if (v != null && r.comparable !== false && v >= r.real[0] / 1.6 && v <= r.real[1] * 1.6) match++;
+    }
+  }
+  truthy('Cada reconstrucción tiene su arma o su asteroide en los presets', ok === HISTORIC.length, `(${ok}/${HISTORIC.length})`);
+  truthy('Todas las comparaciones dan un valor del modelo', rows === HISTORIC.reduce((s, c) => s + c.rows.length, 0));
+  truthy('La mayoría de las magnitudes físicas coinciden o se acercan (dentro de ×1,6)', match >= 12, `(${match})`);
+}
+
 console.log(`\n${pass} correctas, ${fail} fallidas`);
 if (fail) { console.log('\nFallos:\n' + failures.map((f) => '  · ' + f).join('\n')); (globalThis as unknown as { process: { exit(c: number): void } }).process.exit(1); }
 

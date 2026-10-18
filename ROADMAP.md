@@ -327,16 +327,24 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       las cosechas perdidas, ajustadas a la media del escenario. Máscara de tierra y mar a 1° (Natural Earth,
       `scripts/landmask.mjs`).
 
+## 1.18 — Arsenales del mundo y reconstrucciones históricas (publicada)
+
+- [x] La historia tiene ahora tres pestañas: Pruebas, Arsenales y Reconstrucciones (`src/ui/hist-views.ts`).
+- [x] Arsenales del mundo 1945–2026 (`src/data/arsenals.ts`, FAS vía Our World in Data): un círculo por país que
+      crece y mengua año a año, el total y el reparto por países, una gráfica apilada que se puede recorrer y los
+      tratados e hitos (TNP, SALT, INF, START, Nuevo START…), que se detienen un momento y se leen en voz alta con la
+      narración.
+- [x] Reconstrucciones (`src/data/historic.ts`): Trinity, Hiroshima, Nagasaki, Castle Bravo, Tsar Bomba, Tunguska y
+      Cheliábinsk, con su arma o su asteroide, su lugar, su hora y el tiempo de aquel día. Pestaña «Lo que pasó» en
+      los resultados: la historia y una tabla del modelo frente a lo medido (coincide, cerca, se queda corto, se
+      pasa), con notas de por qué difiere cuando difiere (relieve, población de entonces, atmósfera…) y fuentes.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
 
 - [ ] Asteroides reales: catálogo de la NASA (Sentry/CNEOS) con Apophis, 2024 YR4, Bennu…, con su tamaño, velocidad y
       probabilidad de impacto reales, listos para lanzar.
-- [ ] Escenarios históricos reconstruidos: Hiroshima, Nagasaki, Castle Bravo (lluvia sobre Rongelap), Tunguska y
-      Cheliábinsk con su fecha y viento; comparación del modelo con lo que pasó de verdad.
-- [ ] Arsenales del mundo 1945–hoy: cabezas nucleares por país año a año, con el pico de 1986 y los tratados
-      (INF, START…) en la línea de tiempo.
 - [ ] Modo clase / presentación: una secuencia de escenarios que se pasa como diapositivas, con el recorrido
       cinematográfico en cada una.
 - [ ] «Desde mi ventana», segunda parte: grietas y estruendo también al saltar con la barra, montañas reales en el

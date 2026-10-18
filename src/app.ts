@@ -37,6 +37,8 @@ import { engage, type DefenseResult } from './data/defense';
 import { WindowView } from './ui/window-view';
 import { FalloutParticles, type FallSet } from './map/fallout-particles';
 import { WinterLayer } from './map/winter-layer';
+import { ArsenalView, ReconView, type HistTab } from './ui/hist-views';
+import { HISTORIC, type HistCase } from './data/historic';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
 import { WarLayer } from './map/war-layer';
@@ -524,7 +526,7 @@ globeBtn.classList.toggle('on', state.view.globe);
 tbBtn('book-btn', 'Enciclopedia (E)', BOOK_ICON, () => enc.toggle());
 // historia de las pruebas nucleares (1945–2017): el mapa del mundo con un calendario que avanza
 const HISTORY_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/></svg>';
-const historyBtn = tbBtn('hist-btn', 'Historia de las pruebas nucleares (1945–2017)', HISTORY_ICON, () => { if (histMode.active) histMode.close(); else void histMode.open(); });
+const historyBtn = tbBtn('hist-btn', 'Historia: pruebas, arsenales y reconstrucciones', HISTORY_ICON, () => { if (histMode.active || arsView.active || reconView.active) closeHistViews(); else void histMode.open(); });
 const histMode = new History(map, document.getElementById('app')!);
 let histTests = false;
 histMode.onOpen = () => {
@@ -552,6 +554,37 @@ histMode.onClose = () => {
 histMode.onBook = () => { void enc.openBest('Pruebas nucleares'); };
 // con la narración por voz activada, los momentos clave se leen en voz alta
 histMode.onMilestone = (t) => (state.view.narration && tour.narrator.supported ? (tour.narrator.cancel(), tour.narrator.speak(tr(t))) : undefined);
+// las otras pestañas de la historia: arsenales del mundo y reconstrucciones de explosiones reales
+const arsView = new ArsenalView(map, document.getElementById('app')!);
+arsView.onOpen = histMode.onOpen;
+arsView.onClose = histMode.onClose;
+arsView.onMilestone = histMode.onMilestone;
+const reconView = new ReconView(document.getElementById('app')!);
+reconView.onClose = () => historyBtn.classList.remove('on');
+function closeHistViews() { histMode.close(); arsView.close(); reconView.close(); }
+function goHistTab(t: HistTab) {
+  closeHistViews();
+  if (t === 'tests') void histMode.open();
+  else if (t === 'arsenal') arsView.open();
+  else { historyBtn.classList.add('on'); if (run) { clearRun(); results.hide(); } reconView.open(); }
+}
+histMode.onTab = arsView.onTab = reconView.onTab = goHistTab;
+/** siguiente simulación: una reconstrucción histórica */
+let nextHistoric: HistCase | null = null;
+reconView.onRun = (id) => {
+  const c = HISTORIC.find((x) => x.id === id);
+  if (!c) return;
+  closeHistViews();
+  state.multi.on = false; state.launch = '';
+  sidebar.selectPreset(c.preset);
+  sidebar.setEnv(c.env, tr(`Condiciones de aquel día (${c.dateText}): reconstrucción aproximada.`));
+  const live = state.live; state.live = false;
+  setTarget(c.lat, c.lon, c.label, true);
+  state.live = live;
+  map.flyTo({ center: [c.lon, c.lat], zoom: 11, pitch: 55, duration: 2200, essential: true });
+  nextHistoric = c;
+  setTimeout(() => detonate(), 2600);
+};
 const layersBtn = tbBtn('layers-btn', 'Mapas y capas', LAYERS_ICON, (e) => { e.stopPropagation(); togglePopover(layersPanel, layersBtn, buildLayersPanel); });
 popovers.push({ el: layersPanel, btn: layersBtn });
 
@@ -1192,7 +1225,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.17';
+const APP_VERSION = '1.18';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1622,6 +1655,9 @@ async function prepScenario(sc0: Scenario, lat: number, lon: number): Promise<Sc
 /** «Ver qué habría pasado»: la próxima simulación no pasa por la defensa antimisiles */
 let skipDefense = false;
 async function detonate() {
+  // la reconstrucción histórica sólo vale para la simulación que se lanzó desde ella
+  results.setHistoric(nextHistoric);
+  nextHistoric = null;
   if (!puffTex) { // aún cargando el mapa o el motor 3D: se lanza al terminar
     const go = () => setTimeout(() => detonate(), 300);
     if (mapLoaded) fxReady.then(() => setTimeout(go, 200)); else map.once('load', () => fxReady.then(() => setTimeout(go, 200)));

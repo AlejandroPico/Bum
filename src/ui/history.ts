@@ -8,6 +8,7 @@
  * Datos: SIPRI / FOA, Bergkvist y Ferm (2000), «Nuclear Explosions 1945–1998» (2051 explosiones),
  * más las 6 pruebas de Corea del Norte (2006–2017) con rendimientos estimados.
  */
+import { histTabs, type HistTab } from './hist-views';
 import maplibregl, { type Map as MLMap, type GeoJSONSource } from 'maplibre-gl';
 import { h, fmtNum } from './dom';
 import { tr } from '../i18n';
@@ -79,6 +80,8 @@ export class History {
   onOpen: () => void = () => {};
   onClose: () => void = () => {};
   onBook: () => void = () => {};
+  /** cambio de pestaña (arsenales, reconstrucciones) */
+  onTab: (t: HistTab) => void = () => {};
   /** momento clave (para leerlo en voz alta); si devuelve una promesa, el tiempo espera a que acabe */
   onMilestone: (text: string) => Promise<void> | void = () => {};
   private map: MLMap;
@@ -190,7 +193,7 @@ export class History {
     new ResizeObserver(() => this.drawCalendar()).observe(this.cv);
 
     this.el.append(
-      h('div', { class: 'hs-head' }, h('div', { class: 'hs-title' }, 'Pruebas nucleares en el tiempo'), this.dateEl, this.capEl),
+      h('div', { class: 'hs-head' }, histTabs('tests', (t) => this.onTab(t)), h('div', { class: 'hs-title' }, 'Pruebas nucleares en el tiempo'), this.dateEl, this.capEl),
       h('div', { class: 'hs-side' }, this.totEl, this.tallyEl),
       close,
       h('div', { class: 'hs-foot' },

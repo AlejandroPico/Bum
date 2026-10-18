@@ -1,4 +1,5 @@
 import { LAYER_NAMES, type DefenseResult } from '../data/defense';
+import type { HistCase } from '../data/historic';
 import { h, ICONS, fmtNum, setRangeFill } from './dom';
 import { fmtDist, fmtArea, fmtEnergy } from '../physics/effects';
 import { buildStats, type StatSection } from './stats';
@@ -34,7 +35,7 @@ const GROUP_NAMES: Record<string, string> = {
   seismic: 'Sismicidad', emp: 'Pulso electromagnético', ejecta: 'Eyecta', tsunami: 'Tsunami',
 };
 
-type Tab = 'sum' | 'eff' | 'pop' | 'phys' | 'rad' | 'after' | 'def' | 'cmp';
+type Tab = 'hist' | 'sum' | 'eff' | 'pop' | 'phys' | 'rad' | 'after' | 'def' | 'cmp';
 
 /** resumen de un ataque con varias detonaciones */
 export interface MultiInfo { deaths: number; injuries: number; exposed: number; items: { name: string; place: string; energyKt: number; deaths: number }[] }
@@ -43,7 +44,7 @@ const SHELTERS: [string, number][] = [
   ['A la intemperie', 1], ['Coche', 1.5], ['Casa de madera o prefabricada', 3], ['Casa de ladrillo, planta baja', 10],
   ['Piso intermedio de un edificio grande', 40], ['Sótano', 40], ['Centro de un gran edificio de hormigón', 200], ['Refugio antinuclear', 1000],
 ];
-const TABS: [Tab, string][] = [['sum', 'Resumen'], ['eff', 'Efectos'], ['pop', 'Población'], ['phys', 'Física'], ['rad', 'Radiación'], ['after', 'Días después'], ['def', 'Defensa'], ['cmp', 'Comparar']];
+const TABS: [Tab, string][] = [['hist', 'Lo que pasó'], ['sum', 'Resumen'], ['eff', 'Efectos'], ['pop', 'Población'], ['phys', 'Física'], ['rad', 'Radiación'], ['after', 'Días después'], ['def', 'Defensa'], ['cmp', 'Comparar']];
 
 export class ResultsPanel {
   el: HTMLElement;
@@ -79,6 +80,40 @@ export class ResultsPanel {
     const row = h('div', { class: 'seg heat-row' });
     for (const [k, l] of opts) row.append(h('button', { type: 'button', class: this.heat === k ? 'on' : '', onclick: () => this.ev.onHeat!(this.heat === k ? 'off' : k) }, l));
     body.append(h('div', { class: 'heat-blk' }, h('div', { class: 'heat-h' }, 'Mapa de calor'), row));
+  }
+
+  /** reconstrucción histórica: lo que pasó de verdad, para compararlo con el modelo */
+  private historic: { c: HistCase; lat: number; lon: number } | null = null;
+  setHistoric(c: HistCase | null) { this.historic = c ? { c, lat: c.lat, lon: c.lon } : null; if (c) this.tab = 'hist'; }
+  private histBlock(body: HTMLElement, fx: Effects) {
+    const H = this.historic;
+    if (!H) return;
+    const c = H.c;
+    body.append(h('div', { class: 'res-h3' }, c.title, ' · ', c.dateText), h('p', { class: 'hist-story' }, c.story));
+    body.append(h('div', { class: 'res-h3' }, 'El modelo frente a lo que pasó'));
+    const tb = h('div', { class: 'hist-cmp' });
+    tb.append(h('span', { class: 'hc-h' }, ''), h('span', { class: 'hc-h' }, 'Real'), h('span', { class: 'hc-h' }, 'Modelo'), h('span', { class: 'hc-h' }, ''));
+    const f = (v: number, unit: string) => `${v >= 100 ? fmtNum(Math.round(v)) : n1(v, v < 10 ? 1 : 0)} ${tr(unit)}`;
+    const notes: string[] = [];
+    for (const r of c.rows) {
+      const v = r.model(fx, { lat: H.lat, lon: H.lon });
+      const [lo, hi] = r.real;
+      const real = lo === hi ? f(lo, r.unit) : `${f(lo, '').trim()}–${f(hi, r.unit)}`;
+      let verdict = '—', cls = 'na';
+      if (v != null && Number.isFinite(v) && r.comparable !== false) {
+        if (v >= lo * 0.97 && v <= hi * 1.03) { verdict = 'coincide'; cls = 'ok'; }
+        else if (v >= lo / 1.6 && v <= hi * 1.6) { verdict = 'cerca'; cls = 'near'; }
+        else { verdict = v < lo ? 'se queda corto' : 'se pasa'; cls = 'off'; }
+      } else if (r.comparable === false) verdict = 'no comparable';
+      const k = notes.length;
+      if (r.note) notes.push(r.note);
+      tb.append(h('span', { class: 'hc-k' }, r.label, r.note ? h('sup', {}, String(k + 1)) : null), h('span', {}, real), h('span', { class: 'strong' }, v == null || !Number.isFinite(v) ? '—' : f(v, r.unit)), h('span', { class: `hc-v ${cls}` }, verdict));
+    }
+    body.append(tb);
+    notes.forEach((n, i) => body.append(h('div', { class: 'sec-note' }, h('sup', {}, String(i + 1)), ' ', n)));
+    body.append(h('div', { class: 'sec-note' }, 'El modelo es el mismo de cualquier otra simulación (Glasstone y Dolan, Collins et al.): no se ha ajustado para que coincida. Las diferencias muestran lo que no tiene en cuenta (el relieve, los edificios de entonces, la gente, el estado de la atmósfera).'));
+    body.append(h('div', { class: 'sec-note' }, h('b', {}, 'Fuentes: '), c.sources));
+    body.append(h('button', { type: 'button', class: 'btn-line cmp-split', onclick: () => this.ev.onBook(c.book) }, 'Leer la historia en la enciclopedia'));
   }
 
   /** defensa antimisiles del ataque en curso */
@@ -313,7 +348,7 @@ export class ResultsPanel {
     const stats = buildStats(fx);
     const tabsBar = h('div', { class: 'res-tabs' });
     const body = h('div', { class: 'res-body' });
-    const avail = TABS.filter(([t]) => t === 'sum' || t === 'eff' || (t === 'after' && fx.scenario.kind === 'nuclear' && !fx.chemical) || (t === 'def' && (fx.scenario.kind === 'asteroid' || !!this.abm)) || (t === 'rad' && fx.fallout.length > 0 && !fx.volcano) || stats.some((s) => s.tab === t));
+    const avail = TABS.filter(([t]) => (t === 'hist' && !!this.historic) || t === 'sum' || t === 'eff' || (t === 'after' && fx.scenario.kind === 'nuclear' && !fx.chemical) || (t === 'def' && (fx.scenario.kind === 'asteroid' || !!this.abm)) || (t === 'rad' && fx.fallout.length > 0 && !fx.volcano) || stats.some((s) => s.tab === t));
     if (!avail.some(([t]) => t === this.tab)) this.tab = 'sum';
     const show = (t: Tab) => {
       this.tab = t;
@@ -322,6 +357,7 @@ export class ResultsPanel {
       body.scrollTop = 0;
       if (t === 'sum') { if (fx.war && this.ev.onWinter) body.append(h('button', { type: 'button', class: 'btn-line cmp-split', onclick: () => this.ev.onWinter!() }, 'Ver el invierno nuclear mes a mes en el mapa')); if (this.abm?.intercepted) body.append(h('div', { class: 'sec-note' }, `La defensa antimisiles derribó ${this.abm.intercepted} de ${this.abm.total} ojivas: los efectos son los de las que llegaron.`)); if (multi) this.multiBlock(body, multi); this.summary(body, fx, hiroTxt); }
       else if (t === 'eff') this.effects(body, fx);
+      else if (t === 'hist') this.histBlock(body, fx);
       else if (t === 'def') { if (fx.scenario.kind === 'asteroid') this.defense(body, fx); else this.abmBlock(body); }
       else if (t === 'after') this.after(body, fx);
       else {

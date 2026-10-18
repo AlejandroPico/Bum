@@ -197,6 +197,8 @@ export class Sidebar {
     if (S.mode === 'other') return S.other.type === 'volcano' ? { ...S.other.volcano } : S.other.type === 'dam' ? { ...S.other.dam } : S.other.type === 'solar' ? { ...S.other.solar } : S.other.type === 'war' ? { ...S.other.war } : { ...S.other.release, source: S.other.type === 'dirtybomb' ? 'dirtybomb' : 'reactor' };
     return S.mode === 'nuclear' ? { ...S.nuke } : { ...S.ast };
   }
+  /** pone unas condiciones concretas (reconstrucciones históricas) */
+  setEnv: (v: Partial<Environment>, note?: string) => void = () => {};
   /** consulta el tiempo real en el objetivo y lo aplica al entorno */
   loadWeather: (quiet?: boolean) => Promise<void> = async () => {};
 
@@ -736,6 +738,19 @@ export class Sidebar {
       E.rainHourly = w.rainHourly ? [w.rainMmH ?? 0, ...w.rainHourly.slice(1)] : null;
       const top = w.profile[w.profile.length - 1];
       wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} %${w.rainMmH > 0 ? ` · lluvia ${String(w.rainMmH).replace('.', DEC)} mm/h` : ''} · viento a ${(top.zM / 1000).toFixed(0)} km: ${Math.round(top.kmh)} km/h desde ${dirName(top.fromDeg)}. La nube y la lluvia radiactiva usan el perfil de viento hasta la altura real de la nube${w.hourly ? ` y la previsión hora a hora de las próximas ${w.hourly.length} h` : ''}.`;
+    };
+    this.setEnv = (v, note) => {
+      Object.assign(E, { windProfile: null, windHourly: null, rainHourly: null, outdoorPct: null }, v);
+      wR.value = String(Math.min(150, Math.round(E.windKmh)));
+      wComp.set(E.windFromDeg);
+      humR.value = String(Math.round(E.humidity));
+      visR.value = String(Math.max(2, Math.min(80, Math.round(E.visibilityKm))));
+      hrR.value = String(Math.round(E.hour * 4) / 4);
+      rainR.value = String(Math.min(20, Math.round((E.rainMmH ?? 0) * 2) / 2));
+      const prof = E.windProfile;
+      updEnv();
+      E.windProfile = prof ?? null;
+      if (note) wxNote.textContent = note;
     };
     this.loadWeather = async (quiet = false) => {
       wxBtn.disabled = true; wxBtn.classList.add('busy');
