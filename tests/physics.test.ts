@@ -376,3 +376,16 @@ truthy('fmtEnergy(50000) contiene «Mt»', /Mt/.test(fmtEnergy(50000)), `→ ${f
 
 console.log(`\n${pass} correctas, ${fail} fallidas`);
 if (fail) { console.log('\nFallos:\n' + failures.map((f) => '  · ' + f).join('\n')); (globalThis as unknown as { process: { exit(c: number): void } }).process.exit(1); }
+
+
+section('Historia de las pruebas nucleares');
+{
+  const H = (await import('../src/data/tests-history.json')).default as unknown as { regions: string[]; tests: [number, number, number, number, number, number, number, string, number][] };
+  truthy('2057 explosiones (SIPRI 1945–1998 y Corea del Norte)', H.tests.length === 2057);
+  truthy('ordenadas por fecha', H.tests.every((t, i, a) => i === 0 || t[0] >= a[i - 1][0]));
+  truthy('todas con coordenadas válidas y zona conocida', H.tests.every((t) => Math.abs(t[2]) <= 90 && Math.abs(t[3]) <= 180 && !(t[2] === 0 && t[3] === 0) && H.regions[t[8]] !== undefined));
+  const by = [0, 0, 0, 0, 0, 0, 0, 0];
+  for (const t of H.tests) by[t[1]]++;
+  truthy('por países: EE. UU. 1032, URSS 714, Reino Unido 45, Francia 210, China 45, India 3, Pakistán 2, Corea del Norte 6', by.join() === '1032,714,45,210,45,3,2,6');
+  truthy('Trinity es la primera y Hiroshima y Nagasaki van después', H.tests[0][7] === 'Trinity' && H.tests[1][5] === 4 && H.tests[2][5] === 4);
+}

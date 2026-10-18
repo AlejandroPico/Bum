@@ -212,23 +212,38 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       propias por comparación con Xia et al. 2022): Corea del Norte–Corea del Sur, Corea del Norte–Japón, China–EE. UU.
       y Rusia–OTAN en Europa. Vista desde encima del polo para EE. UU.–Rusia.
 
+## 1.9 — Las pruebas nucleares en el tiempo (publicada)
+
+- [x] Botón «Historia de las pruebas nucleares» (reloj, en la barra de arriba; también en «Mapas y capas»): el mapa del
+      mundo, plano o en globo, con un calendario que avanza mes a mes. Cada una de las 2.057 explosiones (1945–2017)
+      es un destello en su lugar con el color de su país y queda marcada; a la izquierda, el total, cuántas fueron en el
+      aire o bajo tierra, los megatones y el contador de cada país. Abajo, un histograma por años y países que sirve de
+      calendario (se pulsa o se arrastra). Velocidad de 1 mes/s, 3 meses/s o 1 año/s; los años sin pruebas pasan deprisa
+      y cerca de los momentos clave (Trinity, Hiroshima, Nagasaki, Ivy Mike, la moratoria, la Tsar Bomba, los tratados,
+      las últimas pruebas de cada país, Corea del Norte) va más despacio y escribe una frase, que se lee en voz alta
+      si está activada la narración. Un pitido por explosión, con un tono por país (como la obra de Isao Hashimoto).
+      Pulsando un punto: nombre, fecha, lugar, tipo, potencia y finalidad. Espacio, flechas y Esc.
+- [x] Datos (`src/data/tests-history.json`, se carga sólo al abrir): SIPRI / FOA, Bergkvist y Ferm (2000), «Nuclear
+      Explosions 1945–1998» (2.051 explosiones, vía TidyTuesday 2019-08-20), con las coordenadas que faltaban
+      completadas y nombres legibles de las zonas, más las 6 pruebas de Corea del Norte con rendimientos estimados.
+      Se genera con un script de Python (ver notas de traspaso).
+
 ## Propuestas para las próximas versiones
 
-Cada una se puede hacer por separado; el orden es una sugerencia.
+Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
 
-- [ ] 1.9 Defensa antimisiles: interceptores (GMD, Aegis SM-3, Arrow 3, S-500…) desde bases reales, probabilidad de
-      interceptación según el tipo de arma (los planeadores y los MIRV la complican) y animación del intento.
-- [ ] 2.0 Sección histórica: las pruebas nucleares en el tiempo, con botón de reproducir y un destello por prueba: animación de las más de 2.000 pruebas de 1945 a 2017 sobre el mapa, año a
-      año, con un contador por país y un sonido por prueba (al estilo de la obra de Isao Hashimoto).
-- [ ] 2.1 Refugio más cercano (dentro de «¿Estoy a salvo?»): estaciones de metro, aparcamientos subterráneos y sótanos públicos de OpenStreetMap
+- [ ] Defensa antimisiles (en duda): interceptores desde bases reales, probabilidad de interceptación según el tipo de
+      arma y animación del intento.
+
+- [ ] Refugio más cercano (dentro de «¿Estoy a salvo?»): estaciones de metro, aparcamientos subterráneos y sótanos públicos de OpenStreetMap
       cerca de tu punto, con el tiempo andando y si llegarías antes que la onda o la lluvia.
-- [ ] 2.2 Escalada: el contraataque y la respuesta, paso a paso, con los vuelos de los misiles de cada bando y el
+- [ ] Escalada: el contraataque y la respuesta, paso a paso, con los vuelos de los misiles de cada bando y el
       balance acumulado (enlaza con la guerra a gran escala y el invierno nuclear).
-- [ ] 2.3 «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
+- [ ] «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
       fuego sobre tu horizonte, según dónde estés.
-- [ ] 2.4 Hospitales y sanidad: camas y hospitales de la zona frente al número de heridos y quemados (cuántos quedarían
+- [ ] Hospitales y sanidad: camas y hospitales de la zona frente al número de heridos y quemados (cuántos quedarían
       sin atender), con los hospitales destruidos marcados en el mapa.
-- [ ] 2.5 Días después: línea de tiempo de las semanas siguientes (síndrome de radiación, agua, electricidad, ayuda
+- [ ] Días después: línea de tiempo de las semanas siguientes (síndrome de radiación, agua, electricidad, ayuda
       exterior, regreso a la zona) con lo que se sabe de Hiroshima, Chernóbil y Fukushima.
 
 ## Descartado por ahora

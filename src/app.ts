@@ -35,6 +35,7 @@ import { fetchInfrastructure, fetchBuildingCounts } from './data/osm';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
 import { WarLayer } from './map/war-layer';
+import { History } from './ui/history';
 import { planFlight, profileFor, legAt, type FlightPlan, type FlightProfile } from './data/flight';
 import type { Effects, Scenario } from './physics/types';
 import type { FxModule } from './fx/types';
@@ -302,7 +303,7 @@ function toggleUI() {
 
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('input, select, textarea')) return;
-  if (enc.isOpen) return;
+  if (enc.isOpen || histMode.active) return;
   if (e.key === 'e' || e.key === 'E') { enc.toggle(); return; }
   if (e.key === 'h' || e.key === 'H') toggleUI();
   if (e.key === ' ' && run) { e.preventDefault(); run.playing = !run.playing; run.lastReal = performance.now(); fxLayer.animating = true; map.triggerRepaint(); }
@@ -400,7 +401,7 @@ function buildLayersPanel() {
     inp.addEventListener('change', () => { V[key] = inp.checked; if (key === 'reduceFlash') { applyReduceFlash(); savePrefs(); } else applyMapPrefs(); });
     return h('label', { class: 'toggle' }, inp, h('span', { class: 'sw' }), label);
   };
-  layersPanel.append(h('div', { class: 'toggles one lp-tg' }, tg('Relieve 3D', 'terrain3d'), tg('Edificios 3D', 'buildings'), tg('Nombres de lugares', 'mapLabels'), tg('Pruebas nucleares (1945–2017)', 'tests')));
+  layersPanel.append(h('div', { class: 'toggles one lp-tg' }, tg('Relieve 3D', 'terrain3d'), tg('Edificios 3D', 'buildings'), tg('Nombres de lugares', 'mapLabels'), tg('Pruebas nucleares (1945–2017)', 'tests')), h('button', { type: 'button', class: 'btn-line lp-hist', onclick: () => { void histMode.open(); } }, 'Ver la historia de las pruebas en el tiempo'));
   const val = h('b', {}, `${Math.round(V.fxOpacity * 100)} %`);
   const r = h('input', { type: 'range', min: 0, max: 100, step: 1, value: Math.round(V.fxOpacity * 100) }) as HTMLInputElement;
   setRangeFill(r);
@@ -482,6 +483,36 @@ document.addEventListener('click', (e) => {
 globeBtn = tbBtn('globe-btn', 'Mapa plano o globo 3D', GLOBE_ICON, () => applyProjection(!state.view.globe));
 globeBtn.classList.toggle('on', state.view.globe);
 tbBtn('book-btn', 'Enciclopedia (E)', BOOK_ICON, () => enc.toggle());
+// historia de las pruebas nucleares (1945–2017): el mapa del mundo con un calendario que avanza
+const HISTORY_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/></svg>';
+const historyBtn = tbBtn('hist-btn', 'Historia de las pruebas nucleares (1945–2017)', HISTORY_ICON, () => { if (histMode.active) histMode.close(); else void histMode.open(); });
+const histMode = new History(map, document.getElementById('app')!);
+let histTests = false;
+histMode.onOpen = () => {
+  historyBtn.classList.add('on');
+  for (const p of popovers) { p.el.classList.add('hidden'); p.btn.classList.remove('on'); }
+  if (enc.isOpen) enc.toggle();
+  if (run) { clearRun(); results.hide(); }
+  histTests = state.view.tests;
+  if (histTests) testsLayer.setVisible(false);
+  setFlightLabels(true);
+  setNightShade(map, null);
+  // vista del mundo entero: el relieve 3D no aporta nada y cuesta dibujarlo
+  if (map.getTerrain()) map.setTerrain(null);
+  map.easeTo({ center: [-10, 25], zoom: state.view.globe ? 1.15 : 1.3, pitch: 0, bearing: 0, duration: 1600, essential: true });
+};
+histMode.onClose = () => {
+  historyBtn.classList.remove('on');
+  tour.narrator.cancel();
+  setFlightLabels(false);
+  if (histTests) testsLayer.setVisible(true);
+  applyPerfLayers();
+  sunKey = '';
+  applySun(true);
+};
+histMode.onBook = () => { void enc.openBest('Pruebas nucleares'); };
+// con la narración por voz activada, los momentos clave se leen en voz alta
+histMode.onMilestone = (t) => (state.view.narration && tour.narrator.supported ? (tour.narrator.cancel(), tour.narrator.speak(tr(t))) : undefined);
 const layersBtn = tbBtn('layers-btn', 'Mapas y capas', LAYERS_ICON, (e) => { e.stopPropagation(); togglePopover(layersPanel, layersBtn, buildLayersPanel); });
 popovers.push({ el: layersPanel, btn: layersBtn });
 
@@ -938,7 +969,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.8.2';
+const APP_VERSION = '1.9';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -971,13 +1002,14 @@ function openAbout() {
       h('ul', { class: 'about-feat' },
         feat('Armas nucleares y explosivos.', 'Más de 70 armas reales, de las bombas de Hiroshima y Nagasaki a la Bomba del Zar y los arsenales actuales, o una potencia a tu medida; en superficie, en el aire, en el espacio, bajo tierra o bajo el agua, y ataques con varias detonaciones a la vez.'),
         feat('Asteroides y cometas.', 'Impactos históricos e hipotéticos y los objetos reales que vigila la NASA, con su cráter, el terremoto, el tsunami que recorre los océanos y la posibilidad de desviarlos a tiempo.'),
-        feat('Otras catástrofes.', 'Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala con su invierno nuclear.'),
+        feat('Otras catástrofes.', 'Accidentes nucleares como Chernóbil o Fukushima, bombas sucias, supervolcanes como Yellowstone, roturas de grandes presas, tormentas solares como la de 1859 y guerras nucleares a gran escala, con los misiles cruzando entre los dos bandos y su invierno nuclear.'),
         feat('¿Estoy a salvo?', 'Elige tu casa o cualquier punto y verás qué te llegaría, cuándo, y qué hacer para protegerte; también puedes comparar dos escenarios en un mapa partido o seguir el vuelo del arma desde su base: misil balístico, planeador hipersónico, misil de crucero o bombardero, y varias ojivas de un mismo misil.'),
         feat('Efectos y víctimas.', 'Bola de fuego, onda expansiva, quemaduras, radiación, lluvia radiactiva, incendios, pulso electromagnético, ceniza y contaminación, con la población real de la zona, los hospitales y servicios afectados y cuánto protege cada tipo de refugio.'),
         feat('Tiempo real.', 'El viento de las próximas horas, la lluvia, el relieve y la hora del lugar cambian el resultado, y el mapa muestra las nubes, la lluvia, la niebla y el radar de precipitación de ahora mismo; una línea de tiempo deja ver la explosión a cámara lenta o el avance de la nube durante días.'),
         feat('Mapas de calor y recorrido de cine.', 'Mapas de calor de la población, de las víctimas y de las muertes por la lluvia radiactiva, y un recorrido automático con planos de cine y rótulos que cuenta la catástrofe de principio a fin.'),
         feat('En tu idioma.', 'Castellano, català, English, français, Deutsch, português e italiano, según el idioma de tu equipo (o el que elijas en el menú del ojo), y un recorrido narrado por voz que explica la catástrofe paso a paso. La enciclopedia, de momento, está en castellano.'),
         feat('Para cualquier equipo.', 'En portátiles y tabletas se activa sola una calidad ligera que mantiene la animación fluida, y si aun así va a saltos baja un poco más en plena simulación; también se puede elegir a mano.'),
+        feat('Historia de las pruebas.', 'Las más de 2.000 explosiones nucleares de 1945 a 2017 sobre el mapa del mundo, mes a mes, con un destello y un pitido por prueba, el contador de cada país y los momentos clave de la carrera nuclear.'),
         feat('Enciclopedia.', 'Cientos de artículos sobre la historia, la ciencia y los efectos de estas armas y catástrofes, con esquemas animados y modelos 3D que se pueden desmontar.'),
       ),
       h('p', { class: 'about-note' }, 'Herramienta divulgativa y educativa: las cifras son estimaciones a partir de modelos científicos públicos y no sustituyen a los planes oficiales de protección civil.'),
@@ -1064,6 +1096,7 @@ map.on('load', async () => {
 });
 
 map.on('click', (e) => {
+  if (histMode.handleClick(e)) return;
   if (safePick) { safePick = false; const c = nearestCity(e.lngLat.lat, e.lngLat.lng); setSafePoint(e.lngLat.lat, e.lngLat.lng, c.km < 15 ? `Cerca de ${c.city.name}` : 'Punto elegido'); return; }
   if (testsLayer.handleClick(e)) return;
   const c = nearestCity(e.lngLat.lat, e.lngLat.lng);
@@ -2042,7 +2075,7 @@ function share() {
 }
 
 // depuración / pruebas automáticas
-(window as any).__an = { map, state, detonate, enc, cloudShot, groundView, testsLayer, setHeat, tour, weatherLayer, heatLayer, tr, get fxLayer() { return fxLayer; }, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.lastOverlay = 0; run.playing = false; map.triggerRepaint(); } }, fmtTime };
+(window as any).__an = { map, state, detonate, histMode, enc, cloudShot, groundView, testsLayer, setHeat, tour, weatherLayer, heatLayer, tr, get fxLayer() { return fxLayer; }, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.lastOverlay = 0; run.playing = false; map.triggerRepaint(); } }, fmtTime };
 
 // ---------------------------------------------------------------- app instalable (PWA)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

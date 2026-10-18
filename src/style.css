@@ -880,3 +880,50 @@ body:not(.touring) .tour-btns, body:not(.touring) .tour-btns button { pointer-ev
 body.rp-open:not(.rp-min) #war-hud { left: calc(50% - 160px); }
 body:not(.ui-collapsed) #war-hud { margin-left: 160px; }
 @media (max-width: 760px) { #war-hud { top: 58px; margin-left: 0 !important; left: 50% !important; } #war-hud b { font-size: 13px; } }
+
+/* ---------------------------------------------------------------- historia de las pruebas (1945–2017) */
+body.hist-on #sidebar, body.hist-on #results, body.hist-on #timeline, body.hist-on #ui-show, body.hist-on .target-marker,
+body.hist-on .strike-marker, body.hist-on #war-hud, body.hist-on #hud-hint, body.hist-on #heat-legend, body.hist-on .flight-dot { display: none !important; }
+body.hist-on #toolbar { right: 12px !important; }
+#history { position: absolute; inset: 0; z-index: 11; pointer-events: none; color: #f4f6fb; --hs-muted: #aab3c5;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 14px rgba(0, 0, 0, 0.55); }
+#history.hidden { display: none; }
+#history button, #history canvas { pointer-events: auto; }
+.hs-head { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); text-align: center; width: min(760px, 70vw); }
+.hs-title { font: 600 11px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--hs-muted); }
+.hs-date { font: 600 30px/1.15 var(--font); letter-spacing: -.01em; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.hs-cap { font: 500 14px/1.35 var(--font); margin-top: 6px; min-height: 2.7em; color: #ffe2b8; }
+.hs-cap.hs-new { animation: hs-in .5s ease-out; }
+@keyframes hs-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.hs-side { position: absolute; left: 18px; top: 70px; width: 230px; }
+.hs-tot b { font: 600 34px/1 var(--font); font-variant-numeric: tabular-nums; }
+.hs-tot span { font: 500 14px var(--font); }
+.hs-sub { font: 500 11px/1.5 var(--mono); color: var(--hs-muted); }
+.hs-tally { margin-top: 14px; display: flex; flex-direction: column; gap: 5px; }
+.hs-row { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 9px; font: 500 13px var(--font); }
+.hs-row i { width: 10px; height: 10px; display: block; box-shadow: 0 0 6px rgba(0, 0, 0, .6); }
+.hs-row b { font: 600 13px var(--mono); font-variant-numeric: tabular-nums; }
+.hs-row.dim { opacity: .4; }
+.hs-x { position: absolute; top: 12px; left: 12px; width: 36px; height: 36px; border: 0; background: rgba(0, 0, 0, .35); color: #fff; font-size: 16px; cursor: pointer; }
+.hs-x:hover { background: rgba(0, 0, 0, .6); }
+.hs-foot { position: absolute; left: 18px; right: 18px; bottom: 14px; }
+.hs-ctrl { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.hs-play { width: 38px; height: 34px; border: 0; background: var(--accent); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.hs-speed { display: flex; flex-direction: row; width: auto; }
+.hs-speed button { white-space: nowrap; padding: 8px 11px; background: rgba(0, 0, 0, .35); color: #e9edf5; border: 0; }
+.hs-speed button.on { background: rgba(255, 255, 255, .9); color: #10131a; text-shadow: none; }
+.hs-btn { border: 0; background: rgba(0, 0, 0, .35); color: #e9edf5; font: 500 12px var(--font); padding: 8px 11px; cursor: pointer; }
+.hs-btn.on { color: #fff; box-shadow: inset 0 -2px 0 var(--accent); }
+.hs-cal { display: block; width: 100%; height: 74px; cursor: pointer; touch-action: none; }
+.hs-src { font: 500 10px var(--mono); color: var(--hs-muted); margin-top: 2px; }
+.lp-hist { width: 100%; margin-top: 8px; }
+@media (max-width: 760px) {
+  .hs-head { top: 56px; width: 92vw; }
+  .hs-date { font-size: 22px; }
+  .hs-cap { font-size: 12.5px; }
+  .hs-side { top: auto; bottom: 150px; left: 12px; width: 180px; }
+  .hs-tot b { font-size: 24px; }
+  .hs-row { font-size: 11.5px; }
+  .hs-tally { gap: 2px; }
+  .hs-foot { left: 10px; right: 10px; }
+}
