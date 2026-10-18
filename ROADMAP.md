@@ -286,12 +286,24 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       habría pasado si llegan». Pestaña «Defensa» con las capas, los disparos, los derribos y la saturación.
 - [x] Arreglo: las estelas del misil a veces se quedaban cortas al saltar en la línea de tiempo.
 
+## 1.15 — «Desde mi ventana» (publicada)
+
+- [x] Vista de realidad aumentada (`src/ui/window-view.ts`), desde el botón de la ventana en los resultados o
+      «Verlo desde aquí» en «¿Estoy a salvo?»: la cámara trasera del móvil de fondo y la brújula y los sensores de
+      inclinación orientan la escena. Sin sensores (ordenador), se mira alrededor arrastrando; con ellos, arrastrar
+      corrige la brújula.
+- [x] Bola de fuego, tronco, polvo de la base y sombrero del hongo con su tamaño angular real desde tu punto (tu
+      ubicación, el punto elegido o, si no hay, uno a 20 km), con la deriva del viento, el horizonte con rumbos y la
+      parte que tapa la curvatura de la Tierra (con refracción). Altura de la mirada: calle, 3.ª, 10.ª o 30.ª planta.
+- [x] Reloj en tiempo real (o ×10, ×60): destello, cuenta atrás hasta la onda expansiva («¡Aléjate de la ventana
+      y túmbate!»), estruendo con vibración, sacudida y cristales rotos a partir de 0,5 psi. Varias detonaciones a la
+      vez en un ataque múltiple.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
 
-- [ ] «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
-      fuego sobre tu horizonte, según dónde estés.
+- (Sin propuestas pendientes por ahora: se añadirán aquí las nuevas ideas.)
 
 ## Descartado por ahora
 

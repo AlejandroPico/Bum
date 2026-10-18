@@ -12,6 +12,7 @@ import { tr } from '../i18n';
 const n1 = (x: number, d = 1) => x.toLocaleString(LOCALE, { maximumFractionDigits: d });
 const dur = (s: number) => { if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min`; if (s < 86400 * 2) { const hh = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return m ? `${hh} h ${m} min` : `${hh} h`; } return `${n1(s / 86400, s < 86400 * 10 ? 1 : 0)} días`; };
 
+const WIN_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M12 3v18M4 12h16"/><path d="M14.5 9.5c0-1.4 1-2.3 2.2-2.3s2.3 1 2.3 2.3" stroke-linecap="round"/></svg>';
 export interface ResultsEvents {
   onToggle(id: string, visible: boolean): void;
   onHover(id: string | null): void;
@@ -22,6 +23,8 @@ export interface ResultsEvents {
   /** comparar con otro escenario en el mapa partido */
   onCompare?(): void;
   onHeat?(k: 'off' | 'pop' | 'deaths' | 'fallout'): void;
+  /** «Desde mi ventana»: la explosión vista desde tu sitio */
+  onWindow?(): void;
 }
 
 const GROUP_NAMES: Record<string, string> = {
@@ -286,6 +289,7 @@ export class ResultsPanel {
         h('div', { class: 'sub' }, `${fx.energyKt > 0 && sc.kind !== 'release' && sc.kind !== 'volcano' ? fmtEnergy(fx.energyKt) + ' ' : ''}${burstTr}${sc.kind === 'solar' || sc.kind === 'war' ? tr(' · todo el planeta') : ` · ${place}`}`),
       ),
       h('button', { class: 'icon-btn', title: 'Ficha en la enciclopedia', html: ICONS.book, onclick: () => this.ev.onBook(sc.name) }),
+      this.ev.onWindow && (sc.kind === 'nuclear' || sc.kind === 'asteroid') ? h('button', { class: 'icon-btn', title: 'Desde mi ventana: verlo con la cámara del móvil', html: WIN_ICON, onclick: () => this.ev.onWindow!() }) : null,
       h('button', { class: 'icon-btn', title: 'Compartir enlace', html: ICONS.share, onclick: () => this.ev.onShare() }),
       minBtn,
     );

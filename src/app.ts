@@ -34,6 +34,7 @@ import { loadRealPopulation } from './data/worldpop';
 import { fetchInfrastructure, fetchBuildingCounts, fetchShelters, fetchHospitals, SHELTER_KINDS, type Shelter } from './data/osm';
 import { assessHealth, type HealthReport } from './physics/health';
 import { engage, type DefenseResult } from './data/defense';
+import { WindowView } from './ui/window-view';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
 import { WarLayer } from './map/war-layer';
@@ -249,6 +250,7 @@ const enc = new Encyclopedia((preset) => {
 
 const results = new ResultsPanel(document.getElementById('results')!, {
   onBook: (name) => { void enc.openBest(name); },
+  onWindow: () => openWindow(),
   onToggle: () => syncHidden(),
   onHover: (id) => { overlays.highlight = id; overlays.refresh(); if (run) run.domes.highlight = id; map.triggerRepaint(); },
   onShare: () => share(),
@@ -1019,6 +1021,28 @@ function setSafePoint(lat: number, lon: number, label: string) {
   // tras el clic en el mapa (el mismo clic llega después al documento y cerraría el menú)
   setTimeout(openSafe, 30);
 }
+// «Desde mi ventana»: la explosión vista desde tu punto, con la cámara y la brújula del móvil
+const winView = new WindowView();
+function openWindow() {
+  const R = run;
+  if (!R || R.allDown || R.fx.war || R.fx.solar || R.fx.dam || R.fx.release || R.fx.volcano) return;
+  // la brújula de iOS sólo da permiso dentro del clic
+  WindowView.prime();
+  R.playing = false; fxLayer.animating = false;
+  const sources = [{ fx: R.fx, plan: R.plan, lat: R.lat, lon: R.lon, delay: 0 }, ...R.extras.map((x) => ({ fx: x.fx, plan: x.plan, lat: x.lat, lon: x.lon, delay: x.delay }))];
+  const go = (obs: { lat: number; lon: number; label: string }) => winView.show({ sources, obs, sound: { flash: (i) => audio.flash(i), boom: (i) => audio.boom(i) } });
+  audio.unlock();
+  if (safePoint) { go(safePoint); return; }
+  const fallback = () => {
+    const [lon, lat] = destination(R.lat, R.lon, 20000, 200);
+    toast('Sin tu ubicación: se mira desde un punto a 20 km de la zona cero (elige otro en «¿Estoy a salvo?»)', 4500);
+    go({ lat, lon, label: 'A 20 km de la zona cero' });
+  };
+  if (!navigator.geolocation) { fallback(); return; }
+  toast('Buscando tu ubicación…', 2500);
+  navigator.geolocation.getCurrentPosition((p) => { setSafePoint(p.coords.latitude, p.coords.longitude, 'Tu ubicación'); go({ lat: p.coords.latitude, lon: p.coords.longitude, label: 'Tu ubicación' }); }, fallback, { enableHighAccuracy: false, timeout: 9000, maximumAge: 600000 });
+}
+
 function buildSafePop() {
   safePop.innerHTML = '';
   safePop.append(h('div', { class: 'sp-h' }, '¿Estoy a salvo?'));
@@ -1051,6 +1075,7 @@ function buildSafePop() {
   const list = h('div', { class: 'sp-items' });
   for (const it of R.items) list.append(h('div', { class: `sp-it lv-${it.level}` }, h('div', {}, h('b', {}, it.label), h('span', {}, it.value)), h('p', {}, it.detail)));
   if (!R.items.length) list.append(h('p', { class: 'sp-note' }, 'Ningún efecto calculado llega a este punto.'));
+  if (!run.allDown && !run.fx.release && !run.fx.volcano && !run.fx.dam && !run.fx.solar && !run.fx.war) safePop.append(h('button', { type: 'button', class: 'btn-line sp-win', onclick: (ev: MouseEvent) => { ev.stopPropagation(); safePop.classList.add('hidden'); safeBtn.classList.remove('on'); openWindow(); } }, 'Verlo desde aquí (cámara del móvil)'));
   safePop.append(list, h('div', { class: 'sp-h2' }, 'Qué hacer'), h('ul', { class: 'sp-adv' }, ...R.advice.map((a) => h('li', {}, a))),
     ...shelterBlock(R),
     h('p', { class: 'sp-note' }, 'Estimación orientativa con los mismos modelos del simulador. En una emergencia real, sigue siempre las instrucciones de las autoridades.'));
@@ -1134,7 +1159,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.14';
+const APP_VERSION = '1.15';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -2329,7 +2354,7 @@ function share() {
 }
 
 // depuración / pruebas automáticas
-(window as any).__an = { map, state, detonate, histMode, startSplit, enc, cloudShot, groundView, testsLayer, setHeat, tour, weatherLayer, heatLayer, tr, get fxLayer() { return fxLayer; }, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.lastOverlay = 0; run.playing = false; map.triggerRepaint(); } }, fmtTime };
+(window as any).__an = { map, state, detonate, histMode, startSplit, enc, cloudShot, groundView, testsLayer, setHeat, tour, winView, setSafePoint, openWindow, weatherLayer, heatLayer, tr, get fxLayer() { return fxLayer; }, get run() { return run; }, seek: (t: number) => { if (run) { run.t = t; run.lastOverlay = 0; run.playing = false; map.triggerRepaint(); } }, fmtTime };
 
 // ---------------------------------------------------------------- app instalable (PWA)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

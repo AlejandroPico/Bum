@@ -945,3 +945,30 @@ body.hist-on #toolbar { right: 12px !important; }
 .af-h b { font: 600 13px var(--font); margin-right: 8px; }
 .af-h span { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
 .af-st p { margin: 5px 0 0; font-size: 12.5px; line-height: 1.5; }
+
+/* «Desde mi ventana» (realidad aumentada) */
+#winview { position: fixed; inset: 0; z-index: 9000; background: #05070b; color: #fff; overflow: hidden; touch-action: none; user-select: none; font-family: "IBM Plex Sans", system-ui, sans-serif; }
+#winview video, #winview canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#winview video { object-fit: cover; }
+#winview.no-cam video { display: none; }
+#winview canvas { cursor: grab; }
+#winview .wv-info { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 16px; right: 64px; font-size: 13px; line-height: 1.45; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 12px rgba(0,0,0,.6); pointer-events: none; }
+#winview .wv-info .wv-head { margin-top: 4px; font-weight: 600; color: #ffd28a; }
+#winview .wv-warn { text-align: center; font-size: 14px; text-shadow: 0 1px 3px rgba(0,0,0,.95); pointer-events: none; }
+#winview .wv-warn b { display: block; font-size: 22px; letter-spacing: .02em; color: #ff6a3d; margin-bottom: 4px; }
+#winview .wv-warn.alert b { animation: wv-blink .9s steps(2) infinite; }
+@keyframes wv-blink { 50% { opacity: .35; } }
+#winview .wv-hint { position: absolute; top: 150px; left: 16px; right: 16px; text-align: center; font-size: 13px; opacity: .8; text-shadow: 0 1px 3px #000; pointer-events: none; }
+#winview .wv-close { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 12px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(0,0,0,.35); color: #fff; font-size: 18px; cursor: pointer; }
+#winview .wv-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0,0,0,.65)); display: flex; flex-direction: column; gap: 8px; }
+#winview .wv-row { display: flex; align-items: center; gap: 8px; }
+#winview .wv-row input[type=range] { flex: 1; min-width: 0; accent-color: #f97316; }
+#winview .wv-b, #winview .wv-seg button, #winview .wv-sel { height: 34px; min-width: 34px; padding: 0 10px; border: 0; border-radius: 17px; background: rgba(255,255,255,.14); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+#winview .wv-sel { appearance: none; padding: 0 14px; width: auto; flex: 0 0 auto; margin: 0; }
+#winview .wv-sel option { color: #000; }
+#winview .wv-seg { display: flex; gap: 2px; }
+#winview .wv-seg button.on { background: #f97316; }
+#winview .wv-time { font-family: "IBM Plex Mono", monospace; font-size: 13px; min-width: 64px; }
+#winview .wv-row:last-child { flex-wrap: wrap; }
+#winview .wv-row:last-child .wv-b:first-of-type { margin-left: auto; }
+.sp-win { margin: 6px 0 2px; width: 100%; }
