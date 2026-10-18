@@ -403,6 +403,33 @@ section('Rotura de presa: cálculo hidráulico');
   truthy('fotos de la inundación en el tiempo', r.snaps.length >= 5 && r.snaps.every((s, i, a) => i === 0 || s.tS >= a[i - 1].tS));
 }
 
+section('Defensa antimisiles');
+{
+  const { engage } = await import('../src/data/defense');
+  const { planFlight: pf } = await import('../src/data/flight');
+  const { LAUNCH_SITES: LS } = await import('../src/data/launch');
+  const kp = LS.find((x) => x.id === 'kp-sunan')!, ru = LS.find((x) => x.id === 'ru-kozelsk')!;
+  const nyc = { lat: 40.71, lon: -74.0 };
+  // Corea del Norte contra Nueva York: GMD con salva de 4 (≈ 96 %); con todo aciertos, derribada
+  const F1 = pf('ballistic', kp, [nyc]);
+  const r1 = engage(F1, kp, [nyc], () => 0);
+  truthy('GMD protege Nueva York de un ICBM norcoreano', r1.region === 'Estados Unidos y Canadá' && r1.perTarget[0].p > 0.9 && r1.perTarget[0].killed, `p = ${r1.perTarget[0].p.toFixed(2)}`);
+  truthy('la ojiva derribada acaba en el punto de intercepción', !!F1.legs[0].killed && F1.legs[0].f1 < 0.8 && r1.attempts[0].fLaunch < r1.attempts[0].fHit);
+  // Rusia: señuelos (la mitad de eficacia) y saturación: 44 GBI dan para 11 ojivas
+  const many = Array.from({ length: 20 }, (_, i) => ({ lat: 35 + i * 0.6, lon: -100 + i * 1.5 }));
+  const F2 = pf('ballistic', ru, many);
+  const r2 = engage(F2, ru, many, () => 0.99);
+  const g = r2.systems.find((x) => x.name.startsWith('GMD'))!;
+  truthy('con 20 ojivas el GMD se satura (11 salvas de 4)', g.shots === 44 && g.saturated === 9, `${g.shots} / ${g.saturated}`);
+  truthy('con señuelos la probabilidad baja', r2.decoys && r2.perTarget[0].p < r1.perTarget[0].p, r2.perTarget[0].p.toFixed(2));
+  // el planeador hipersónico burla el curso medio; sin defensa en la zona, todo pasa
+  const F3 = pf('hgv', ru, [nyc]);
+  truthy('el planeador hipersónico pasa el GMD', engage(F3, ru, [nyc], () => 0).perTarget[0].p === 0);
+  const lagos = { lat: 6.5, lon: 3.4 };
+  const r4 = engage(pf('ballistic', ru, [lagos]), ru, [lagos], () => 0);
+  truthy('sin defensa en la zona, ninguna intercepción', r4.region === null && r4.intercepted === 0 && r4.pThrough === 1);
+}
+
 console.log(`\n${pass} correctas, ${fail} fallidas`);
 if (fail) { console.log('\nFallos:\n' + failures.map((f) => '  · ' + f).join('\n')); (globalThis as unknown as { process: { exit(c: number): void } }).process.exit(1); }
 

@@ -1,3 +1,4 @@
+import { LAYER_NAMES, type DefenseResult } from '../data/defense';
 import { h, ICONS, fmtNum, setRangeFill } from './dom';
 import { fmtDist, fmtArea, fmtEnergy } from '../physics/effects';
 import { buildStats, type StatSection } from './stats';
@@ -73,6 +74,55 @@ export class ResultsPanel {
     const row = h('div', { class: 'seg heat-row' });
     for (const [k, l] of opts) row.append(h('button', { type: 'button', class: this.heat === k ? 'on' : '', onclick: () => this.ev.onHeat!(this.heat === k ? 'off' : k) }, l));
     body.append(h('div', { class: 'heat-blk' }, h('div', { class: 'heat-h' }, 'Mapa de calor'), row));
+  }
+
+  /** defensa antimisiles del ataque en curso */
+  private abm: DefenseResult | null = null;
+  setAbm(d: DefenseResult | null) { this.abm = d; }
+  private abmBlock(body: HTMLElement) {
+    const d = this.abm;
+    if (!d) return;
+    body.append(h('div', { class: 'res-h3' }, 'Defensa antimisiles', d.region ? ' · ' : '', d.region ? tr(d.region) : ''));
+    if (!d.region) { body.append(h('div', { class: 'sec-note' }, 'No hay defensa antimisiles en la zona del objetivo: las ojivas llegan sin oposición.')); return; }
+    const kv = h('div', { class: 'kv' });
+    const pct = (x: number) => `${Math.round(x * 100)} %`;
+    kv.append(h('span', { class: 'k' }, 'Ojivas derribadas'), h('span', { class: 'strong' }, `${d.intercepted} / ${d.total}`));
+    kv.append(h('span', { class: 'k' }, 'Probabilidad de que pase cada ojiva'), h('span', {}, pct(d.pThrough)));
+    body.append(kv);
+    body.append(h('div', { class: 'res-h3' }, 'Capas de la defensa'));
+    const ks = h('div', { class: 'kv' });
+    for (const S of d.systems) {
+      const v = S.pk <= 0 ? 'No puede interceptar este tipo de vuelo' : S.shots ? (S.kills === 1 ? `${S.shots} interceptores · 1 derribo` : `${S.shots} interceptores · ${S.kills} derribos`) : S.saturated ? 'Sin interceptores: saturada' : 'No llegó a disparar';
+      ks.append(h('span', { class: 'k' }, S.name, h('small', {}, tr(LAYER_NAMES[S.layer]), S.sites.length ? ' · ' : '', S.sites.join(', '))), h('span', {}, v));
+    }
+    body.append(ks);
+    for (const S of d.systems) body.append(h('div', { class: 'sec-note' }, h('b', {}, S.name), ': ', S.note));
+    if (d.systems.some((S) => S.saturated)) body.append(h('div', { class: 'sec-note' }, 'Cada capa dispara varios interceptores contra cada ojiva y tiene un número limitado: con muchas ojivas se queda sin munición y las demás pasan sin oposición.'));
+    if (d.decoys) body.append(h('div', { class: 'sec-note' }, 'El atacante lleva señuelos y ayudas a la penetración: fuera de la atmósfera, la defensa acierta la mitad de las veces que en las pruebas.'));
+    body.append(h('div', { class: 'sec-note' }, 'Probabilidades de divulgación a partir de las pruebas publicadas (MDA, GAO, CSIS). Los planeadores hipersónicos vuelan demasiado bajo para las capas exteriores y maniobran; los misiles de crucero y los aviones sólo los frena la defensa aérea. Cada simulación es una tirada distinta.'));
+  }
+
+  /** todas las ojivas derribadas: no hay detonación */
+  renderIntercepted(name: string, place: string, onSee: () => void) {
+    const el = this.el, d = this.abm!;
+    el.innerHTML = '';
+    el.classList.remove('hidden', 'min');
+    const head = h('div', { class: 'res-head' },
+      h('div', { class: 'ttl' },
+        h('div', { class: 'kicker' }, 'Ataque interceptado'),
+        h('h2', {}, name),
+        h('div', { class: 'sub' }, place),
+      ),
+    );
+    const counters = h('div', { class: 'counters' },
+      h('div', { class: 'cnt' }, h('div', { class: 'v' }, `${d.intercepted} / ${d.total}`), h('div', { class: 'l' }, 'Ojivas derribadas')),
+      h('div', { class: 'cnt' }, h('div', { class: 'v' }, '0'), h('div', { class: 'l' }, 'Fallecidos')),
+    );
+    const body = h('div', { class: 'res-body' });
+    body.append(h('div', { class: 'sec-note' }, 'Ninguna ojiva llegó a su objetivo: los interceptores las destruyen por choque directo, sin explosión nuclear. Con otra tirada, o con más ojivas, el resultado podría ser muy distinto.'));
+    body.append(h('button', { type: 'button', class: 'btn-line cmp-split', onclick: onSee }, 'Ver qué habría pasado si llegan'));
+    this.abmBlock(body);
+    el.append(head, counters, body);
   }
 
   /** hospitales y sanidad (llegan después, de OpenStreetMap) */
@@ -257,16 +307,16 @@ export class ResultsPanel {
     const stats = buildStats(fx);
     const tabsBar = h('div', { class: 'res-tabs' });
     const body = h('div', { class: 'res-body' });
-    const avail = TABS.filter(([t]) => t === 'sum' || t === 'eff' || (t === 'after' && fx.scenario.kind === 'nuclear' && !fx.chemical) || (t === 'def' && fx.scenario.kind === 'asteroid') || (t === 'rad' && fx.fallout.length > 0 && !fx.volcano) || stats.some((s) => s.tab === t));
+    const avail = TABS.filter(([t]) => t === 'sum' || t === 'eff' || (t === 'after' && fx.scenario.kind === 'nuclear' && !fx.chemical) || (t === 'def' && (fx.scenario.kind === 'asteroid' || !!this.abm)) || (t === 'rad' && fx.fallout.length > 0 && !fx.volcano) || stats.some((s) => s.tab === t));
     if (!avail.some(([t]) => t === this.tab)) this.tab = 'sum';
     const show = (t: Tab) => {
       this.tab = t;
       tabsBar.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
       body.innerHTML = '';
       body.scrollTop = 0;
-      if (t === 'sum') { if (multi) this.multiBlock(body, multi); this.summary(body, fx, hiroTxt); }
+      if (t === 'sum') { if (this.abm?.intercepted) body.append(h('div', { class: 'sec-note' }, `La defensa antimisiles derribó ${this.abm.intercepted} de ${this.abm.total} ojivas: los efectos son los de las que llegaron.`)); if (multi) this.multiBlock(body, multi); this.summary(body, fx, hiroTxt); }
       else if (t === 'eff') this.effects(body, fx);
-      else if (t === 'def') this.defense(body, fx);
+      else if (t === 'def') { if (fx.scenario.kind === 'asteroid') this.defense(body, fx); else this.abmBlock(body); }
       else if (t === 'after') this.after(body, fx);
       else {
         if (t === 'cmp' && this.ev.onCompare && (sc.kind === 'nuclear' || sc.kind === 'asteroid')) body.append(h('button', { type: 'button', class: 'btn-line cmp-split', onclick: () => this.ev.onCompare!() }, 'Comparar con otro escenario en el mapa partido'));

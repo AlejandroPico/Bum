@@ -38,6 +38,8 @@ export interface FlightLeg {
   f0: number; f1: number;
   /** índice del objetivo (−1: el «bus» de un MIRV) */
   target: number;
+  /** derribada por la defensa antimisiles (el tramo acaba en el punto de intercepción) */
+  killed?: boolean;
 }
 export interface FlightPlan {
   profile: FlightProfile;

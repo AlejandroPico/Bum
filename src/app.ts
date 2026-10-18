@@ -33,6 +33,7 @@ import { nearestCity, haversineKm, setRealPopulation } from './data/cities';
 import { loadRealPopulation } from './data/worldpop';
 import { fetchInfrastructure, fetchBuildingCounts, fetchShelters, fetchHospitals, SHELTER_KINDS, type Shelter } from './data/osm';
 import { assessHealth, type HealthReport } from './physics/health';
+import { engage, type DefenseResult } from './data/defense';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
 import { WarLayer } from './map/war-layer';
@@ -134,6 +135,10 @@ interface Run {
   extras: { fx: Effects; plan: FxPlan; domes: Domes; fires: Fires; lat: number; lon: number; delay: number }[];
   /** final de la simulación (el de la detonación más larga, o la cronología propia del escenario) */
   tEnd?: number;
+  /** defensa antimisiles: resultado, intercepciones ya avisadas y si se derribaron todas las ojivas */
+  defense?: DefenseResult | null;
+  defNext?: number;
+  allDown?: boolean;
 }
 let run: Run | null = null;
 /** módulo 3D de una detonación que estalla `delay` segundos después de la principal (ojivas MIRV) */
@@ -919,7 +924,7 @@ function clearFlightUI() {
 /** plano de persecución del misil en la fracción f del vuelo (detrás de la cabeza, mirando hacia delante) */
 function chaseCam(plan: FlightPlan, f: number): Cam | null {
   const bus = plan.legs.find((L) => L.target < 0);
-  const L = bus && f < bus.f1 ? bus : plan.legs.find((x) => x.target === 0) ?? plan.legs[0];
+  const L = bus && f < bus.f1 ? bus : plan.legs.find((x) => x.target >= 0 && !x.killed) ?? plan.legs.find((x) => x.target === 0) ?? plan.legs[0];
   const a = legAt(L, Math.max(L.f0, f)), b = legAt(L, Math.min(L.f1, Math.max(L.f0, f) + 0.012));
   if (!a || !b) return null;
   const r = Math.PI / 180;
@@ -956,8 +961,19 @@ function setFlightLabels(on: boolean) {
 /** dibuja el vuelo en el instante t (negativo hasta la detonación) */
 function drawFlight(R: Run, t: number, now: number) {
   const F = R.flight!;
-  const f = Math.max(0, Math.min(1, (t - R.tStart) / F.flightS));
+  const fRaw = (t - R.tStart) / F.flightS;
+  const f = Math.max(0, Math.min(1, fRaw));
   setFlightLabels(t < 0);
+  // avisos de la defensa antimisiles al pasar por cada intercepción (al volver atrás, se recuentan)
+  const A = R.defense?.attempts ?? [];
+  if (A.length) {
+    const done = A.filter((a) => a.fHit <= fRaw).length;
+    if (done < (R.defNext ?? 0)) R.defNext = done;
+    while ((R.defNext ?? 0) < done) {
+      const a = A[R.defNext!]; R.defNext!++;
+      if (done - R.defNext! < 2) toast(`${tr(a.system)}: ${tr(a.hit ? 'ojiva derribada' : 'el interceptor falla')}`, 2600);
+    }
+  }
   if (t >= 0) {
     if (flightUI.labelEl) { clearFlightUI(); setMissilePath(F.plan, 1); }
     return;
@@ -969,7 +985,7 @@ function drawFlight(R: Run, t: number, now: number) {
   }
   // la cabeza que va delante: posición en pantalla (3D) y su altura
   const bus = F.plan.legs.find((L) => L.target < 0);
-  const L = bus && f < bus.f1 ? bus : F.plan.legs.find((x) => x.target === 0) ?? F.plan.legs[0];
+  const L = bus && f < bus.f1 ? bus : F.plan.legs.find((x) => x.target >= 0 && !x.killed) ?? F.plan.legs.find((x) => x.target === 0) ?? F.plan.legs[0];
   const a = legAt(L, f);
   const sp = missileFx?.lead ? fxLayer.project(missileFx.lead) : null;
   if (!a || !sp) { flightUI.labelEl.style.display = 'none'; return; }
@@ -1118,7 +1134,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.13';
+const APP_VERSION = '1.14';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1541,6 +1557,8 @@ async function prepScenario(sc0: Scenario, lat: number, lon: number): Promise<Sc
   return sc;
 }
 
+/** «Ver qué habría pasado»: la próxima simulación no pasa por la defensa antimisiles */
+let skipDefense = false;
 async function detonate() {
   if (!puffTex) { // aún cargando el mapa o el motor 3D: se lanza al terminar
     const go = () => setTimeout(() => detonate(), 300);
@@ -1561,7 +1579,7 @@ async function detonate() {
     await new Promise((r) => setTimeout(r, 30));
     const list: Strike[] = multi ? state.multi.strikes.slice(0, 24) : [{ lat: state.target.lat, lon: state.target.lon, label: state.target.label, sc: sidebar.currentScenario(), azimuth: state.ast.azimuth }];
     const env = { ...state.env };
-    const comp: { st: Strike; fx: Effects }[] = [];
+    let comp: { st: Strike; fx: Effects }[] = [];
     for (const st of list) {
       const sc = await prepScenario(st.sc, st.lat, st.lon);
       comp.push({ st, fx: computeEffects(sc, env, st.lat, st.lon) });
@@ -1578,19 +1596,33 @@ async function detonate() {
       if (popSource) for (const c of comp) { c.fx = computeEffects(c.fx.scenario, env, c.st.lat, c.st.lon); c.fx.popSource = popSource; }
       prep.step(STEP_POP, popSource ? 'ok' : 'skip', popSource ? '' : 'no disponible: modelo urbano aproximado');
     }
-    const { lat, lon } = list[0];
+    // vuelo desde la base de lanzamiento (con varios objetivos, ojivas múltiples o varios misiles)
+    const sc0 = comp[0].fx.scenario;
+    const site = sc0.kind === 'nuclear' && comp.every((c) => c.fx.scenario.kind === 'nuclear') ? LAUNCH_SITES.find((s) => s.id === state.launch) : undefined;
+    let flight: FlightPlan | null = null;
+    let defense: DefenseResult | null = null;
+    const nTargets = comp.length;
+    if (site) {
+      const prof: FlightProfile = state.flightProfile === 'auto' ? profileFor(sc0.name) : state.flightProfile;
+      flight = planFlight(prof, site, comp.map((c) => ({ lat: c.st.lat, lon: c.st.lon })));
+      // defensa antimisiles: cada ojiva se enfrenta a las capas de la zona; las derribadas no estallan
+      if (state.defense && !skipDefense) defense = engage(flight, site, comp.map((c) => ({ lat: c.st.lat, lon: c.st.lon })));
+    }
+    skipDefense = false;
+    const allDown = !!defense && defense.intercepted === comp.length;
+    const liveIdx = comp.map((_, i) => i).filter((i) => allDown || !defense?.perTarget[i].killed);
+    if (allDown) liveIdx.length = 1;
+    // el reloj se cuenta desde la llegada de la primera ojiva que estalla
+    const d0 = flight && !allDown ? Math.min(...liveIdx.map((i) => flight!.delays[i])) : 0;
+    const delayOf = liveIdx.map((i) => (flight ? flight.delays[i] - d0 : 0));
+    comp = liveIdx.map((i) => comp[i]);
+    const { lat, lon } = comp[0].st;
     const fx = comp[0].fx;
     const sc = fx.scenario;
     clearRun();
     syncStrikeMarkers();
-    // vuelo desde la base de lanzamiento (con varios objetivos, ojivas múltiples o varios misiles)
-    const site = sc.kind === 'nuclear' && comp.every((c) => c.fx.scenario.kind === 'nuclear') ? LAUNCH_SITES.find((s) => s.id === state.launch) : undefined;
-    let flight: FlightPlan | null = null;
-    if (site) {
-      const prof: FlightProfile = state.flightProfile === 'auto' ? profileFor(sc.name) : state.flightProfile;
-      flight = planFlight(prof, site, comp.map((c) => ({ lat: c.st.lat, lon: c.st.lon })));
-      fx.missile = { site: site.name, country: site.country, rangeKm: flight.rangeKm, flightMin: flight.flightMin, apogeeKm: flight.apogeeKm, reentryKms: flight.reentryKms, warningMin: flight.warningMin, boostMin: flight.boostMin, profile: flight.profile, profileName: flight.name, cruiseKm: flight.cruiseKm, mirv: flight.mirv, targets: comp.length };
-    }
+    if (site && flight) fx.missile = { site: site.name, country: site.country, rangeKm: flight.rangeKm, flightMin: flight.flightMin, apogeeKm: flight.apogeeKm, reentryKms: flight.reentryKms, warningMin: flight.warningMin, boostMin: flight.boostMin, profile: flight.profile, profileName: flight.name, cruiseKm: flight.cruiseKm, mirv: flight.mirv, targets: nTargets };
+    results.setAbm(defense);
     const plan = new FxPlan(fx, env);
     if (sc.kind === 'asteroid') plan.entryAzimuth = list[0].azimuth ?? state.ast.azimuth;
 
@@ -1714,7 +1746,8 @@ async function detonate() {
         if (FX.Rubble.wanted(pl)) mods.push(new FX.Rubble(pl, primary ? q : q * 0.5));
         mods.push(new FX.Fireball(pl));
       }
-      for (const m of mods) { fxLayer.add(wrap(m)); m.object.position.set(e, el, -n); m.object.updateMatrixWorld(); }
+      // todas las ojivas derribadas: no hay explosión que dibujar
+      if (!allDown) for (const m of mods) { fxLayer.add(wrap(m)); m.object.position.set(e, el, -n); m.object.updateMatrixWorld(); }
       return { domes, fires, swap };
     };
     const main = build(fx, plan, lat, lon, true);
@@ -1723,7 +1756,7 @@ async function detonate() {
     for (let k = 1; k < comp.length; k++) {
       const pk = new FxPlan(comp[k].fx, env);
       // las ojivas de un mismo misil (MIRV) llegan unos segundos después unas de otras
-      const delay = flight?.delays[k] ?? 0;
+      const delay = delayOf[k];
       const b = build(comp[k].fx, pk, comp[k].st.lat, comp[k].st.lon, false, delay);
       if (b.swap) swaps.push(b.swap);
       extras.push({ fx: comp[k].fx, plan: pk, domes: b.domes, fires: b.fires, lat: comp[k].st.lat, lon: comp[k].st.lon, delay });
@@ -1731,7 +1764,7 @@ async function detonate() {
     // trayectoria del arma en 3D
     missileFx = null;
     if (flight) {
-      missileFx = new FX.Missile(flight, { ...fxLayer.origin }, -flight.flightMin * 60, flight.flightMin * 60, map.getCanvas());
+      missileFx = new FX.Missile(flight, { ...fxLayer.origin }, -(flight.flightMin * 60 + d0), flight.flightMin * 60, map.getCanvas(), defense?.attempts ?? []);
       missileFx.rebuild(state.view.globe);
       fxLayer.add(missileFx);
       fxLayer.extentM = Math.max(fxLayer.extentM, missileFx.extentM);
@@ -1743,12 +1776,12 @@ async function detonate() {
 
     results.hidden.clear();
     overlays.setHidden(new Set());
-    overlays.set(fx, lat, lon, fx.windKmh);
+    if (allDown) overlays.set(null); else overlays.set(fx, lat, lon, fx.windKmh);
     overlays.extras = extras.map((x) => ({ fx: x.fx, lat: x.lat, lon: x.lon, delay: x.delay, reveal: (t: number) => revealFor(x.plan, t), gateT: x.plan.fbDone, falloutDelayS: Math.max(x.plan.fbDone, x.plan.tau) }));
     overlays.gateT = plan.fbDone;
     overlays.falloutDelayS = Math.max(plan.fbDone, plan.tau);
     overlays.setReveal(0, 0);
-    const place = list[0].label || nearestCity(lat, lon).city.name;
+    const place = comp[0].st.label || nearestCity(lat, lon).city.name;
     let multiInfo: MultiInfo | undefined;
     if (comp.length > 1) {
       const tot = combinedCasualties(comp.map((x) => ({ fx: x.fx, lat: x.st.lat, lon: x.st.lon })));
@@ -1756,9 +1789,10 @@ async function detonate() {
     }
     results.setInfra(null);
     results.setBuildings(null);
-    results.render(fx, `${place}`, multiInfo);
+    if (allDown) results.renderIntercepted(sc.name || fmtEnergy(fx.energyKt), place, () => { skipDefense = true; void detonate(); });
+    else results.render(fx, `${place}`, multiInfo);
     // infraestructuras reales por zona (OpenStreetMap), en segundo plano
-    if (!fx.release && !fx.volcano) {
+    if (!fx.release && !fx.volcano && !allDown) {
       const zs = ['psi20', 'psi5', 'psi1', 'burn3'].map((id) => fx.rings.find((r) => r.id === id)).filter((r): r is NonNullable<typeof r> => !!r && !r.global && r.radiusM > 50)
         .sort((a, b) => a.radiusM - b.radiusM).map((r) => ({ id: r.id, label: `${({ psi20: '20 psi', psi5: '5 psi', psi1: '1 psi', burn3: 'Quemad. 3.º' } as Record<string, string>)[r.id]}\n${fmtDistShort(r.radiusM)}`, radiusM: r.radiusM }));
       if (zs.length) {
@@ -1811,14 +1845,15 @@ async function detonate() {
     // con vuelo del misil, el reloj empieza en el lanzamiento (unos 12 s reales a velocidad ×1)
     const flightS = flight ? flight.flightMin * 60 : 0;
     // guerra: el reloj empieza en el primer lanzamiento; el intercambio dura unos 50 s reales a ×1
-    const tStart = flight ? -flightS : plan.isAsteroid ? -plan.entryDuration : fx.war ? -(warEnd + 90) : 0;
+    const tStart = flight ? -(flightS + d0) : plan.isAsteroid ? -plan.entryDuration : fx.war ? -(warEnd + 90) : 0;
     const preRate = flight ? flightS / 12 : fx.war ? (warEnd + 90) / 50 : 0.6;
     run = {
       fx, plan, lat, lon, t: tStart, tStart, preRate, flight: flight ? { plan: flight, flightS, camStart, camDone: false, chase: state.view.cinematic } : null, playing: true, speed: 1, lastReal: performance.now(),
       boomDone: false, flashDone: false, obsArrival: plan.shockTime(Math.hypot(dObs, plan.h)), obsPsi: fx.pressurePsiAt(dObs),
       domes: main.domes, beats: 0, userCam: !state.view.cinematic || comp.length > 1 || !!fx.dam || !!fx.solar || !!fx.war, lastOverlay: 0, skyFlash: false, rate: 1, orbit: null, flashReal: -1, wideDone: false,
-      extras, swaps, slowSince: 0,
+      extras, swaps, slowSince: 0, defense, defNext: 0, allDown,
     };
+    if (allDown) run.userCam = true;
     // el vuelo se encuadra entero con los paneles ya colocados (los márgenes dependen de la simulación)
     if (flightBounds) {
       updatePadding();
@@ -1837,6 +1872,7 @@ async function detonate() {
       ev.push({ t: tStart, label: 'Lanzamiento' });
       if (flight.mirv) ev.push({ t: tStart + flightS * flight.legs[0].f1, label: 'Separación' });
       ev.push({ t: -Math.min(flightS * 0.12, 120), label: flight.profile === 'ballistic' ? 'Reentrada' : 'Llegada' });
+      if (defense?.attempts.length) ev.push({ t: tStart + flightS * defense.attempts[0].fHit, label: 'Intercepción' });
     }
     let tEnd = Math.max(plan.tEnd, ...extras.map((x) => x.plan.tEnd + x.delay));
     if (fx.solar) {
@@ -1851,10 +1887,15 @@ async function detonate() {
       ev.push({ t: tStart, label: 'Primer ataque' }, { t: tStart + 420, label: 'Respuesta' }, { t: tStart + 1200, label: 'Segunda oleada' }, { t: 6 * 3600, label: 'Incendios' }, { t: 7 * 86400, label: 'Hollín' });
       tEnd = 30 * 86400;
     }
+    if (allDown && flight) {
+      // sin detonación: la simulación acaba poco después de la última intercepción
+      ev.splice(0, ev.length, ...ev.filter((e) => e.t < 0));
+      tEnd = Math.max(20, tStart + flightS * Math.max(...defense!.attempts.map((a) => a.fHit)) + 60);
+    }
     run.tEnd = tEnd;
     timeline.offset = fx.war ? -tStart : 0;
     timeline.configure(tStart, tEnd, ev, flight ? 0.3 : fx.war ? 0.55 : 0.12, fx.solar ? 1200 : fx.war ? 3600 : 0.02);
-    timeline.setTour(Tour.available(fx));
+    timeline.setTour(!allDown && Tour.available(fx));
     document.body.classList.add('detonated');
     syncStrikeMarkers();
     markerEl.style.display = 'none';
@@ -1864,11 +1905,11 @@ async function detonate() {
     writeHash();
     fxLayer.animating = true;
     map.triggerRepaint();
-    startTsunami(fx, lat, lon);
+    if (!allDown) startTsunami(fx, lat, lon);
     if (fx.dam) startDamSim(fx, lat, lon); else { damWorker?.terminate(); damWorker = null; overlays.flood = null; }
-    if (state.view.heat !== 'off') void refreshHeat();
+    if (state.view.heat !== 'off' && !allDown) void refreshHeat();
     // «Empezar con el recorrido»: el recorrido cinematográfico arranca solo, desde el principio
-    if (state.view.autoTour && Tour.available(fx)) setTimeout(() => { if (run && !tour.active) tour.start(); }, 50);
+    if (state.view.autoTour && !allDown && Tour.available(fx)) setTimeout(() => { if (run && !tour.active) tour.start(); }, 50);
   } finally {
     busy = false;
     prep.hide();
@@ -2020,7 +2061,7 @@ function onFxFrame(ctx: FrameCtx) {
   ctx.night = n;
   // la bola de fuego ilumina el entorno
   // guerra, tormenta solar y presa: no hay una bola de fuego en el punto central
-  const quiet = !!(R.fx.war || R.fx.solar || R.fx.dam);
+  const quiet = !!(R.fx.war || R.fx.solar || R.fx.dam || R.allDown);
   const heat = quiet ? 0 : P.heat(t);
   if (heat > 0.02) {
     const k = Math.min(1.5, heat * heat);

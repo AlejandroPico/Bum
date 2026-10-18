@@ -5,6 +5,8 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import type { FrameCtx, FxModule } from './types';
 import { legAt, type FlightPlan } from '../data/flight';
+import { greatCirclePath } from '../data/launch';
+import type { Attempt } from '../data/defense';
 
 /**
  * Vuelo del arma en 3D: el arco real por el aire (o por el espacio, a cientos de km de altura), con
@@ -19,15 +21,15 @@ import { legAt, type FlightPlan } from '../data/flight';
 const R_EARTH = 6371008.8;
 const RAD = Math.PI / 180;
 
-function glowTexture() {
+function glowTexture(white = false) {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d')!;
   const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   gr.addColorStop(0, 'rgba(255,255,255,1)');
-  gr.addColorStop(0.18, 'rgba(255,240,200,0.95)');
-  gr.addColorStop(0.45, 'rgba(255,150,40,0.45)');
-  gr.addColorStop(1, 'rgba(255,90,0,0)');
+  gr.addColorStop(0.18, white ? 'rgba(255,255,255,0.9)' : 'rgba(255,240,200,0.95)');
+  gr.addColorStop(0.45, white ? 'rgba(255,255,255,0.35)' : 'rgba(255,150,40,0.45)');
+  gr.addColorStop(1, white ? 'rgba(255,255,255,0)' : 'rgba(255,90,0,0)');
   g.fillStyle = gr;
   g.fillRect(0, 0, 64, 64);
   const t = new THREE.CanvasTexture(c);
@@ -46,17 +48,33 @@ export class Missile implements FxModule {
   private globe: boolean | null = null;
   private planned: Line2[] = [];
   private flown: Line2[] = [];
-  private flownGeo: LineGeometry[] = [];
   private heads: THREE.Mesh[] = [];
   private mats: LineMaterial[] = [];
   private tex = glowTexture();
+  private texW = glowTexture(true);
+  /** interceptores de la defensa antimisiles */
+  private icpt: { a: Attempt; line: Line2; mat: LineMaterial; head: THREE.Mesh; flash: THREE.Mesh; pts: THREE.Vector3[] }[] = [];
   /** posición (local) de la cabeza que va delante, para colocar el rótulo */
   lead: THREE.Vector3 | null = null;
   /** distancia máxima (m) de la trayectoria al origen, para el plano lejano */
   extentM = 0;
 
-  constructor(plan: FlightPlan, origin: { lng: number; lat: number; alt: number }, tStart: number, flightS: number, canvas: HTMLCanvasElement) {
+  constructor(plan: FlightPlan, origin: { lng: number; lat: number; alt: number }, tStart: number, flightS: number, canvas: HTMLCanvasElement, intercepts: Attempt[] = []) {
     this.plan = plan; this.origin = origin; this.tStart = tStart; this.flightS = flightS; this.canvas = canvas;
+    for (const a of intercepts) {
+      const mat = new LineMaterial({ color: 0x67e8f9, linewidth: 2, transparent: true, opacity: 0.9, depthWrite: false });
+      const line = new Line2(new LineGeometry(), mat);
+      line.frustumCulled = false; line.renderOrder = 5;
+      const mk = () => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.texW, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        m.matrixAutoUpdate = false; m.frustumCulled = false; m.renderOrder = 7;
+        return m;
+      };
+      const head = mk(), flash = mk();
+      (head.material as THREE.MeshBasicMaterial).color.setRGB(0.55, 0.95, 1);
+      this.icpt.push({ a, line, mat, head, flash, pts: [] });
+      this.object.add(line, head, flash);
+    }
     for (const _ of plan.legs) {
       const pm = new LineMaterial({ color: 0xffb020, linewidth: 1.2, transparent: true, opacity: 0.32, depthWrite: false });
       const fm = new LineMaterial({ color: 0xffc04a, linewidth: 2.6, transparent: true, opacity: 0.95, depthWrite: false });
@@ -64,7 +82,7 @@ export class Missile implements FxModule {
       const pl = new Line2(new LineGeometry(), pm), fl = new Line2(new LineGeometry(), fm);
       pl.frustumCulled = fl.frustumCulled = false;
       pl.renderOrder = fl.renderOrder = 5;
-      this.planned.push(pl); this.flown.push(fl); this.flownGeo.push(fl.geometry as LineGeometry);
+      this.planned.push(pl); this.flown.push(fl);
       const head = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
       head.matrixAutoUpdate = false; head.frustumCulled = false; head.renderOrder = 6;
       this.heads.push(head);
@@ -107,6 +125,31 @@ export class Missile implements FxModule {
       (this.planned[k].geometry as LineGeometry).setPositions(arr);
       this.planned[k].computeLineDistances();
     });
+    // interceptor: de su base al punto de encuentro, subiendo deprisa y después casi en horizontal
+    for (const I of this.icpt) {
+      const { a } = I;
+      const n = 48;
+      const g = greatCirclePath(a.site[0], a.site[1], a.pt[1], a.pt[0], n);
+      I.pts = g.map(([lo, la], i) => { const u = i / n; return this.local(lo, la, a.altKm * 1000 * (1 - (1 - u) ** 2.2), globe); });
+    }
+  }
+
+  /** cambia los puntos de una línea; con otro número de puntos se crea una geometría nueva (si no, el número de tramos dibujados se queda en el primero) */
+  private setLine(l: Line2, arr: number[]) {
+    const g = l.geometry as LineGeometry;
+    if ((g.userData.n ?? -1) !== arr.length) {
+      g.dispose();
+      l.geometry = new LineGeometry();
+      (l.geometry as LineGeometry).userData.n = arr.length;
+    }
+    (l.geometry as LineGeometry).setPositions(arr);
+  }
+
+  /** coloca un brillo orientado a la cámara */
+  private billboard(m: THREE.Mesh, p: THREE.Vector3, sizeM: number, ctx: FrameCtx) {
+    const r = ctx.right.clone().multiplyScalar(sizeM), up = ctx.up.clone().multiplyScalar(sizeM), n = new THREE.Vector3().crossVectors(r, up).normalize();
+    m.matrix.makeBasis(r, up, n).setPosition(p);
+    m.matrixWorldNeedsUpdate = true;
   }
 
   update(ctx: FrameCtx) {
@@ -120,7 +163,8 @@ export class Missile implements FxModule {
     const f = (t - this.tStart) / this.flightS;
     const endF = Math.max(...this.plan.legs.map((L) => L.f1));
     // después de la última detonación, las estelas se apagan poco a poco
-    const fade = t <= (endF - 1) * this.flightS ? 1 : Math.max(0, 1 - (t - (endF - 1) * this.flightS) / 90);
+    const fEnd = Math.max(endF, ...this.icpt.map((I) => I.a.fHit + 0.06));
+    const fade = f <= fEnd ? 1 : Math.max(0, 1 - ((f - fEnd) * this.flightS) / 90);
     this.object.visible = fade > 0 && f >= 0;
     if (!this.object.visible) { this.lead = null; return; }
     this.lead = null;
@@ -141,7 +185,7 @@ export class Missile implements FxModule {
       for (let j = 0; j <= i; j++) arr.push(P[j].x, P[j].y, P[j].z);
       arr.push(hp.x, hp.y, hp.z);
       if (arr.length < 6) arr.push(hp.x, hp.y, hp.z);
-      this.flownGeo[k].setPositions(arr);
+      this.setLine(this.flown[k], arr);
       this.flown[k].visible = true;
       // cabeza: llama del cohete al principio, brillo de reentrada al final; el «bus» desaparece al soltar las ojivas
       const busDone = L.target < 0 && f >= L.f1;
@@ -158,6 +202,35 @@ export class Missile implements FxModule {
       (head.material as THREE.MeshBasicMaterial).color.setRGB(boost ? 1 : reentry ? 1 : 1, boost ? 0.75 : reentry ? 0.62 : 0.88, boost ? 0.45 : reentry ? 0.3 : 0.6);
       if (!this.lead && (L.target <= 0)) this.lead = hp;
     });
+    // interceptores: estela cian, cabeza brillante y destello al llegar (grande si acierta)
+    for (const I of this.icpt) {
+      const { a } = I;
+      const hm = I.head.material as THREE.MeshBasicMaterial, fm = I.flash.material as THREE.MeshBasicMaterial;
+      I.mat.resolution.set(W, H);
+      if (I.mat.depthTest !== dt) { I.mat.depthTest = dt; I.mat.needsUpdate = true; }
+      for (const m of [hm, fm]) if (m.depthTest !== dt) { m.depthTest = dt; m.needsUpdate = true; }
+      if (f < a.fLaunch || !I.pts.length) { I.line.visible = I.head.visible = I.flash.visible = false; continue; }
+      const u = Math.min(1, (f - a.fLaunch) / Math.max(1e-6, a.fHit - a.fLaunch));
+      const P = I.pts, x = u * (P.length - 1), i = Math.min(P.length - 2, Math.floor(x));
+      const hp = P[i].clone().lerp(P[i + 1], x - i);
+      const arr: number[] = [];
+      for (let j = 0; j <= i; j++) arr.push(P[j].x, P[j].y, P[j].z);
+      arr.push(hp.x, hp.y, hp.z);
+      if (arr.length < 6) arr.push(hp.x, hp.y, hp.z);
+      this.setLine(I.line, arr);
+      I.line.visible = true;
+      const after = Math.max(0, f - a.fHit);
+      I.mat.opacity = 0.9 * fade * Math.max(0.15, 1 - after / 0.12);
+      I.head.visible = u < 1;
+      if (I.head.visible) this.billboard(I.head, hp, pxM(hp, 12), ctx);
+      const age = after / 0.05;
+      I.flash.visible = u >= 1 && age < 1;
+      if (I.flash.visible) {
+        this.billboard(I.flash, P[P.length - 1], pxM(P[P.length - 1], a.hit ? 34 + 110 * age : 12 + 26 * age), ctx);
+        fm.opacity = (1 - age) ** 1.5;
+        fm.color.setRGB(a.hit ? 1 : 0.6, a.hit ? 0.97 : 0.9, 1);
+      }
+    }
     if (!this.lead) {
       const k = this.plan.legs.findIndex((L, j) => this.heads[j].visible);
       if (k >= 0) this.lead = this.heads[k].matrix.elements ? new THREE.Vector3().setFromMatrixPosition(this.heads[k].matrix) : null;
@@ -166,8 +239,9 @@ export class Missile implements FxModule {
 
   dispose() {
     for (const l of [...this.planned, ...this.flown]) l.geometry.dispose();
-    for (const m of this.mats) m.dispose();
-    for (const h of this.heads) { h.geometry.dispose(); (h.material as THREE.Material).dispose(); }
-    this.tex.dispose();
+    for (const m of [...this.mats, ...this.icpt.map((I) => I.mat)]) m.dispose();
+    for (const h of [...this.heads, ...this.icpt.flatMap((I) => [I.head, I.flash])]) { h.geometry.dispose(); (h.material as THREE.Material).dispose(); }
+    for (const I of this.icpt) I.line.geometry.dispose();
+    this.tex.dispose(); this.texW.dispose();
   }
 }

@@ -271,12 +271,24 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       síndrome de radiación y el regreso (cuándo bajaría la radiación, cesio-137), con datos de Hiroshima, Nagasaki,
       Chernóbil y Fukushima.
 
+## 1.14 — Defensa antimisiles (publicada)
+
+- [x] Defensa antimisiles (`src/data/defense.ts`), con trayectoria del misil y la opción «Con defensa antimisiles»:
+      sistemas reales por zona (GMD en Alaska y California; Aegis Ashore en Rumanía y Polonia; Arrow 3 en Alemania;
+      Arrow 2 y 3, THAAD y Honda de David en Israel; THAAD en Corea del Sur y el Golfo; SM-3 IIA en Japón; A-135 en
+      Moscú; escudo de Delhi; Patriot/SAMP-T y defensa aérea), en capas (curso medio, alta exo y endo, terminal).
+- [x] Salvas de interceptores con probabilidad por interceptor, inventario limitado (saturación con muchas ojivas),
+      señuelos de las potencias nucleares, planeadores hipersónicos que burlan las capas exteriores, y misiles de
+      crucero y aviones frente a la defensa aérea. Cada simulación es una tirada.
+- [x] Animación: el interceptor (cian) sale de su base y se encuentra con la ojiva; si acierta, la ojiva acaba ahí
+      con un destello; si falla, sigue. Avisos en pantalla y marca «Intercepción» en la línea de tiempo.
+- [x] Sólo estallan las ojivas que pasan; si se derriban todas, ficha «Ataque interceptado» con el botón «Ver qué
+      habría pasado si llegan». Pestaña «Defensa» con las capas, los disparos, los derribos y la saturación.
+- [x] Arreglo: las estelas del misil a veces se quedaban cortas al saltar en la línea de tiempo.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
-
-- [ ] Defensa antimisiles (en duda): interceptores desde bases reales, probabilidad de interceptación según el tipo de
-      arma y animación del intento.
 
 - [ ] «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
       fuego sobre tu horizonte, según dónde estés.

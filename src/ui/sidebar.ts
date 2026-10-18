@@ -1,6 +1,7 @@
 import { WAR_PRESETS } from '../data/war';
 import { LAUNCH_SITES, type LaunchSite } from '../data/launch';
 import { planFlight, profileFor } from '../data/flight';
+import { defenseAt } from '../data/defense';
 import { h, setRangeFill, ICONS, toast } from './dom';
 import { NUKE_PRESETS, ASTEROID_PRESETS, COMPOSITIONS } from '../data/presets';
 import { parseCoords, fetchWeather, type Weather } from './geo';
@@ -61,6 +62,8 @@ export interface AppState {
   launch: string;
   /** trayectoria: automática según el arma o una elegida */
   flightProfile: 'auto' | 'ballistic' | 'hgv' | 'cruise' | 'aircraft';
+  /** defensa antimisiles en la zona del objetivo (con trayectoria) */
+  defense: boolean;
 }
 
 export interface Strike { lat: number; lon: number; label: string; sc: Scenario; azimuth?: number }
@@ -76,6 +79,7 @@ export function defaultState(): AppState {
     live: true,
     launch: '',
     flightProfile: 'auto',
+    defense: false,
     other: { type: 'reactor', release: { kind: 'release', name: 'Chernóbil (1986)', source: 'reactor', isotope: 'Cs-137', activityTBq: 85000, heightM: 1000, durationH: 240 }, volcano: { kind: 'volcano', name: 'Yellowstone (supererupción)', vei: 8, volumeMul: 2.5 }, dam: { kind: 'dam', name: 'Presa de las Tres Gargantas (China)', volumeHm3: 39300, heightM: 181 }, solar: { kind: 'solar', name: 'Evento Carrington (1859)', dstNt: -1200 }, war: { kind: 'war', name: 'India–Pakistán: 100 armas de 15 kt', preset: 'inpk-5' } },
     multi: { on: false, strikes: [] },
   };
@@ -394,11 +398,20 @@ export class Sidebar {
     for (const [v, l] of [['auto', 'Según el arma'], ['ballistic', 'Misil balístico (arco por el espacio)'], ['hgv', 'Planeador hipersónico (Avangard, DF-17)'], ['cruise', 'Misil de crucero (vuelo rasante)'], ['aircraft', 'Bombardero (bomba de gravedad)']] as const) profSel.append(h('option', { value: v }, l));
     profSel.value = S.flightProfile;
     const profField = field('Tipo de vuelo', null, profSel);
+    // defensa antimisiles: las capas que protegen la zona del objetivo intentan derribar las ojivas
+    const defNote = h('div', { class: 'note' });
+    const defSeg = seg([['off', 'Sin defensa'], ['on', 'Con defensa antimisiles']], S.defense ? 'on' : 'off', (v) => { S.defense = v === 'on'; updLaunch(); });
+    const defField = field('Defensa antimisiles', null, defSeg.el);
     const updLaunch = () => {
       const s = LAUNCH_SITES.find((x) => x.id === S.launch);
       launchSel.value = s ? s.id : '';
-      profField.style.display = s ? '' : 'none';
+      profField.style.display = defField.style.display = s ? '' : 'none';
+      defNote.textContent = '';
       if (!s) { launchNote.textContent = ''; return; }
+      if (S.defense) {
+        const D = defenseAt(S.target.lat, S.target.lon);
+        defNote.textContent = D ? `${tr('Protegen la zona del objetivo')} (${tr(D.region)}): ${D.systems.map((x) => tr(x)).join(', ')}.` : tr('No hay defensa antimisiles en la zona del objetivo: las ojivas llegan sin oposición.');
+      }
       const prof = S.flightProfile === 'auto' ? profileFor(S.nuke.name) : S.flightProfile;
       const multi = S.multi.on && S.multi.strikes.length > 1;
       const targets = multi ? S.multi.strikes.map((x) => ({ lat: x.lat, lon: x.lon })) : [{ lat: S.target.lat, lon: S.target.lon }];
@@ -429,6 +442,8 @@ export class Sidebar {
         field('Lanzado desde (trayectoria del misil)', null, launchSel),
         profField,
         launchNote,
+        defField,
+        defNote,
       )),
     );
     updNuke();
