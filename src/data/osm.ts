@@ -130,3 +130,29 @@ export async function fetchShelters(lat: number, lon: number, radiusM = 2500): P
   for (const s of out) if (!seen.some((t) => t.kind === s.kind && Math.hypot((t.lat - s.lat) * 110570, (t.lon - s.lon) * 111320 * cos) < 150)) seen.push(s);
   return seen;
 }
+
+/** hospitales de OpenStreetMap alrededor de la zona cero (con sus camas, si constan) */
+export interface Hospital { name: string; lat: number; lon: number; beds: number | null }
+export async function fetchHospitals(lat: number, lon: number, radiusM: number): Promise<Hospital[] | null> {
+  const a = `(around:${Math.round(radiusM)},${lat.toFixed(5)},${lon.toFixed(5)})`;
+  const body = `[out:json][timeout:40];nwr[amenity=hospital]${a};out center tags 600;`;
+  for (const url of ENDPOINTS) {
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 45000);
+      const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: body }), signal: ctl.signal });
+      clearTimeout(t);
+      if (!r.ok) continue;
+      const data: { elements: { lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] } = await r.json();
+      const out: Hospital[] = [];
+      for (const e of data.elements) {
+        const la = e.lat ?? e.center?.lat, lo = e.lon ?? e.center?.lon, g = e.tags ?? {};
+        if (la === undefined || lo === undefined) continue;
+        const b = parseInt(g.beds ?? g['capacity:beds'] ?? '', 10);
+        out.push({ name: g.name ?? '', lat: la, lon: lo, beds: Number.isFinite(b) && b > 0 ? b : null });
+      }
+      return out;
+    } catch { /* siguiente servidor */ }
+  }
+  return null;
+}

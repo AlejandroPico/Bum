@@ -4,6 +4,7 @@ import { buildStats, type StatSection } from './stats';
 import type { Effects } from '../physics/types';
 import { INFRA, type InfraResult, type BuildingCounts } from '../data/osm';
 import type { TerrainShadow } from '../physics/terrain';
+import type { HealthReport } from '../physics/health';
 import { LOCALE, DEC } from '../i18n/locale';
 import { tr } from '../i18n';
 
@@ -27,7 +28,7 @@ const GROUP_NAMES: Record<string, string> = {
   seismic: 'Sismicidad', emp: 'Pulso electromagnético', ejecta: 'Eyecta', tsunami: 'Tsunami',
 };
 
-type Tab = 'sum' | 'eff' | 'pop' | 'phys' | 'rad' | 'def' | 'cmp';
+type Tab = 'sum' | 'eff' | 'pop' | 'phys' | 'rad' | 'after' | 'def' | 'cmp';
 
 /** resumen de un ataque con varias detonaciones */
 export interface MultiInfo { deaths: number; injuries: number; exposed: number; items: { name: string; place: string; energyKt: number; deaths: number }[] }
@@ -36,7 +37,7 @@ const SHELTERS: [string, number][] = [
   ['A la intemperie', 1], ['Coche', 1.5], ['Casa de madera o prefabricada', 3], ['Casa de ladrillo, planta baja', 10],
   ['Piso intermedio de un edificio grande', 40], ['Sótano', 40], ['Centro de un gran edificio de hormigón', 200], ['Refugio antinuclear', 1000],
 ];
-const TABS: [Tab, string][] = [['sum', 'Resumen'], ['eff', 'Efectos'], ['pop', 'Población'], ['phys', 'Física'], ['rad', 'Radiación'], ['def', 'Defensa'], ['cmp', 'Comparar']];
+const TABS: [Tab, string][] = [['sum', 'Resumen'], ['eff', 'Efectos'], ['pop', 'Población'], ['phys', 'Física'], ['rad', 'Radiación'], ['after', 'Días después'], ['def', 'Defensa'], ['cmp', 'Comparar']];
 
 export class ResultsPanel {
   el: HTMLElement;
@@ -72,6 +73,74 @@ export class ResultsPanel {
     const row = h('div', { class: 'seg heat-row' });
     for (const [k, l] of opts) row.append(h('button', { type: 'button', class: this.heat === k ? 'on' : '', onclick: () => this.ev.onHeat!(this.heat === k ? 'off' : k) }, l));
     body.append(h('div', { class: 'heat-blk' }, h('div', { class: 'heat-h' }, 'Mapa de calor'), row));
+  }
+
+  /** hospitales y sanidad (llegan después, de OpenStreetMap) */
+  private health: HealthReport | 'loading' | 'error' | null = null;
+  setHealth(r: HealthReport | 'loading' | 'error' | null) { this.health = r; if (this.tab === 'pop' || this.tab === 'after' || this.tab === 'eff') this.reshow?.(); }
+  private healthBlock(body: HTMLElement) {
+    const r = this.health;
+    if (!r) return;
+    body.append(h('div', { class: 'res-h3' }, 'Hospitales y sanidad'));
+    if (r === 'loading') { body.append(h('div', { class: 'sec-note' }, 'Buscando los hospitales de la zona en OpenStreetMap…')); return; }
+    if (r === 'error') { body.append(h('div', { class: 'sec-note' }, 'No se pudo consultar OpenStreetMap (servidor ocupado o sin conexión).')); return; }
+    const row = (k: string, hint: string, v: string) => h('div', { class: 'bld-r' }, h('div', {}, h('b', {}, k), h('span', {}, hint)), h('strong', {}, v));
+    body.append(h('div', { class: 'bld' },
+      row('Hospitales', `en ${fmtDist(r.radiusM)} a la redonda`, fmtNum(r.hospitals.length)),
+      row('Destruidos', 'más de 5 psi: fuera de servicio', fmtNum(r.destroyed)),
+      row('Dañados', '1–5 psi: funcionan a medias, sin cristales ni luz', fmtNum(r.damaged)),
+      row('En servicio', 'fuera de la zona de daños', fmtNum(r.ok)),
+      row('Camas disponibles', 'dando altas y abriendo camas de emergencia', `≈ ${fmtNum(r.bedsUsable)}`),
+      row('Heridos que necesitarían ingreso', 'aproximadamente la mitad de los heridos', `≈ ${fmtNum(r.needBeds)}`),
+      row('Sin cama de hospital', 'heridos graves que no podrían ser ingresados', `≈ ${fmtNum(r.unattended)}`),
+      row('Con quemaduras graves', 'necesitarían una unidad de quemados', `≈ ${fmtNum(r.burns)}`)),
+      h('div', { class: 'sec-note' }, `${r.bedsGuessed ? `${fmtNum(r.bedsGuessed)} de los ${fmtNum(r.hospitals.length)} hospitales no tienen sus camas en OpenStreetMap: se suponen 150 por hospital. ` : ''}Las unidades de grandes quemados son muy escasas: unas 250 camas en toda España y unas 1.800 en EE. UU.; unos cientos de quemados graves bastan para saturar un país. Además, el personal sanitario de la zona también sería víctima: en Hiroshima murieron o resultaron heridos 270 de los 300 médicos de la ciudad. Los hospitales se marcan en el mapa por cómo quedarían.`));
+  }
+
+  /** días después: lo que pasaría en las horas, días, semanas y años siguientes */
+  private after(body: HTMLElement, fx: Effects) {
+    const fo = !fx.release && fx.fallout.length ? [...fx.fallout].sort((a, b) => b.level - a.level)[0] : null;
+    const HR = this.health && this.health !== 'loading' && this.health !== 'error' ? this.health : null;
+    const IR = this.infra && this.infra !== 'loading' && this.infra !== 'error' ? this.infra : null;
+    const zoneMax = IR ? IR.zones[IR.zones.length - 1] : null;
+    const cnt = (k: string) => (zoneMax ? zoneMax.counts[k] ?? 0 : 0);
+    // ley de Way-Wigner: la tasa de dosis baja como t^-1,2 (regla del 7-10)
+    const rateAt = (L: number, hrs: number) => L * Math.pow(hrs, -1.2);
+    const until = (L: number, x: number) => Math.pow(L / x, 1 / 1.2);
+    const fmtH = (hh: number) => (hh < 48 ? `${Math.round(hh)} h` : hh < 24 * 60 ? `${Math.round(hh / 24)} días` : hh < 24 * 730 ? `${Math.round(hh / 24 / 30)} meses` : `${Math.round(hh / 24 / 365)} años`);
+    const fmtR = (r: number) => (r >= 1 ? `${n1(r, r < 10 ? 1 : 0)} rad/h` : r >= 0.001 ? `${n1(r * 1000, r < 0.01 ? 1 : 0)} mrad/h` : `${n1(r * 1e6, 0)} µrad/h`);
+    const fires = fx.fires && fx.fires.kind !== 'none';
+    const stages: [string, string, string[]][] = [];
+    stages.push(['Primeras horas', 'el caos', [
+      `Unos ${fmtNum(Math.round(fx.casualties.injuries))} heridos y ningún sistema de emergencias capaz de atenderlos a la vez.${HR ? ` De los ${fmtNum(HR.hospitals.length)} hospitales de la zona, ${fmtNum(HR.destroyed)} quedarían destruidos y ${fmtNum(HR.damaged)} dañados; faltarían camas para unos ${fmtNum(HR.unattended)} heridos graves.` : ''}`,
+      fires ? (fx.fires!.kind === 'firestorm' ? 'Una tormenta de fuego arrasaría el centro durante unas 3 horas: vientos hacia el incendio y nadie podría entrar a rescatar.' : 'Los incendios se extenderían durante horas con el viento; los bomberos no tendrían agua ni accesos.') : 'Incendios aislados en los edificios dañados.',
+      fo ? `La lluvia radiactiva empezaría a caer a sotavento en la primera hora. Lo vital es ponerse a cubierto bajo tierra o en el centro de un edificio grande y no salir.` : 'La explosión en el aire apenas deja lluvia radiactiva local: después de la onda, se puede salir a ayudar con cuidado.',
+    ]]);
+    if (fo) stages.push(['Hora 7 a 2 días', 'la radiación baja deprisa', [
+      `Regla del 7-10: cada vez que el tiempo se multiplica por 7, la radiación se divide por 10. Donde a la hora 1 hubiera ${fmtR(fo.level)}, a las 7 h habría ${fmtR(rateAt(fo.level, 7))} y a los 2 días ${fmtR(rateAt(fo.level, 49))}.`,
+      'Quedarse a cubierto al menos 24 horas evita la mayor parte de la dosis. En las zonas más contaminadas conviene esperar 2 o 3 días antes de evacuar, si el refugio es bueno (FEMA, 2010).',
+    ]]);
+    stages.push(['Primeros días', 'sin luz ni agua', [
+      `Sin electricidad en toda la zona dañada${cnt('sub') ? `: ${fmtNum(cnt('sub'))} subestaciones` : ''}${cnt('pow') ? ` y ${fmtNum(cnt('pow'))} centrales` : ''} dentro de las zonas de daño.${fx.emp && fx.emp.peakKVm >= 6 ? ' El pulso electromagnético además dañaría aparatos electrónicos y redes eléctricas a cientos de km.' : ''}`,
+      `Sin agua corriente: las tuberías rotas vacían la red${cnt('wat') ? ` y ${fmtNum(cnt('wat'))} potabilizadoras o depuradoras quedan en la zona de daños` : ''}. Agua embotellada o hervida; el agua de grifos y depósitos cerrados no está contaminada por la lluvia radiactiva.`,
+      'La ayuda exterior (militares, hospitales de campaña, otras regiones) tardaría de 1 a 3 días en llegar en número. En Hiroshima volvió la luz a parte de la ciudad al día siguiente y los tranvías circularon a los 3 días.',
+    ]]);
+    stages.push(['Semanas 1 a 6', 'el síndrome de radiación', [
+      'Quienes recibieron más de 1 Gy tienen náuseas y vómitos en las primeras horas, después unos días de aparente mejoría y, entre la 2.ª y la 6.ª semana, caída de las defensas, hemorragias e infecciones. En Hiroshima y Nagasaki muchas muertes llegaron así, semanas después.',
+      'Las quemaduras y las heridas infectadas, sin hospitales suficientes ni antibióticos, matan a muchos de los heridos que sobrevivieron al primer día.',
+    ]]);
+    const back: string[] = [];
+    if (fo) {
+      const a = until(fo.level, 0.01), b = until(fo.level, 0.001);
+      back.push(`En la zona más contaminada (${fmtR(fo.level)} a la hora 1), la radiación bajaría a 10 mrad/h (se podría entrar unas horas) en unos ${fmtH(a)} y a 1 mrad/h en unos ${fmtH(b)}. Pasados unos meses domina el cesio-137, que tarda décadas en desaparecer: como en Chernóbil, parte de la zona podría quedar cerrada mucho tiempo.`);
+      back.push('Fukushima (2011): la zona evacuada de 20 km empezó a reabrirse a los 6 años y algunas áreas siguen cerradas.');
+    } else back.push('Sin lluvia radiactiva local, la zona se puede reconstruir: Hiroshima y Nagasaki volvieron a estar habitadas en meses y hoy son grandes ciudades.');
+    back.push('A largo plazo, más casos de leucemia (máximo a los 5–7 años) y de otros cánceres durante décadas entre los supervivientes expuestos.');
+    stages.push(['Meses y años', 'el regreso', back]);
+    body.append(h('div', { class: 'sec-note' }, 'Lo que pasaría después de la explosión, con las cifras de esta simulación y lo que se sabe de Hiroshima, Nagasaki, Chernóbil y Fukushima.'));
+    const tl = h('div', { class: 'after-tl' });
+    for (const [when, what, items] of stages) tl.append(h('div', { class: 'af-st' }, h('div', { class: 'af-h' }, h('b', {}, when), h('span', {}, what)), ...items.map((t) => h('p', {}, t))));
+    body.append(tl);
   }
 
   /** infraestructuras de OpenStreetMap por zona (llegan después, de forma asíncrona) */
@@ -128,7 +197,7 @@ export class ResultsPanel {
   }
   setInfra(r: InfraResult | 'loading' | 'error' | null) {
     this.infra = r;
-    if (this.tab === 'pop') this.reshow?.();
+    if (this.tab === 'pop' || this.tab === 'after') this.reshow?.();
   }
   private infraBlock(body: HTMLElement) {
     this.buildingsBlock(body);
@@ -188,7 +257,7 @@ export class ResultsPanel {
     const stats = buildStats(fx);
     const tabsBar = h('div', { class: 'res-tabs' });
     const body = h('div', { class: 'res-body' });
-    const avail = TABS.filter(([t]) => t === 'sum' || t === 'eff' || (t === 'def' && fx.scenario.kind === 'asteroid') || (t === 'rad' && fx.fallout.length > 0 && !fx.volcano) || stats.some((s) => s.tab === t));
+    const avail = TABS.filter(([t]) => t === 'sum' || t === 'eff' || (t === 'after' && fx.scenario.kind === 'nuclear' && !fx.chemical) || (t === 'def' && fx.scenario.kind === 'asteroid') || (t === 'rad' && fx.fallout.length > 0 && !fx.volcano) || stats.some((s) => s.tab === t));
     if (!avail.some(([t]) => t === this.tab)) this.tab = 'sum';
     const show = (t: Tab) => {
       this.tab = t;
@@ -198,10 +267,11 @@ export class ResultsPanel {
       if (t === 'sum') { if (multi) this.multiBlock(body, multi); this.summary(body, fx, hiroTxt); }
       else if (t === 'eff') this.effects(body, fx);
       else if (t === 'def') this.defense(body, fx);
+      else if (t === 'after') this.after(body, fx);
       else {
         if (t === 'cmp' && this.ev.onCompare && (sc.kind === 'nuclear' || sc.kind === 'asteroid')) body.append(h('button', { type: 'button', class: 'btn-line cmp-split', onclick: () => this.ev.onCompare!() }, 'Comparar con otro escenario en el mapa partido'));
         if (t === 'pop') this.heatBlock(body, fx);
-        this.sections(body, stats.filter((s) => s.tab === t)); if (t === 'pop') this.infraBlock(body); if (t === 'phys') this.shadowBlock(body); if (t === 'rad' && fx.fallout.length && fx.falloutDoseAt && !fx.release) this.shelter(body, fx); }
+        this.sections(body, stats.filter((s) => s.tab === t)); if (t === 'pop') { this.healthBlock(body); this.infraBlock(body); } if (t === 'phys') this.shadowBlock(body); if (t === 'rad' && fx.fallout.length && fx.falloutDoseAt && !fx.release) this.shelter(body, fx); }
     };
     this.reshow = () => show(this.tab);
     for (const [t, l] of avail) tabsBar.append(h('button', { type: 'button', 'data-t': t, onclick: () => show(t) }, l));
@@ -485,6 +555,9 @@ export class ResultsPanel {
         h('span', { class: 'tsu-legend' }, ...([['#7dd3fc', '< 1 m'], ['#38bdf8', '1–3 m'], ['#facc15', '3–10 m'], ['#fb923c', '10–30 m'], ['#ef4444', '> 30 m']] as const).map(([c, t]) => h('span', {}, h('b', { style: { background: c } }), t))))));
     }
     if (fx.fires && fx.fires.kind !== 'none') extra.push(this.toggleRow('burn', '#ff6a1a', fx.fires.kind === 'firestorm' ? 'Tormenta de fuego' : 'Incendios que avanzan con el viento', '', h('div', { class: 'meta' }, 'Superficie quemada en las horas siguientes a la explosión.')));
+    const HR = this.health;
+    if (HR && HR !== 'loading' && HR !== 'error' && HR.hospitals.length) extra.push(this.toggleRow('hosp', '#22c55e', 'Hospitales', `${fmtNum(HR.hospitals.length)}`, h('div', { class: 'meta' }, 'Hospitales de OpenStreetMap según cómo quedarían: ',
+      h('span', { class: 'marks' }, ...([['#ef4444', `Destruidos (más de 5 psi): ${fmtNum(HR.destroyed)}`], ['#f59e0b', `Dañados (1–5 psi): ${fmtNum(HR.damaged)}`], ['#22c55e', `En servicio: ${fmtNum(HR.ok)}`]] as const).map(([c, t]) => h('span', {}, h('b', { style: { background: c } }), t))))));
     if (fx.emp && fx.emp.peakKVm >= 6) extra.push(this.toggleRow('emp', '#4cc9f0', 'Campo del pulso electromagnético', '', h('div', { class: 'meta' }, 'Zonas con más de 6, 12,5 y 25 kV/m (pulso E1 de gran altitud).')));
     // marcas que deja la explosión en el suelo (las manchas oscuras concéntricas)
     const marks = this.groundMarks(fx);

@@ -260,6 +260,17 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       frente a la radiación (FEMA 2010) y si llegarías antes que la onda o antes de que empiece la lluvia radiactiva.
       Se marcan en el mapa y, al pulsarlos, la cámara va hasta ellos.
 
+## 1.13 — Hospitales y sanidad, y «Días después» (publicada)
+
+- [x] Hospitales y sanidad (pestaña Población, `src/physics/health.ts`): hospitales de OpenStreetMap alrededor de la
+      zona (`fetchHospitals`), destruidos (> 5 psi), dañados (1–5 psi) o en servicio, camas disponibles (150 por hospital
+      si no constan; 35 % de las camas en funcionamiento), heridos que necesitarían ingreso, cuántos se quedarían sin cama
+      y quemados graves. Se marcan en el mapa por colores (ocultables en Efectos).
+- [x] Pestaña «Días después» (explosiones nucleares): primeras horas, regla del 7-10 con la radiación de la zona más
+      contaminada, primeros días sin luz ni agua (con las subestaciones y potabilizadoras de la zona), semanas del
+      síndrome de radiación y el regreso (cuándo bajaría la radiación, cesio-137), con datos de Hiroshima, Nagasaki,
+      Chernóbil y Fukushima.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
@@ -269,10 +280,6 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 
 - [ ] «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
       fuego sobre tu horizonte, según dónde estés.
-- [ ] Hospitales y sanidad: camas y hospitales de la zona frente al número de heridos y quemados (cuántos quedarían
-      sin atender), con los hospitales destruidos marcados en el mapa.
-- [ ] Días después: línea de tiempo de las semanas siguientes (síndrome de radiación, agua, electricidad, ayuda
-      exterior, regreso a la zona) con lo que se sabe de Hiroshima, Chernóbil y Fukushima.
 
 ## Descartado por ahora
 

@@ -31,7 +31,8 @@ import type { Weather } from './ui/geo';
 import { assessPoint, type SafetyReport } from './physics/safety';
 import { nearestCity, haversineKm, setRealPopulation } from './data/cities';
 import { loadRealPopulation } from './data/worldpop';
-import { fetchInfrastructure, fetchBuildingCounts, fetchShelters, SHELTER_KINDS, type Shelter } from './data/osm';
+import { fetchInfrastructure, fetchBuildingCounts, fetchShelters, fetchHospitals, SHELTER_KINDS, type Shelter } from './data/osm';
+import { assessHealth, type HealthReport } from './physics/health';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
 import { WarLayer } from './map/war-layer';
@@ -833,6 +834,17 @@ function setSolarLayer(fx: Effects | null, tS = Infinity) {
   map.addLayer({ id: 'fx-solar-lbl', type: 'symbol', source: 'fx-solar', filter: ['==', ['geometry-type'], 'Point'], layout: { 'text-field': ['get', 'name'], 'text-size': 12.5, 'text-max-width': 12, 'text-font': ['Noto Sans Regular'], 'symbol-sort-key': 0 }, paint: { 'text-color': ['get', 'lc'], 'text-halo-color': 'rgba(0,0,0,0.85)', 'text-halo-width': 1.6 } });
 }
 
+// hospitales en el mapa, por cómo quedarían (destruidos, dañados, en servicio)
+function setHospitalLayer(rep: HealthReport | null) {
+  const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: (rep?.hospitals ?? []).map((ho) => ({ type: 'Feature', properties: { c: ho.state === 'destroyed' ? '#ef4444' : ho.state === 'damaged' ? '#f59e0b' : '#22c55e', name: ho.name }, geometry: { type: 'Point', coordinates: [ho.lon, ho.lat] } })) };
+  const src = map.getSource('fx-hosp') as maplibregl.GeoJSONSource | undefined;
+  if (src) { src.setData(fc); return; }
+  if (!rep) return;
+  map.addSource('fx-hosp', { type: 'geojson', data: fc });
+  map.addLayer({ id: 'fx-hosp', type: 'circle', source: 'fx-hosp', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 14, 7], 'circle-color': ['get', 'c'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5 } });
+  map.addLayer({ id: 'fx-hosp-lbl', type: 'symbol', source: 'fx-hosp', minzoom: 12.5, layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-font': ['Noto Sans Regular'], 'text-max-width': 10 }, paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 1.2 } });
+}
+
 // lluvia negra (aparece en el mapa a los ~20 min de la explosión)
 function setBlackRainLayer(list: { br: Effects['blackRain'] | undefined; lat: number; lon: number }[]) {
   const features: GeoJSON.Feature[] = [];
@@ -1106,7 +1118,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.12';
+const APP_VERSION = '1.13';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1319,6 +1331,8 @@ function syncHidden() {
   showBlackRain(blackRainWant);
   if (run?.fx.solar) setSolarLayer(run.fx, Math.max(0, run.t));
   if (run?.fx.war && warLayer) { warLayer.hidden = new Set(results.hidden); warLayer.update(run.t - run.tStart); }
+  const hv = results.hidden.has('hosp') ? 'none' : 'visible';
+  for (const id of ['fx-hosp', 'fx-hosp-lbl']) if (map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== hv) map.setLayoutProperty(id, 'visibility', hv);
   const sv = results.hidden.has('shadow') ? 'none' : 'visible';
   for (const id of ['fx-shadow', 'fx-shadow-line']) if (map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== sv) map.setLayoutProperty(id, 'visibility', sv);
   map.triggerRepaint();
@@ -1467,6 +1481,7 @@ function clearRun() {
   setMissilePath(null); clearFlightUI(); setFlightLabels(false); missileFx = null;
   weatherLayer.setSimTime(0);
   clearShelterMarkers(); shelters = { key: '', list: null };
+  setHospitalLayer(null); results.setHealth(null);
   setShadowLayer(null, 0, 0);
   setBlackRainLayer([]); showBlackRain(false);
   setSolarLayer(null);
@@ -1751,6 +1766,20 @@ async function detonate() {
         results.setInfra('loading');
         fetchInfrastructure(lat, lon, zs).then((r) => { if (token === infraToken) results.setInfra(r ?? 'error'); }, () => { if (token === infraToken) results.setInfra('error'); });
       }
+      // hospitales de la zona: cuántos quedan en pie y cuántos heridos se quedarían sin cama
+      const psi1 = Math.max(fx.rings.find((r) => r.id === 'psi1')?.radiusM ?? 0, ...extras.map((x) => x.fx.rings.find((r) => r.id === 'psi1')?.radiusM ?? 0));
+      if (psi1 > 0 && !fx.dam && !fx.solar && !fx.war) {
+        const hr = Math.min(40000, Math.max(15000, psi1 * 2 + spread));
+        const token = infraToken;
+        results.setHealth('loading');
+        fetchHospitals(cLat, cLon, hr).then((l) => {
+          if (token !== infraToken || !run) return;
+          if (!l) { results.setHealth('error'); return; }
+          const rep = assessHealth([{ fx, lat, lon }, ...extras.map((x) => ({ fx: x.fx, lat: x.lat, lon: x.lon }))], l, hr);
+          results.setHealth(rep);
+          setHospitalLayer(rep);
+        }, () => { if (token === infraToken) results.setHealth('error'); });
+      } else results.setHealth(null);
       setBlackRainLayer([{ br: fx.blackRain, lat, lon }, ...extras.map((x) => ({ br: x.fx.blackRain, lat: x.lat, lon: x.lon }))]);
       // sombra del relieve sobre el destello (líneas de visión con el modelo del terreno)
       const burnR = Math.min(40000, fx.rings.find((r) => r.id === 'burn2')?.radiusM ?? fx.rings.find((r) => r.id === 'burn1')?.radiusM ?? 0);
