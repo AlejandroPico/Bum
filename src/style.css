@@ -972,7 +972,7 @@ body.hist-on #toolbar { right: 12px !important; }
 #winview .wv-row:last-child { flex-wrap: wrap; }
 #winview .wv-row:last-child .wv-b:first-of-type { margin-left: auto; }
 .sp-win { margin: 6px 0 2px; width: 100%; }
-#winview .wv-vr { position: absolute; top: max(60px, calc(env(safe-area-inset-top) + 50px)); right: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+#winview .wv-vr { display: flex; flex-wrap: wrap; gap: 6px; }
 #vrview { position: fixed; inset: 0; z-index: 9100; background: #000; }
 #vrview canvas { display: block; width: 100%; height: 100%; }
 #vrview .vr-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; opacity: .75; }
@@ -1017,3 +1017,41 @@ body.hist-on #toolbar { right: 12px !important; }
 .hist-cmp .hc-v.off { color: #fb923c; }
 .hist-cmp .hc-v.na { color: var(--muted); }
 @media (max-width: 760px) { #hist-rec .rc-list { top: 170px; } }
+
+/* modo clase / presentación */
+#present-pop { position: absolute; top: 64px; right: 12px; z-index: 40; width: min(380px, calc(100vw - 24px)); max-height: calc(100vh - 90px); overflow-y: auto; padding: 14px 16px; }
+#present-pop.hidden { display: none; }
+.pp-add { display: flex; gap: 6px; margin: 8px 0; }
+.pp-in, .pp-t, .pp-note { flex: 1; min-width: 0; background: rgba(var(--ink), .05); border: 0; border-bottom: 1px solid var(--line); color: inherit; font: inherit; font-size: 12.5px; padding: 6px 4px; }
+.pp-note { width: 100%; resize: vertical; font-size: 11.5px; margin-top: 3px; }
+.pp-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.pp-row { display: flex; align-items: center; gap: 4px; }
+.pp-i { font: 600 11px var(--mono); width: 18px; color: var(--muted); }
+.pp-b { border: 0; background: none; color: inherit; cursor: pointer; padding: 4px 5px; opacity: .75; }
+.pp-b:hover { opacity: 1; }
+.pp-tpl { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
+.pp-tpl b { display: block; font-size: 12.5px; }
+.pp-tpl span { font-size: 11px; color: var(--muted); }
+body.presenting #sidebar, body.presenting #ui-show { display: none !important; }
+#present-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 32; width: min(760px, calc(100vw - 24px)); display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 14px rgba(0,0,0,.6); pointer-events: none; }
+#present-bar.hidden { display: none; }
+#present-bar button, #present-bar label { pointer-events: auto; }
+.pb-k { font: 600 11px var(--mono); letter-spacing: .12em; opacity: .8; }
+.pb-count { margin-left: 10px; color: #ffd28a; }
+.pb-title { font: 600 26px/1.15 var(--font); margin-top: 2px; }
+.pb-note { font-size: 14px; line-height: 1.4; margin-top: 4px; max-width: 520px; color: #ffe8c8; }
+.pb-ctrl { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pb-b { height: 34px; min-width: 34px; padding: 0 12px; border: 0; background: rgba(0,0,0,.45); color: #fff; font: 500 13px var(--font); cursor: pointer; text-shadow: none; }
+.pb-next { background: var(--accent); }
+.pb-next.pulse { animation: pb-pulse 1.2s ease-in-out infinite; }
+.pb-next:disabled { opacity: .4; }
+@keyframes pb-pulse { 50% { box-shadow: 0 0 0 6px rgba(249,115,22,.35); } }
+.pb-auto { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+body.touring #present-bar { bottom: 130px; }
+@media (max-width: 760px) { #present-bar { flex-direction: column; align-items: stretch; bottom: 110px; } .pb-title { font-size: 19px; } .pb-note { font-size: 12.5px; } }
+#winview .wv-cal { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(340px, calc(100vw - 32px)); padding: 16px; background: rgba(5, 7, 12, .78); backdrop-filter: blur(6px); font-size: 13px; line-height: 1.45; text-align: center; }
+#winview .wv-cal b { display: block; font-size: 15px; margin-bottom: 4px; }
+#winview .wv-cal p { margin: 0 0 10px; opacity: .85; }
+#winview .wv-cal-b { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
+#winview .wv-ok { background: #f97316; }
+#winview .wv-acc { font: 500 11px "IBM Plex Mono", monospace; opacity: .8; min-height: 1.2em; }

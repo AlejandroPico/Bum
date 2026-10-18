@@ -38,6 +38,7 @@ import { WindowView } from './ui/window-view';
 import { FalloutParticles, type FallSet } from './map/fallout-particles';
 import { WinterLayer } from './map/winter-layer';
 import { ArsenalView, ReconView, type HistTab } from './ui/hist-views';
+import { Presenter, buildPresentPanel, type PresentCtx, type Slide } from './ui/present';
 import { HISTORIC, type HistCase } from './data/historic';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
@@ -569,6 +570,86 @@ function goHistTab(t: HistTab) {
   else { historyBtn.classList.add('on'); if (run) { clearRun(); results.hide(); } reconView.open(); }
 }
 histMode.onTab = arsView.onTab = reconView.onTab = goHistTab;
+// modo clase / presentación: escenarios guardados como diapositivas
+const PRESENT_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M12 16v4M8 20h8"/><path d="M10 8.5l4 1.5-4 1.5z" fill="currentColor"/></svg>';
+const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
+/** copia los valores de `src` en `dst` sin cambiar los objetos (el panel lateral guarda referencias a ellos) */
+function assignDeep(dst: any, src: any) {
+  for (const k of Object.keys(src)) {
+    const v = src[k];
+    if (Array.isArray(v) && Array.isArray(dst[k])) { dst[k].length = 0; dst[k].push(...clone(v)); }
+    else if (v && typeof v === 'object' && !Array.isArray(v) && dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k])) assignDeep(dst[k], v);
+    else dst[k] = clone(v);
+  }
+}
+const presentCtx: PresentCtx = {
+  snapshot: () => clone({ mode: state.mode, nuke: state.nuke, ast: state.ast, other: state.other, target: state.target, env: state.env, multi: state.multi, launch: state.launch, flightProfile: state.flightProfile, defense: state.defense, globe: state.view.globe }),
+  apply: (sn) => {
+    const s = clone(sn) as any;
+    const globe = s.globe; delete s.globe;
+    assignDeep(state, s);
+    sidebar.setMode(state.mode);
+    sidebar.setEnv({ ...state.env });
+    const live = state.live; state.live = false;
+    setTarget(state.target.lat, state.target.lon, state.target.label, false);
+    state.live = live;
+    syncStrikeMarkers();
+    if (typeof globe === 'boolean' && globe !== state.view.globe) applyProjection(globe);
+  },
+  run: async (sl) => { nextHistoric = sl.hist ? HISTORIC.find((x) => x.id === sl.hist) ?? null : null; await detonate(); },
+  tour: () => { if (!run || !Tour.available(run.fx)) return false; tour.start(); return true; },
+  stopTour: () => tour.stop(true),
+  templates: () => presentTemplates(),
+};
+/** lecciones preparadas */
+function presentTemplates() {
+  const base = defaultState();
+  const nk = (name: string) => { for (const g of NUKE_PRESETS) for (const it of g.items) if (it.name === name) return it; return null; };
+  const ak = (name: string) => ASTEROID_PRESETS.find((a) => a.name === name) ?? null;
+  const snapOf = (o: { mode: 'nuclear' | 'asteroid' | 'other'; nuke?: object; ast?: object; other?: object; lat: number; lon: number; label: string; env?: object; globe?: boolean }) =>
+    clone({ mode: o.mode, nuke: { ...base.nuke, ...(o.nuke ?? {}) }, ast: { ...base.ast, ...(o.ast ?? {}) }, other: { ...base.other, ...(o.other ?? {}) }, target: { lat: o.lat, lon: o.lon, label: o.label }, env: { ...base.env, ...(o.env ?? {}) }, multi: { on: false, strikes: [] }, launch: '', flightProfile: 'auto', defense: false, globe: !!o.globe });
+  const hist = (id: string, title: string, note: string): Slide => {
+    const c = HISTORIC.find((x) => x.id === id)!;
+    const n = nk(c.preset), a = ak(c.preset);
+    return { title, note, hist: id, snap: snapOf({ mode: n ? 'nuclear' : 'asteroid', nuke: n ? { ...n, kind: 'nuclear' } : undefined, ast: a ? { ...a, kind: 'asteroid', surface: 'auto', azimuth: 250 } : undefined, lat: c.lat, lon: c.lon, label: c.label, env: c.env }) };
+  };
+  const T = state.target;
+  const city = (name: string, yieldKt: number, burst: string, title: string, note: string, heightM = 0): Slide => ({ title, note, snap: snapOf({ mode: 'nuclear', nuke: { name, yieldKt, fission: 0.5, burst, heightM }, lat: T.lat, lon: T.lon, label: T.label }) });
+  return [
+    { name: tr('De Hiroshima a la Tsar Bomba'), desc: tr('Cuatro explosiones reales, de 15 kt a 50 Mt, con lo que pasó de verdad.'), slides: () => [
+      hist('hiroshima', tr('Hiroshima, 1945'), tr('La primera bomba sobre una ciudad. Fijaos en el radio de destrucción casi total: 1,6 km.')),
+      hist('nagasaki', tr('Nagasaki, 1945'), tr('Más potente que la de Hiroshima, pero las colinas protegieron parte de la ciudad.')),
+      hist('bravo', tr('Castle Bravo, 1954'), tr('Mil veces Hiroshima, y una lluvia radiactiva que llegó a 180 km.')),
+      hist('tsar', tr('Tsar Bomba, 1961'), tr('La mayor explosión de la historia: la nube subió a la mesosfera.')),
+    ] },
+    { name: tr('Una ciudad, cuatro armas'), desc: tr('El objetivo actual con armas cada vez más grandes.'), slides: () => [
+      city('Little Boy — Hiroshima (1945)', 15, 'optimal', tr('15 kt: la bomba de Hiroshima'), tr('Una bomba de la Segunda Guerra Mundial sobre nuestra ciudad.')),
+      city('W88 (EE. UU.)', 475, 'optimal', tr('475 kt: una ojiva de submarino actual'), tr('Cada misil Trident lleva varias.')),
+      city('B83-1 (EE. UU.)', 1200, 'optimal', tr('1,2 Mt: la mayor bomba de EE. UU. hoy'), tr('El daño no crece en proporción: hace falta 8 veces más energía para doblar el radio.')),
+      city('Tsar Bomba (URSS, 1961)', 50000, 'custom', tr('50 Mt: la Tsar Bomba'), tr('Nunca se ha desplegado un arma así: es demasiado grande para ser útil.'), 4000),
+    ] },
+    { name: tr('Amenazas del espacio'), desc: tr('Del meteoro de Cheliábinsk al que acabó con los dinosaurios.'), slides: () => [
+      hist('chelyabinsk', tr('Cheliábinsk, 2013'), tr('19 m: estalló en el aire y rompió ventanas en seis ciudades.')),
+      hist('tunguska', tr('Tunguska, 1908'), tr('Unos 60 m: arrasó un bosque del tamaño de una gran ciudad.')),
+      { title: tr('Un asteroide de 1 km'), note: tr('Pasaría cada medio millón de años: daños en todo un continente.'), snap: snapOf({ mode: 'asteroid', ast: { ...(ak('Asteroide de 1 km') ?? {}), kind: 'asteroid', surface: 'auto', azimuth: 250 }, lat: T.lat, lon: T.lon, label: T.label }) },
+      { title: tr('Chicxulub, hace 66 millones de años'), note: tr('10 km: el impacto que acabó con los dinosaurios.'), snap: snapOf({ mode: 'asteroid', ast: { ...(ak('Chicxulub (extinción K-Pg)') ?? {}), kind: 'asteroid', surface: 'auto', azimuth: 250 }, lat: 21.4, lon: -89.5, label: 'Chicxulub (Yucatán)', globe: true }) },
+    ] },
+    { name: tr('Más allá de las bombas'), desc: tr('Un accidente nuclear, una tormenta solar y una guerra nuclear con su invierno.'), slides: () => [
+      { title: tr('Chernóbil, 1986'), note: tr('Un reactor en llamas durante diez días: la contaminación llegó a toda Europa.'), snap: snapOf({ mode: 'other', other: { type: 'reactor' }, lat: 51.389, lon: 30.099, label: 'Chernóbil' }) },
+      { title: tr('Evento Carrington'), note: tr('Una tormenta solar como la de 1859 hoy dejaría sin luz a regiones enteras.'), snap: snapOf({ mode: 'other', other: { type: 'solar' }, lat: T.lat, lon: T.lon, label: T.label, globe: true }) },
+      { title: tr('Guerra nuclear e invierno nuclear'), note: tr('EE. UU. y Rusia: después, el hambre mata a más gente que las bombas.'), snap: snapOf({ mode: 'other', other: { type: 'war', war: { kind: 'war', name: 'usru-150', preset: 'usru-150' } }, lat: T.lat, lon: T.lon, label: T.label, globe: true }) },
+    ] },
+  ];
+}
+const presenter = new Presenter(presentCtx, document.getElementById('app')!);
+const presentPop = h('div', { id: 'present-pop', class: 'glass hidden' });
+document.getElementById('app')!.append(presentPop);
+const presentBtn = tbBtn('present-btn', 'Presentación (modo clase)', PRESENT_ICON, (e) => { e.stopPropagation(); togglePopover(presentPop, presentBtn, buildPresent); });
+popovers.push({ el: presentPop, btn: presentBtn });
+function buildPresent() { buildPresentPanel(presentPop, presenter, presentCtx, () => { presentPop.classList.add('hidden'); presentBtn.classList.remove('on'); }); }
+presenter.onChange = () => { if (!presentPop.classList.contains('hidden')) buildPresent(); };
+// una presentación compartida por enlace se abre lista para empezar
+if (presenter.fromHash()) setTimeout(() => { togglePopover(presentPop, presentBtn, buildPresent); toast('Presentación cargada desde el enlace'); }, 2500);
 /** siguiente simulación: una reconstrucción histórica */
 let nextHistoric: HistCase | null = null;
 reconView.onRun = (id) => {
@@ -1096,7 +1177,7 @@ function openWindow() {
   WindowView.prime();
   R.playing = false; fxLayer.animating = false;
   const sources = [{ fx: R.fx, plan: R.plan, lat: R.lat, lon: R.lon, delay: 0 }, ...R.extras.map((x) => ({ fx: x.fx, plan: x.plan, lat: x.lat, lon: x.lon, delay: x.delay }))];
-  const go = (obs: { lat: number; lon: number; label: string }) => winView.show({ sources, obs, lite: perf.lite, sound: { flash: (i) => audio.flash(i), boom: (i) => audio.boom(i) } });
+  const go = (obs: { lat: number; lon: number; label: string }) => winView.show({ sources, obs, lite: perf.lite, hour: state.env.hour, sound: { flash: (i) => audio.flash(i), boom: (i) => audio.boom(i) } });
   audio.unlock();
   if (safePoint) { go(safePoint); return; }
   const fallback = () => {
@@ -1225,7 +1306,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.18';
+const APP_VERSION = '1.19';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1580,6 +1661,7 @@ const tour = new Tour({
 }, document.getElementById('app')!);
 
 tour.onVoice = () => { state.view.narration = !state.view.narration; savePrefs(); };
+tour.onChange = (on) => { if (!on) presenter.tourEnded(); };
 
 // ---------------------------------------------------------------------------
 // simulación

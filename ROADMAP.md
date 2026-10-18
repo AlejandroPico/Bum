@@ -339,16 +339,26 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       los resultados: la historia y una tabla del modelo frente a lo medido (coincide, cerca, se queda corto, se
       pasa), con notas de por qué difiere cuando difiere (relieve, población de entonces, atmósfera…) y fuentes.
 
+## 1.19 — Modo clase y «Desde mi ventana», segunda parte (publicada)
+
+- [x] Modo clase / presentación (`src/ui/present.ts`, botón de la pantalla en la barra): cada diapositiva guarda el
+      escenario entero (arma o asteroide, objetivo, tiempo, ataque múltiple, trayectoria, defensa), un título y notas
+      para quien presenta. Al presentar se lanza cada simulación con su recorrido cinematográfico; ← y → para cambiar,
+      «Pasar sola» con cuenta atrás, Esc para salir (se recupera el escenario de antes). Se guarda en el navegador y
+      se comparte con un enlace. Cuatro lecciones preparadas: De Hiroshima a la Tsar Bomba, Una ciudad y cuatro armas,
+      Amenazas del espacio y Más allá de las bombas.
+- [x] «Desde mi ventana», segunda parte: el relieve real (modelo del terreno hasta 90 km) dibuja el horizonte y tapa
+      la parte del hongo que queda detrás de los montes; la diferencia de altura entre tu sitio y la zona cero cuenta.
+      De noche el hongo sólo se ve por la luz de la bola de fuego (rojiza y violácea al principio) y el resplandor de
+      los incendios. El Sol aparece como referencia. Calibración guiada de la brújula (el «ocho» y apuntar al Sol o a
+      la zona cero). Grietas en los cristales también al saltar con la barra. La noche también en realidad virtual.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
 
 - [ ] Asteroides reales: catálogo de la NASA (Sentry/CNEOS) con Apophis, 2024 YR4, Bennu…, con su tamaño, velocidad y
       probabilidad de impacto reales, listos para lanzar.
-- [ ] Modo clase / presentación: una secuencia de escenarios que se pasa como diapositivas, con el recorrido
-      cinematográfico en cada una.
-- [ ] «Desde mi ventana», segunda parte: grietas y estruendo también al saltar con la barra, montañas reales en el
-      horizonte, el hongo de noche iluminado por dentro y una calibración guiada de la brújula.
 - [ ] Traducir los artículos de la enciclopedia a los 7 idiomas.
 
 ## Descartado por ahora

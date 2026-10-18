@@ -14,6 +14,8 @@ import { DEC, LOCALE } from '../i18n/locale';
 import type { FxPlan } from '../fx/plan';
 import type { Effects } from '../physics/types';
 import { localOffset, assessPoint } from '../physics/safety';
+import { elevationSampler } from '../map/elevation';
+import { subsolarAtLocalHour } from '../map/daynight';
 
 export interface WinSource { fx: Effects; plan: FxPlan; lat: number; lon: number; delay: number }
 export interface WinOpts {
@@ -22,6 +24,8 @@ export interface WinOpts {
   sound?: { flash(i: number): void; boom(i: number): void };
   /** equipo modesto: menos resolución y menos detalle */
   lite?: boolean;
+  /** hora local de la simulación (para saber si es de día o de noche) */
+  hour?: number;
 }
 
 const RAD = Math.PI / 180;
@@ -45,7 +49,7 @@ const FLOORS: [number, string][] = [[1.6, 'Calle'], [10, '3.ª planta'], [31, '1
 /** pseudoaleatorio fijo (para que las «coliflores» del hongo no tiemblen) */
 function rnd(i: number) { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
 
-interface Src extends WinSource { E: number; N: number; d: number; az: number; psi: number; tArr: number; boomed: boolean }
+interface Src extends WinSource { E: number; N: number; d: number; az: number; psi: number; tArr: number; boomed: boolean; /** altura del suelo de la zona cero sobre el del observador (m) */ base: number }
 
 export class WindowView {
   private el: HTMLElement | null = null;
@@ -76,6 +80,12 @@ export class WindowView {
   private cracks: [number, number, number, number][] = [];
   private flashed = false;
   private headline = '';
+  /** relieve: elevación máxima (rad) por rumbo (cada 1°) hasta cada distancia de la tabla */
+  private terrain: { dists: Float32Array; hmax: Float32Array[]; ground: number } | null = null;
+  /** el Sol (rumbo y elevación en grados) y cuánto es de noche (0 día, 1 noche cerrada) */
+  private sun = { az: 0, el: 45 };
+  private night = 0;
+  private compassAcc: number | null = null;
 
   get open() { return !!this.el; }
 
@@ -93,7 +103,7 @@ export class WindowView {
     this.S = o.sources.map((s) => {
       const off = localOffset(s.lat, s.lon, o.obs.lat, o.obs.lon);
       const psi = s.fx.pressurePsiAt(off.d);
-      return { ...s, E: -off.e, N: -off.n, d: off.d, az: (off.bearing + 180) % 360, psi, tArr: s.delay + arrival(s, Math.hypot(off.d, s.plan.h)), boomed: false };
+      return { ...s, E: -off.e, N: -off.n, d: off.d, az: (off.bearing + 180) % 360, psi, tArr: s.delay + arrival(s, Math.hypot(off.d, s.plan.h)), boomed: false, base: 0 };
     });
     this.main = this.S.reduce((a, b) => (b.d < a.d ? b : a));
     const rep = assessPoint(this.main.fx, this.main.lat, this.main.lon, o.obs.lat, o.obs.lon);
@@ -104,11 +114,72 @@ export class WindowView {
     // mirada inicial: hacia la zona cero, a media altura del hongo
     this.yaw = this.main.az;
     this.pitch = Math.max(3, Math.min(35, this.elevDeg(this.main, (this.main.plan.capTop + this.main.plan.capBottom) / 2) * 0.7));
+    // el Sol a la hora de la simulación
+    {
+      const sub = subsolarAtLocalHour(new Date(), o.hour ?? 12, o.obs.lon);
+      const la = o.obs.lat * RAD, d = sub.lat * RAD, H = (o.obs.lon - sub.lon) * RAD;
+      const el = Math.asin(Math.sin(la) * Math.sin(d) + Math.cos(la) * Math.cos(d) * Math.cos(H));
+      const az = Math.atan2(-Math.sin(H), Math.tan(d) * Math.cos(la) - Math.sin(la) * Math.cos(H));
+      this.sun = { az: ((az / RAD) + 360) % 360, el: el / RAD };
+      this.night = Math.max(0, Math.min(1, (2 - this.sun.el) / 8));
+    }
+    this.terrain = null;
+    void this.loadTerrain();
     this.build();
     this.startSensors();
     void this.startCamera();
     this.last = performance.now();
     this.loop();
+  }
+
+  /** punto de mira mientras se calibra */
+  private aiming: 'sun' | 'gz' | null = null;
+  /**
+   * Calibración guiada de la brújula: primero el «ocho» que recalibra el magnetómetro del móvil;
+   * después, apuntar a una referencia conocida (el Sol, si es de día, o la zona cero) y corregir la
+   * diferencia.
+   */
+  private calibrate() {
+    if (!this.el) return;
+    this.el.querySelector('.wv-cal')?.remove();
+    const acc = h('div', { class: 'wv-acc' });
+    const box = h('div', { class: 'wv-cal' });
+    const close = () => { this.aiming = null; clearInterval(iv); box.remove(); };
+    const iv = window.setInterval(() => {
+      acc.textContent = this.compassAcc != null ? tr(`Precisión de la brújula: ±${Math.round(this.compassAcc)}°`) : this.sensor ? '' : tr('Este dispositivo no tiene brújula: arrastra para orientar la vista.');
+    }, 500);
+    const step2 = () => {
+      box.innerHTML = '';
+      const go = (k: 'sun' | 'gz') => {
+        this.aiming = k;
+        box.innerHTML = '';
+        box.append(h('b', {}, k === 'sun' ? 'Pon el Sol en el centro de la cruz' : 'Pon en el centro de la cruz la dirección de la zona cero'),
+          h('p', {}, k === 'sun' ? 'Míralo en la imagen de la cámara, nunca directamente.' : 'Si sabes hacia dónde queda (un monte, un edificio alto, una carretera).'),
+          h('div', { class: 'wv-cal-b' },
+            h('button', { type: 'button', class: 'wv-b wv-ok', onclick: () => {
+              const B = this.basis();
+              const fAz = (Math.atan2(B.f[0], B.f[1]) / RAD + 360) % 360;
+              const want = k === 'sun' ? this.sun.az : this.main.az;
+              const d = ((want - fAz + 540) % 360) - 180;
+              this.yawOff += d;
+              toast(tr(`Brújula corregida en ${Math.round(d)}°`), 2500);
+              close();
+            } }, 'Ya'),
+            h('button', { type: 'button', class: 'wv-b', onclick: close }, 'Cancelar')));
+      };
+      box.append(h('b', {}, 'Paso 2: una referencia'), h('p', {}, 'Apunta el móvil a algo cuya dirección se conoce y toca «Ya»: se corrige el error que quede.'),
+        h('div', { class: 'wv-cal-b' },
+          this.sun.el > 3 ? h('button', { type: 'button', class: 'wv-b wv-ok', onclick: () => go('sun') }, 'Apuntar al Sol') : null,
+          h('button', { type: 'button', class: 'wv-b', onclick: () => go('gz') }, 'Apuntar a la zona cero'),
+          h('button', { type: 'button', class: 'wv-b', onclick: () => { this.yawOff = 0; close(); } }, 'Quitar la corrección')));
+    };
+    box.append(
+      h('b', {}, 'Paso 1: recalibrar el móvil'),
+      h('p', {}, 'Dibuja varias veces un «ocho» en el aire con el móvil, girando la muñeca, lejos de objetos metálicos y de imanes.'),
+      h('div', { class: 'wv-eight', html: '<svg viewBox="0 0 120 60" width="120" height="60"><path d="M60 30c-14-20-44-20-44 0s30 20 44 0 44-20 44 0-30 20-44 0z" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="2"/><circle r="5" fill="#f97316"><animateMotion dur="2.4s" repeatCount="indefinite" path="M60 30c-14-20-44-20-44 0s30 20 44 0 44-20 44-0-30 20-44 0z"/></circle></svg>' }),
+      acc,
+      h('div', { class: 'wv-cal-b' }, h('button', { type: 'button', class: 'wv-b wv-ok', onclick: step2 }, 'Hecho'), h('button', { type: 'button', class: 'wv-b', onclick: close }, 'Cancelar')));
+    this.el.append(box);
   }
 
   /** pasa a la realidad virtual con el mismo instante y la misma altura; al salir se vuelve aquí */
@@ -173,12 +244,14 @@ export class WindowView {
     const vrRow = h('div', { class: 'wv-vr' });
     const vrBtn = (mode: 'xr' | 'cardboard', label: string) => h('button', { type: 'button', class: 'wv-b', onclick: () => void this.enterVr(mode) }, label);
     if (matchMedia('(pointer: coarse)').matches) vrRow.append(vrBtn('cardboard', 'Visor RV (Cardboard)'));
+    vrRow.append(h('button', { type: 'button', class: 'wv-b', onclick: () => this.calibrate() }, 'Calibrar la brújula'));
     void import('./vr-view').then((m) => m.xrSupported()).then((ok) => { if (ok && this.el) vrRow.prepend(vrBtn('xr', 'Gafas RV')); });
-    el.append(this.video, this.cv, info, hint, close, vrRow,
+    el.append(this.video, this.cv, info, hint, close,
       h('div', { class: 'wv-bar' },
         warn,
         h('div', { class: 'wv-row' }, play, restart, time, slider),
         h('div', { class: 'wv-row' }, speeds, floor, h('button', { type: 'button', class: 'wv-b', title: 'Alejar', html: '−', onclick: zm(1 / 1.25) }), h('button', { type: 'button', class: 'wv-b', title: 'Acercar', html: '+', onclick: zm(1.25) })),
+        vrRow,
       ));
     this.hud = { info, warn, time, slider, play, hint };
     this.syncPlay();
@@ -208,6 +281,63 @@ export class WindowView {
     for (const s of this.S) s.boomed = t >= s.tArr;
     this.flashed = t > 0;
     if (t < Math.min(...this.S.map((s) => s.tArr))) this.cracks = [];
+    // al saltar más allá de la llegada de la onda, los cristales ya están rotos
+    else if (!this.cracks.length) { const mx = Math.max(...this.S.filter((s) => t >= s.tArr).map((s) => s.psi), 0); if (mx >= 0.5) this.makeCracks(mx); }
+  }
+  private makeCracks(psi: number) {
+    const W = this.cv.width, H = this.cv.height;
+    const n = Math.round(10 + Math.min(40, psi * 8));
+    for (let k = 0; k < 3; k++) {
+      const cx = W * (0.2 + 0.6 * Math.random()), cy = H * (0.15 + 0.6 * Math.random());
+      for (let i = 0; i < n / 3; i++) {
+        const a = Math.random() * Math.PI * 2, L = (0.15 + Math.random() * 0.6) * Math.max(W, H);
+        this.cracks.push([cx, cy, cx + Math.cos(a) * L, cy + Math.sin(a) * L]);
+      }
+    }
+  }
+
+  /**
+   * Relieve real alrededor del observador (modelo digital del terreno): para cada rumbo, el ángulo
+   * más alto del terreno hasta cada distancia. Las montañas tapan lo que hay detrás y la parte baja
+   * del hongo desaparece tras ellas, como en la realidad.
+   */
+  private async loadTerrain() {
+    const o = this.o;
+    const R = Math.min(90000, Math.max(30000, this.main.d + 5000));
+    let smp: ((la: number, lo: number) => number | null) | null = null;
+    try { smp = await elevationSampler(o.obs.lat, o.obs.lon, R); } catch { smp = null; }
+    if (!smp || !this.el) return;
+    const ground = Math.max(0, smp(o.obs.lat, o.obs.lon) ?? 0);
+    for (const s of this.S) { const z = smp(s.lat, s.lon); s.base = (z == null ? ground : Math.max(0, z)) - ground; }
+    const dists: number[] = [];
+    for (let d = 150; d <= R; d = d < 2000 ? d + 100 : d * 1.035) dists.push(d);
+    const D = Float32Array.from(dists);
+    const cosL = Math.cos(o.obs.lat * RAD);
+    const hmax: Float32Array[] = [];
+    for (let a = 0; a < 360; a++) {
+      const sa = Math.sin(a * RAD), ca = Math.cos(a * RAD);
+      const row = new Float32Array(D.length);
+      let m = -Math.PI / 2;
+      for (let k = 0; k < D.length; k++) {
+        const d = D[k];
+        const z = smp(o.obs.lat + (d * ca) / 110540, o.obs.lon + (d * sa) / (111320 * cosL));
+        const hz = z == null ? 0 : Math.max(0, z) - ground; // el mar, a nivel 0
+        const el = Math.atan2(hz - (d * d) / (2 * R_EFF) - this.eyeH, d);
+        if (el > m) m = el;
+        row[k] = m;
+      }
+      hmax.push(row);
+    }
+    this.terrain = { dists: D, hmax, ground };
+  }
+  /** ángulo (rad) del terreno en el rumbo `az` hasta la distancia `d` (o el horizonte llano) */
+  private occl(az: number, d: number): number {
+    const T = this.terrain;
+    if (!T) return -Math.sqrt((2 * this.eyeH) / R_EFF);
+    const row = T.hmax[((Math.round(az) % 360) + 360) % 360];
+    let k = 0;
+    while (k < T.dists.length - 1 && T.dists[k + 1] < d) k++;
+    return row[k];
   }
   private onResize = () => {
     const dpr = Math.min(this.o.lite ? 1.25 : 2, window.devicePixelRatio || 1);
@@ -248,8 +378,9 @@ export class WindowView {
   }
 
   private absSeen = false;
-  private onOri = (e: DeviceOrientationEvent & { webkitCompassHeading?: number }) => {
+  private onOri = (e: DeviceOrientationEvent & { webkitCompassHeading?: number; webkitCompassAccuracy?: number }) => {
     if (e.alpha == null || e.beta == null || e.gamma == null) return;
+    if (typeof e.webkitCompassAccuracy === 'number' && e.webkitCompassAccuracy >= 0) this.compassAcc = e.webkitCompassAccuracy;
     if (e.type === 'deviceorientationabsolute') this.absSeen = true;
     else if (this.absSeen) return; // en Android se usa el evento absoluto (referido al norte)
     let a = e.alpha;
@@ -307,7 +438,7 @@ export class WindowView {
   }
   /** elevación aparente (grados) de un punto a altura z sobre la zona cero de `s` */
   private elevDeg(s: Src, z: number) {
-    return Math.atan2(z - (s.d * s.d) / (2 * R_EFF) - this.eyeH, s.d) / RAD;
+    return Math.atan2(z + s.base - (s.d * s.d) / (2 * R_EFF) - this.eyeH, s.d) / RAD;
   }
 
   // ------------------------------------------------------------------ dibujo
@@ -340,17 +471,7 @@ export class WindowView {
       this.o.sound?.boom(Math.max(0.15, I));
       if (navigator.vibrate) navigator.vibrate([80 + 300 * I, 40, 120 * I]);
       // la onda rompe los cristales a partir de ~0,5 psi
-      if (s.psi >= 0.5 && !this.cracks.length) {
-        const W = this.cv.width, H = this.cv.height;
-        const n = Math.round(10 + Math.min(40, s.psi * 8));
-        for (let k = 0; k < 3; k++) {
-          const cx = W * (0.2 + 0.6 * Math.random()), cy = H * (0.15 + 0.6 * Math.random());
-          for (let i = 0; i < n / 3; i++) {
-            const a = Math.random() * Math.PI * 2, L = (0.15 + Math.random() * 0.6) * Math.max(W, H);
-            this.cracks.push([cx, cy, cx + Math.cos(a) * L, cy + Math.sin(a) * L]);
-          }
-        }
-      }
+      if (s.psi >= 0.5 && !this.cracks.length) this.makeCracks(s.psi);
     }
   }
 
@@ -373,23 +494,27 @@ export class WindowView {
     };
     /** punto (este, norte, altura sobre el suelo) relativo al observador, con la curvatura */
     const P = (e: number, n: number, z: number): V3 => [e, n, z - (e * e + n * n) / (2 * R_EFF) - this.eyeH];
+    const Pm = (s: Src, e: number, n: number, z: number) => P(e, n, z + s.base);
     const dip = -Math.sqrt((2 * this.eyeH) / R_EFF);
     const dirV = (az: number, el: number): V3 => [Math.cos(el) * Math.sin(az * RAD), Math.cos(el) * Math.cos(az * RAD), Math.sin(el)];
-    // horizonte (y el suelo, si no hay cámara)
+    // horizonte (con el relieve real si se ha cargado) y el suelo, si no hay cámara
     const hz: [number, number][] = [];
-    for (let a = 0; a <= 360; a += 3) { const p = proj(dirV(a, dip)); if (p && p[0] > -W && p[0] < 2 * W) hz.push([p[0], p[1]]); }
+    const far = this.terrain ? this.terrain.dists[this.terrain.dists.length - 1] : 0;
+    for (let a = 0; a <= 360; a += this.terrain ? 1 : 3) { const p = proj(dirV(a, this.terrain ? this.occl(a, far) : dip)); if (p && p[0] > -W && p[0] < 2 * W) hz.push([p[0], p[1]]); }
     hz.sort((a, b) => a[0] - b[0]);
     const noCam = !this.stream;
+    const nk = this.night;
+    const mixc = (a: number[], b: number[]) => `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * nk)).join(',')})`;
     if (noCam) {
       const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, '#2c5a8f'); sky.addColorStop(1, '#a9c6de');
+      sky.addColorStop(0, mixc([44, 90, 143], [4, 6, 14])); sky.addColorStop(1, mixc([169, 198, 222], [20, 28, 46]));
       g.fillStyle = sky; g.fillRect(-W, -H, 3 * W, 3 * H);
       if (hz.length > 1) {
         g.beginPath(); g.moveTo(hz[0][0], hz[0][1]);
         for (const p of hz) g.lineTo(p[0], p[1]);
         g.lineTo(hz[hz.length - 1][0], 3 * H); g.lineTo(hz[0][0], 3 * H); g.closePath();
         const gr = g.createLinearGradient(0, hz[0][1], 0, H);
-        gr.addColorStop(0, '#5d6658'); gr.addColorStop(1, '#2b3027');
+        gr.addColorStop(0, mixc([93, 102, 88], [16, 18, 22])); gr.addColorStop(1, mixc([43, 48, 39], [6, 7, 9]));
         g.fillStyle = gr; g.fill();
       }
     }
@@ -406,11 +531,20 @@ export class WindowView {
       g.fillRect(p[0] - 0.5 * dpr, p[1] - (big ? 8 : 4) * dpr, 1 * dpr, (big ? 8 : 4) * dpr);
       if (big) g.fillText((COMPASS[lang] ?? COMPASS.es)[a / 45], p[0], p[1] - 12 * dpr);
     }
+    // el Sol (referencia para comprobar la brújula)
+    if (this.sun.el > -1) {
+      const sp = proj(dirV(this.sun.az, this.sun.el * RAD));
+      if (sp && sp[0] > -20 && sp[0] < W + 20 && sp[1] > -20 && sp[1] < H + 20) {
+        g.strokeStyle = 'rgba(255,230,140,0.9)'; g.lineWidth = 1.5 * dpr;
+        g.beginPath(); g.arc(sp[0], sp[1], 9 * dpr, 0, Math.PI * 2); g.stroke();
+        g.fillStyle = 'rgba(255,230,140,0.9)'; g.textAlign = 'center'; g.fillText(tr('Sol'), sp[0], sp[1] + 22 * dpr);
+      }
+    }
     // explosiones (de la más lejana a la más cercana)
-    for (const s of [...this.S].sort((a, b) => b.d - a.d)) this.drawBlast(s, proj, P, dip, dpr, fpx, W, H);
+    for (const s of [...this.S].sort((a, b) => b.d - a.d)) this.drawBlast(s, proj, (e, n, z) => Pm(s, e, n, z), dip, dpr, fpx, W, H);
     // zona cero sobre el horizonte, o una flecha si queda fuera
     const m = this.main;
-    const zp = proj(P(m.E, m.N, 0));
+    const zp = proj(Pm(m, m.E, m.N, 0));
     const onScreen = zp && zp[0] > 0 && zp[0] < W && zp[1] > -H && zp[1] < 2 * H;
     g.fillStyle = '#ffb020'; g.font = `600 ${12 * dpr}px "IBM Plex Sans", system-ui, sans-serif`;
     if (onScreen) {
@@ -440,6 +574,14 @@ export class WindowView {
       white = Math.max(white, Math.min(0.97, k * 0.85 * near * vis * Math.exp(-ts / (s.plan.tMax * 4 + 0.6))));
     }
     if (white > 0.01) { g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = `rgba(255,252,240,${white})`; g.fillRect(0, 0, W, H); }
+    // cruz para apuntar durante la calibración
+    if (this.aiming) {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.strokeStyle = '#f97316'; g.lineWidth = 2 * dpr;
+      const c = 18 * dpr;
+      g.beginPath(); g.moveTo(W / 2 - c, H / 2); g.lineTo(W / 2 + c, H / 2); g.moveTo(W / 2, H / 2 - c); g.lineTo(W / 2, H / 2 + c); g.stroke();
+      g.beginPath(); g.arc(W / 2, H / 2, c * 0.6, 0, Math.PI * 2); g.stroke();
+    }
     // cristales rotos
     if (this.cracks.length) {
       g.setTransform(1, 0, 0, 1, 0, 0);
@@ -461,10 +603,12 @@ export class WindowView {
     // lo que queda por debajo del horizonte lo tapa la curvatura de la Tierra
     const dh = Math.sqrt(2 * R_EFF * this.eyeH);
     g.save();
-    if (s.d > dh) {
+    if (s.d > dh || this.terrain) {
       const hz: [number, number][] = [];
-      for (let a = s.az - 40; a <= s.az + 40; a += 4) {
-        const v: V3 = [Math.cos(dip) * Math.sin(a * RAD), Math.cos(dip) * Math.cos(a * RAD), Math.sin(dip)];
+      for (let a = s.az - 40; a <= s.az + 40; a += this.terrain ? 1 : 4) {
+        // lo que tapa: el relieve entre el observador y la explosión (o la curvatura de la Tierra)
+        const el = this.terrain ? this.occl(a, s.d * 0.98) : dip;
+        const v: V3 = [Math.cos(el) * Math.sin(a * RAD), Math.cos(el) * Math.cos(a * RAD), Math.sin(el)];
         const p = proj(v); if (p) hz.push([p[0], p[1]]);
       }
       if (hz.length > 1) {
@@ -492,7 +636,7 @@ export class WindowView {
           const u = i / n, j = (rnd(i + 50) - 0.5) * 0.35;
           const x = a[0] + (b[0] - a[0]) * u + j * (ra + rb) * 0.5, y = a[1] + (b[1] - a[1]) * u;
           const r = Math.max(1, ra + (rb - ra) * u) * (0.8 + 0.4 * rnd(i + 90));
-          const c0 = Math.round(105 + 60 * u);
+          const c0 = Math.round((105 + 60 * u) * (1 - 0.75 * this.night));
           const gr = g.createRadialGradient(x - r * 0.25, y - r * 0.2, 0, x, y, r);
           gr.addColorStop(0, `rgba(${c0 + 25},${c0 + 10},${c0},${0.5 * sf})`); gr.addColorStop(1, `rgba(${c0},${c0 - 12},${c0 - 22},0)`);
           g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
@@ -523,7 +667,14 @@ export class WindowView {
           const pr = (N === 1 ? 1 : 0.32 + 0.25 * rnd(i * 3 + 3)) * Math.max(R, 1);
           const pRy = N === 1 ? Math.max(Ry, 0.6) : pr * (Ry / Math.max(R, 1)) * 1.6;
           const lit = 0.5 + 0.5 * Math.sin(a); // las de arriba, más claras
-          const col = [Math.round(140 + 90 * lit + glow * 40), Math.round(128 + 88 * lit - glow * 50), Math.round(120 + 82 * lit - glow * 90)];
+          // de día, el Sol ilumina las bolas de arriba; de noche sólo se ven por la luz de la bola de fuego
+          // (rojiza y violácea al principio) y, después, por el resplandor anaranjado de los incendios
+          const nk = this.night;
+          const inner = Math.exp(-ts / Math.max(1, pl.tau * 0.9));
+          const fireLit = s.fx.fires && s.fx.fires.kind !== 'none' ? 0.35 * (1 - lit) : 0;
+          const dayC = [140 + 90 * lit, 128 + 88 * lit, 120 + 82 * lit];
+          const nightC = [28 + 150 * inner + 120 * fireLit, 24 + 60 * inner + 50 * fireLit, 36 + 110 * inner * (1 - lit) + 10 * fireLit];
+          const col = dayC.map((d, n) => Math.round(d + (nightC[n] - d) * nk + glow * [40, -50, -90][n]));
           const gr = g.createRadialGradient(x, y - pRy * 0.35, 0, x, y, pr);
           gr.addColorStop(0, `rgba(${col[0] + 20},${col[1] + 15},${col[2] + 10},${0.95 * fade})`);
           gr.addColorStop(0.7, `rgba(${col[0]},${col[1]},${col[2]},${0.85 * fade})`);
@@ -565,12 +716,15 @@ export class WindowView {
     const dir = DIRS[Math.round(m.az / 45) % 8];
     const topKm = m.plan.capTop / 1000;
     const el = Math.max(0, this.elevDeg(m, m.plan.capTop));
-    const hidden = Math.max(0, (m.d - Math.sqrt(2 * R_EFF * this.eyeH)) ** 2 / (2 * R_EFF));
+    // altura que queda tapada: por la curvatura de la Tierra o, si se ha cargado, también por el relieve
+    const hidden = this.terrain
+      ? Math.max(0, m.d * Math.tan(this.occl(m.az, m.d * 0.98)) + (m.d * m.d) / (2 * R_EFF) + this.eyeH - m.base)
+      : Math.max(0, (m.d - Math.sqrt(2 * R_EFF * this.eyeH)) ** 2 / (2 * R_EFF));
     const lines = [
       tr(`${this.o.obs.label} · zona cero a ${kmTxt} km al ${dir}`),
       tr(`El hongo subirá a ${n1(topKm)} km: se verá a ${Math.round(el)}° sobre el horizonte (≈ ${n1(el / 10)} puños con el brazo extendido)`),
     ];
-    if (hidden > 50) lines.push(tr(`La curvatura de la Tierra tapa los primeros ${hidden >= 1000 ? `${n1(hidden / 1000)} km` : `${Math.round(hidden)} m`} de altura`));
+    if (hidden > 50) lines.push(tr(`${this.terrain ? 'El relieve y la curvatura de la Tierra tapan' : 'La curvatura de la Tierra tapa'} los primeros ${hidden >= 1000 ? `${n1(hidden / 1000)} km` : `${Math.round(hidden)} m`} de altura`));
     lines.push(tr(this.headline));
     const html = lines.map((l, i) => `<div class="${i === lines.length - 1 ? 'wv-head' : ''}">${l}</div>`).join('');
     if (html !== this.lastHud) { this.lastHud = html; this.hud.info.innerHTML = html; }

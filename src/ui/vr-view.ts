@@ -13,6 +13,7 @@ import { tr } from '../i18n';
 import { DEC } from '../i18n/locale';
 import { localOffset } from '../physics/safety';
 import type { WinOpts, WinSource } from './window-view';
+import { subsolarAtLocalHour } from '../map/daynight';
 
 const RAD = Math.PI / 180;
 const R_EFF = 6371000 / (1 - 0.13);
@@ -80,6 +81,8 @@ export class VrView {
   private session: any = null;
   private onExit: (() => void) | null = null;
   private eyeH = 1.6;
+  /** 0 de día, 1 de noche cerrada */
+  private night = 0;
   private lite = false;
   private mode: 'xr' | 'cardboard' = 'cardboard';
   private orient: { a: number; b: number; g: number } | null = null;
@@ -90,6 +93,12 @@ export class VrView {
   async start(o: WinOpts & { t0?: number; eyeH?: number; lite?: boolean }, mode: 'xr' | 'cardboard', onExit: () => void) {
     this.o = o; this.mode = mode; this.onExit = onExit;
     this.eyeH = o.eyeH ?? 1.6; this.lite = !!o.lite;
+    {
+      const sub = subsolarAtLocalHour(new Date(), o.hour ?? 12, o.obs.lon);
+      const la = o.obs.lat * RAD, d = sub.lat * RAD, H = (o.obs.lon - sub.lon) * RAD;
+      const el = Math.asin(Math.sin(la) * Math.sin(d) + Math.cos(la) * Math.cos(d) * Math.cos(H)) / RAD;
+      this.night = Math.max(0, Math.min(1, (2 - el) / 8));
+    }
     this.t = o.t0 !== undefined && o.t0 > -5 && o.t0 < 3000 ? o.t0 : -5;
     this.speed = 1;
     const el = h('div', { id: 'vrview' });
@@ -190,16 +199,16 @@ export class VrView {
     S.add(this.rig); this.rig.add(this.camera); S.add(this.world);
     // cielo (con el destello) y suelo
     this.sky = new THREE.ShaderMaterial({
-      side: THREE.BackSide, depthWrite: false, depthTest: false, uniforms: { flash: { value: 0 } },
+      side: THREE.BackSide, depthWrite: false, depthTest: false, uniforms: { flash: { value: 0 }, night: { value: this.night } },
       vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform float flash; varying vec3 vP; void main(){ float e = normalize(vP).y; vec3 c = mix(vec3(0.70,0.79,0.86), vec3(0.20,0.38,0.60), smoothstep(0.0, 0.55, e)); gl_FragColor = vec4(mix(c, vec3(1.0, 0.98, 0.93), flash), 1.0); }',
+      fragmentShader: 'uniform float flash; uniform float night; varying vec3 vP; void main(){ float e = normalize(vP).y; vec3 c = mix(vec3(0.70,0.79,0.86), vec3(0.20,0.38,0.60), smoothstep(0.0, 0.55, e)); vec3 n = mix(vec3(0.07,0.09,0.15), vec3(0.01,0.015,0.04), smoothstep(0.0, 0.55, e)); c = mix(c, n, night); gl_FragColor = vec4(mix(c, vec3(1.0, 0.98, 0.93), flash), 1.0); }',
     });
     const sky = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), this.sky);
     sky.renderOrder = -10; sky.frustumCulled = false;
     // pequeña y sin profundidad: se dibuja primero y todo lo demás encima, como si estuviera en el infinito
     this.rig.add(sky);
     this.renderer.setClearColor(0xa9c3d8);
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(8e5, 96), new THREE.MeshBasicMaterial({ map: groundTexture() }));
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(8e5, 96), new THREE.MeshBasicMaterial({ map: groundTexture(), color: new THREE.Color(1, 1, 1).multiplyScalar(1 - 0.85 * this.night) }));
     ground.rotation.x = -Math.PI / 2;
     S.add(ground);
     // velo blanco del destello delante de los ojos
@@ -329,7 +338,12 @@ export class VrView {
       const sz = rx * (0.55 + 0.35 * rnd(i + 40));
       sp.scale.set(sz, sz * Math.min(1, (ry / rx) * 2.2), 1);
       const lit = 0.55 + 0.45 * (v * 0.5 + 0.5);
-      (sp.material as THREE.SpriteMaterial).color.setRGB(Math.min(1, 0.6 * lit + 0.35 + glow * 0.3), Math.min(1, 0.56 * lit + 0.32 - glow * 0.1), Math.min(1, 0.52 * lit + 0.3 - glow * 0.3));
+      // de noche, sólo la luz de la bola de fuego (rojiza al principio) ilumina el hongo
+      const nk = this.night, inner = Math.exp(-ts / Math.max(1, pl.tau * 0.9));
+      const day = [0.6 * lit + 0.35, 0.56 * lit + 0.32, 0.52 * lit + 0.3];
+      const nite = [0.12 + 0.6 * inner, 0.1 + 0.25 * inner, 0.15 + 0.45 * inner * (1 - lit)];
+      const cc = day.map((x, n) => x + (nite[n] - x) * nk);
+      (sp.material as THREE.SpriteMaterial).color.setRGB(Math.min(1, cc[0] + glow * 0.3), Math.min(1, Math.max(0, cc[1] - glow * 0.1)), Math.min(1, Math.max(0, cc[2] - glow * 0.3)));
       (sp.material as THREE.SpriteMaterial).opacity = 0.9 * fade;
     });
     // tronco y polvo
@@ -344,7 +358,7 @@ export class VrView {
       const r = pl.stemR * (1.3 + (0.75 - 1.3) * u) * (0.8 + 0.4 * rnd(i + 90));
       sp.position.set(dm[0] + (rnd(i + 50) - 0.5) * r * 0.4, z, -dm[1]);
       sp.scale.set(r * 2.2, r * 2.2, 1);
-      const c = 0.42 + 0.25 * u;
+      const c = (0.42 + 0.25 * u) * (1 - 0.75 * this.night);
       (sp.material as THREE.SpriteMaterial).color.setRGB(c + 0.08, c + 0.03, c);
       (sp.material as THREE.SpriteMaterial).opacity = 0.75 * sf;
     });
