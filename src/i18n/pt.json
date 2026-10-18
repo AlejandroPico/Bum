@@ -2240,5 +2240,10 @@
  "¡Aléjate de la ventana y túmbate!": "Afaste-se da janela e deite-se!",
  "La onda expansiva llega en {0}: {1} psi, {2}": "A onda de choque chega dentro de {0}: {1} psi, {2}",
  "El estruendo llega en {0}": "O estrondo chega dentro de {0}",
- "Ha llegado la onda expansiva: {0} psi": "Chegou a onda de choque: {0} psi"
+ "Ha llegado la onda expansiva: {0} psi": "Chegou a onda de choque: {0} psi",
+ "Visor RV (Cardboard)": "Visor RV (Cardboard)",
+ "Gafas RV": "Óculos RV",
+ "No se pudo abrir la realidad virtual en este dispositivo": "Não foi possível abrir a realidade virtual neste dispositivo",
+ "Salir": "Sair",
+ "Batería baja: calidad mínima para gastar menos": "Bateria fraca: qualidade mínima para gastar menos"
 }

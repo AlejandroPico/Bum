@@ -2377,5 +2377,10 @@
  "¡Aléjate de la ventana y túmbate!": "Get away from the window and lie down!",
  "La onda expansiva llega en {0}: {1} psi, {2}": "The blast wave arrives in {0}: {1} psi, {2}",
  "El estruendo llega en {0}": "The boom arrives in {0}",
- "Ha llegado la onda expansiva: {0} psi": "The blast wave has arrived: {0} psi"
+ "Ha llegado la onda expansiva: {0} psi": "The blast wave has arrived: {0} psi",
+ "Visor RV (Cardboard)": "VR viewer (Cardboard)",
+ "Gafas RV": "VR headset",
+ "No se pudo abrir la realidad virtual en este dispositivo": "Virtual reality could not be opened on this device",
+ "Salir": "Exit",
+ "Batería baja: calidad mínima para gastar menos": "Low battery: minimum quality to save power"
 }

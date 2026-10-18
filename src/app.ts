@@ -60,7 +60,7 @@ readHash(state);
 const AUTOQ_KEY = 'bum:autoq';
 /** nivel automático: el del equipo, o uno más bajo si una simulación anterior iba a saltos */
 function autoLevel() {
-  let q = perf.lowPower ? 0.5 : 1;
+  let q = perf.weak ? 0.25 : perf.lowPower ? 0.5 : 1;
   try { const a = +(localStorage.getItem(AUTOQ_KEY) ?? ''); if (a === 0.25 || a === 0.5) q = Math.min(q, a); } catch { /* sin almacenamiento */ }
   return q;
 }
@@ -73,6 +73,16 @@ function autoLevel() {
   perf.q = auto ? autoLevel() : [0.25, 0.5, 1, 1.6].includes(+(pr.quality ?? 1)) ? +(pr.quality ?? 1) : 1;
 }
 document.body.classList.toggle('lite', perf.lite);
+// batería baja (sin cargar): con la calidad automática, se baja a Mínima para que dure más
+(navigator as Navigator & { getBattery?: () => Promise<{ level: number; charging: boolean; addEventListener(e: string, f: () => void): void }> }).getBattery?.().then((b) => {
+  const check = () => {
+    if (!state.view.autoQ || b.charging || b.level > 0.2 || perf.q <= 0.25) return;
+    applyPerf(0.25);
+    toast('Batería baja: calidad mínima para gastar menos', 3500);
+  };
+  b.addEventListener('levelchange', check); b.addEventListener('chargingchange', check);
+  setTimeout(check, 4000);
+}).catch(() => undefined);
 const map = createMap(document.getElementById('map')!, [state.target.lon, state.target.lat], { lite: perf.lite, pixelRatio: pixelRatioFor(perf.q) });
 const overlays = new Overlays(map);
 // tiempo real en el mapa (nubes, radar, lluvia en pantalla y niebla)
@@ -1030,7 +1040,7 @@ function openWindow() {
   WindowView.prime();
   R.playing = false; fxLayer.animating = false;
   const sources = [{ fx: R.fx, plan: R.plan, lat: R.lat, lon: R.lon, delay: 0 }, ...R.extras.map((x) => ({ fx: x.fx, plan: x.plan, lat: x.lat, lon: x.lon, delay: x.delay }))];
-  const go = (obs: { lat: number; lon: number; label: string }) => winView.show({ sources, obs, sound: { flash: (i) => audio.flash(i), boom: (i) => audio.boom(i) } });
+  const go = (obs: { lat: number; lon: number; label: string }) => winView.show({ sources, obs, lite: perf.lite, sound: { flash: (i) => audio.flash(i), boom: (i) => audio.boom(i) } });
   audio.unlock();
   if (safePoint) { go(safePoint); return; }
   const fallback = () => {
@@ -1159,7 +1169,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.15';
+const APP_VERSION = '1.16';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1751,7 +1761,9 @@ async function detonate() {
       domes.hidden = new Set(results.hidden);
       mods.push(domes);
       if (primary && pl.isAsteroid) mods.push(new FX.Bolide(pl, puffTex!));
-      const fires = new FX.Fires(pl, puffTex!, elevAt, primary ? q : q * 0.5);
+      // en un ataque múltiple con calidad baja, las detonaciones secundarias llevan menos partículas
+      const qx = primary ? q : perf.lite ? q * 0.3 : q * 0.5;
+      const fires = new FX.Fires(pl, puffTex!, elevAt, qx);
       fires.object.visible = state.view.fires;
       mods.push(fires);
       // presas y tormentas solares no tienen nube, onda ni bola de fuego
@@ -1759,7 +1771,7 @@ async function detonate() {
       if (!fxi.dam && !fxi.solar && !fxi.war) {
         const vol = volumetric && cloudNoise ? new FX.VolumeCloud(pl, cloudNoise, primary ? q : Math.min(q, 0.6)) : null;
         if (vol) mods.push(vol);
-        const mush = new FX.Mushroom(pl, puffTex!, primary ? q : q * 0.5, !!vol);
+        const mush = new FX.Mushroom(pl, puffTex!, qx, !!vol);
         mods.push(mush);
         // paso a modo ligero en plena simulación: la nube volumétrica se cambia por partículas
         if (vol) swap = () => {
@@ -1768,7 +1780,7 @@ async function detonate() {
           fxLayer.add(wrap(m2)); m2.object.position.set(e, el, -n); m2.object.updateMatrixWorld();
         };
         mods.push(new FX.Shock(pl));
-        if (FX.Rubble.wanted(pl)) mods.push(new FX.Rubble(pl, primary ? q : q * 0.5));
+        if (FX.Rubble.wanted(pl) && (primary || !perf.lite)) mods.push(new FX.Rubble(pl, qx));
         mods.push(new FX.Fireball(pl));
       }
       // todas las ojivas derribadas: no hay explosión que dibujar
@@ -2218,7 +2230,7 @@ function onFxFrame(ctx: FrameCtx) {
     autoQ.fps = 1000 / Math.max(1, fxLayer.frameMs);
     sidebar.qualVal.textContent = `${Math.round(autoQ.fps)} fps`;
     if (state.view.autoQ && perf.q > 0.25 && !document.hidden) {
-      if (autoQ.fps < 24) {
+      if (autoQ.fps < 24 && (!fxLayer.maxFps || fxLayer.maxFps >= 24)) {
         if (!R.slowSince) R.slowSince = now;
         else if (now - R.slowSince > 2500) {
           R.slowSince = 0;
@@ -2230,6 +2242,9 @@ function onFxFrame(ctx: FrameCtx) {
       } else R.slowSince = 0;
     }
   }
+
+  // con calidad baja, cuando el hongo ya sólo se disipa, basta con menos fotogramas
+  fxLayer.maxFps = perf.lite && t > P.tau * 4 && !tour.active && !(R.flight && t < 0) ? 15 : maxFpsFor(perf.q);
 
   // post-procesado
   const post = fxLayer.post;

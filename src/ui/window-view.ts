@@ -20,6 +20,8 @@ export interface WinOpts {
   sources: WinSource[];
   obs: { lat: number; lon: number; label: string };
   sound?: { flash(i: number): void; boom(i: number): void };
+  /** equipo modesto: menos resolución y menos detalle */
+  lite?: boolean;
 }
 
 const RAD = Math.PI / 180;
@@ -109,6 +111,29 @@ export class WindowView {
     this.loop();
   }
 
+  /** pasa a la realidad virtual con el mismo instante y la misma altura; al salir se vuelve aquí */
+  private async enterVr(mode: 'xr' | 'cardboard') {
+    const { VrView } = await import('./vr-view');
+    const vr = new VrView();
+    this.suspend(true);
+    const ok = await vr.start({ ...this.o, t0: this.t, eyeH: this.eyeH, lite: this.o.lite }, mode, () => this.suspend(false));
+    if (ok === false) toast('No se pudo abrir la realidad virtual en este dispositivo', 3500);
+  }
+  private suspend(on: boolean) {
+    if (!this.el) return;
+    if (on) {
+      cancelAnimationFrame(this.raf);
+      this.el.style.display = 'none';
+      this.stream?.getTracks().forEach((t) => { t.enabled = false; });
+    } else {
+      this.el.style.display = '';
+      this.stream?.getTracks().forEach((t) => { t.enabled = true; });
+      this.last = performance.now();
+      this.onResize();
+      this.loop();
+    }
+  }
+
   close() {
     if (!this.el) return;
     cancelAnimationFrame(this.raf);
@@ -144,7 +169,12 @@ export class WindowView {
     floor.addEventListener('change', () => { this.eyeH = FLOORS[+floor.value][0]; });
     const zm = (k: number) => () => { this.zoom = Math.max(0.5, Math.min(4, this.zoom * k)); };
     const close = h('button', { type: 'button', class: 'wv-close', title: 'Cerrar', html: '✕', onclick: () => this.close() });
-    el.append(this.video, this.cv, info, hint, close,
+    // realidad virtual: gafas (WebXR) o el móvil en un visor tipo Cardboard
+    const vrRow = h('div', { class: 'wv-vr' });
+    const vrBtn = (mode: 'xr' | 'cardboard', label: string) => h('button', { type: 'button', class: 'wv-b', onclick: () => void this.enterVr(mode) }, label);
+    if (matchMedia('(pointer: coarse)').matches) vrRow.append(vrBtn('cardboard', 'Visor RV (Cardboard)'));
+    void import('./vr-view').then((m) => m.xrSupported()).then((ok) => { if (ok && this.el) vrRow.prepend(vrBtn('xr', 'Gafas RV')); });
+    el.append(this.video, this.cv, info, hint, close, vrRow,
       h('div', { class: 'wv-bar' },
         warn,
         h('div', { class: 'wv-row' }, play, restart, time, slider),
@@ -180,7 +210,7 @@ export class WindowView {
     if (t < Math.min(...this.S.map((s) => s.tArr))) this.cracks = [];
   }
   private onResize = () => {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(this.o.lite ? 1.25 : 2, window.devicePixelRatio || 1);
     this.cv.width = Math.round(this.cv.clientWidth * dpr);
     this.cv.height = Math.round(this.cv.clientHeight * dpr);
   };
@@ -486,7 +516,7 @@ export class WindowView {
       const R = pxR(rx, c[2]), Ry = pxR(ry, c[2]);
       if (R > 0.4) {
         const glow = Math.max(0, Math.min(1, heat * 1.4)); // incandescente al principio
-        const N = R < 6 ? 1 : 26;
+        const N = R < 6 ? 1 : this.o.lite ? 14 : 26;
         for (let i = 0; i < N; i++) {
           const a = rnd(i * 3 + 1) * Math.PI * 2, rr = Math.sqrt(rnd(i * 3 + 2));
           const x = c[0] + Math.cos(a) * rr * R * 0.8, y = c[1] - Math.sin(a) * rr * Ry * 0.75;

@@ -299,11 +299,36 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       y túmbate!»), estruendo con vibración, sacudida y cristales rotos a partir de 0,5 psi. Varias detonaciones a la
       vez en un ataque múltiple.
 
+## 1.16 — Realidad virtual y móviles modestos (publicada)
+
+- [x] Realidad virtual (`src/ui/vr-view.ts`), desde «Desde mi ventana»: con gafas de RV (WebXR, la zona cero se pone
+      delante; gatillo para la velocidad y botón lateral para volver a empezar) o con el móvil en un visor tipo
+      Cardboard (pantalla partida y brújula, con el norte real). Bola de fuego, tronco, polvo y sombrero del hongo en
+      3D a su distancia real, anillos de 5 y 1 psi en el suelo, curvatura de la Tierra, destello, sacudida y
+      estruendo con la onda expansiva, y un rótulo con el reloj y los avisos.
+- [x] Móviles modestos: se detectan los de gama baja (gráfica antigua, 2–3 GB de memoria, ahorro de datos) y
+      empiezan en Mínima; Mínima a 24 fotogramas por segundo; con calidad baja, a 15 cuando el hongo ya sólo se
+      disipa; las detonaciones secundarias de un ataque múltiple llevan menos partículas y sin escombros; con la
+      batería baja y sin cargar se pasa a Mínima; «Desde mi ventana» con menos resolución y menos detalle.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
 
-- (Sin propuestas pendientes por ahora: se añadirán aquí las nuevas ideas.)
+- [ ] Asteroides reales: catálogo de la NASA (Sentry/CNEOS) con Apophis, 2024 YR4, Bennu…, con su tamaño, velocidad y
+      probabilidad de impacto reales, listos para lanzar.
+- [ ] Escenarios históricos reconstruidos: Hiroshima, Nagasaki, Castle Bravo (lluvia sobre Rongelap), Tunguska y
+      Cheliábinsk con su fecha y viento; comparación del modelo con lo que pasó de verdad.
+- [ ] Arsenales del mundo 1945–hoy: cabezas nucleares por país año a año, con el pico de 1986 y los tratados
+      (INF, START…) en la línea de tiempo.
+- [ ] Invierno nuclear en el mapa: mapa mundial animado mes a mes de la bajada de temperatura y las cosechas perdidas.
+- [ ] Lluvia radiactiva más realista (tipo HYSPLIT): partículas que caen desde cada altura del hongo con el viento
+      real de cada capa y cada hora; manchas curvadas en lugar de la elipse.
+- [ ] Modo clase / presentación: una secuencia de escenarios que se pasa como diapositivas, con el recorrido
+      cinematográfico en cada una.
+- [ ] «Desde mi ventana», segunda parte: grietas y estruendo también al saltar con la barra, montañas reales en el
+      horizonte, el hongo de noche iluminado por dentro y una calibración guiada de la brújula.
+- [ ] Traducir los artículos de la enciclopedia a los 7 idiomas.
 
 ## Descartado por ahora
 

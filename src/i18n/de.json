@@ -2386,5 +2386,10 @@
  "¡Aléjate de la ventana y túmbate!": "Weg vom Fenster und leg dich hin!",
  "La onda expansiva llega en {0}: {1} psi, {2}": "Die Druckwelle kommt in {0} an: {1} psi, {2}",
  "El estruendo llega en {0}": "Der Knall kommt in {0} an",
- "Ha llegado la onda expansiva: {0} psi": "Die Druckwelle ist da: {0} psi"
+ "Ha llegado la onda expansiva: {0} psi": "Die Druckwelle ist da: {0} psi",
+ "Visor RV (Cardboard)": "VR-Brille (Cardboard)",
+ "Gafas RV": "VR-Headset",
+ "No se pudo abrir la realidad virtual en este dispositivo": "Virtuelle Realität konnte auf diesem Gerät nicht geöffnet werden",
+ "Salir": "Beenden",
+ "Batería baja: calidad mínima para gastar menos": "Akku schwach: minimale Qualität zum Stromsparen"
 }

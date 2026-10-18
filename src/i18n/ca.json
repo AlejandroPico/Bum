@@ -2318,5 +2318,10 @@
  "¡Aléjate de la ventana y túmbate!": "Allunya't de la finestra i estira't a terra!",
  "La onda expansiva llega en {0}: {1} psi, {2}": "L'ona expansiva arriba d'aquí a {0}: {1} psi, {2}",
  "El estruendo llega en {0}": "L'estrèpit arriba d'aquí a {0}",
- "Ha llegado la onda expansiva: {0} psi": "Ha arribat l'ona expansiva: {0} psi"
+ "Ha llegado la onda expansiva: {0} psi": "Ha arribat l'ona expansiva: {0} psi",
+ "Visor RV (Cardboard)": "Visor RV (Cardboard)",
+ "Gafas RV": "Ulleres RV",
+ "No se pudo abrir la realidad virtual en este dispositivo": "No s’ha pogut obrir la realitat virtual en aquest dispositiu",
+ "Salir": "Sortir",
+ "Batería baja: calidad mínima para gastar menos": "Bateria baixa: qualitat mínima per gastar menys"
 }

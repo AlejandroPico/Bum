@@ -15,6 +15,8 @@ export const perf = {
   get lite() { return this.q <= 0.5; },
   /** se detectó un equipo poco potente (gráfica integrada, pocos núcleos o poca memoria) */
   lowPower: false,
+  /** equipo muy modesto (móvil de gama baja, poca memoria o ahorro de datos): se empieza en Mínima */
+  weak: false,
   gpu: '',
 };
 
@@ -28,7 +30,7 @@ export function pixelRatioFor(q: number): number {
 }
 
 /** fotogramas por segundo máximos de la animación (0 = sin límite) */
-export const maxFpsFor = (q: number) => (q <= 0.5 ? 30 : 0);
+export const maxFpsFor = (q: number) => (q <= 0.25 ? 24 : q <= 0.5 ? 30 : 0);
 
 /**
  * Detección (sin coste apreciable): nombre de la tarjeta gráfica, núcleos, memoria y tipo de
@@ -58,5 +60,9 @@ export function detectLowPower(): boolean {
   const px = screen.width * screen.height * (window.devicePixelRatio || 1) ** 2;
   const low = (!dedicated && (weakGpu || cores <= 4 || mem <= 4 || touch)) || (weakGpu && px > 4e6);
   perf.lowPower = low;
+  // gama baja: gráficas móviles antiguas, 2–3 GB de memoria o el modo de ahorro de datos
+  const oldGpu = /mali-[2-4]\d\d|mali-t\d|mali-g(31|51|52|57)|adreno \(tm\) [3-5]\d\d|adreno [3-5]\d\d|powervr|videocore|swiftshader|llvmpipe/.test(g);
+  const saveData = !!(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+  perf.weak = touch && (oldGpu || mem <= 3 || cores <= 4) || saveData;
   return low;
 }
