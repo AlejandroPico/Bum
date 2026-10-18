@@ -473,6 +473,15 @@ section('Arsenales del mundo y reconstrucciones históricas');
   truthy('La mayoría de las magnitudes físicas coinciden o se acercan (dentro de ×1,6)', match >= 12, `(${match})`);
 }
 
+section('Asteroides reales (NASA/JPL)');
+{
+  const C = (await import('../src/data/neo-catalog.json')).default as unknown as { sentry: [string, number, number | null, number | null][]; famous: { name: string; dM: number | null }[]; approaches: unknown[] };
+  truthy('Lista de riesgo Sentry completa (más de 1000 objetos)', C.sentry.length > 1000, `(${C.sentry.length})`);
+  truthy('Probabilidades entre 0 y 1', C.sentry.every((r) => r[3] == null || (r[3] > 0 && r[3] < 1)));
+  truthy('Apophis, Bennu y 2024 YR4 con su tamaño', ['Apophis', 'Bennu', '2024 YR4'].every((n) => (C.famous.find((f) => f.name === n)?.dM ?? 0) > 30));
+  truthy('Acercamientos de los próximos años', C.approaches.length > 20, `(${C.approaches.length})`);
+}
+
 console.log(`\n${pass} correctas, ${fail} fallidas`);
 if (fail) { console.log('\nFallos:\n' + failures.map((f) => '  · ' + f).join('\n')); (globalThis as unknown as { process: { exit(c: number): void } }).process.exit(1); }
 

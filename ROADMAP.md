@@ -353,12 +353,24 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       los incendios. El Sol aparece como referencia. Calibración guiada de la brújula (el «ocho» y apuntar al Sol o a
       la zona cero). Grietas en los cristales también al saltar con la barra. La noche también en realidad virtual.
 
+## 1.20 — Asteroides reales de la NASA (publicada)
+
+- [x] Catálogo de asteroides reales (`src/ui/neo-panel.ts`, botón en el panel de asteroides), con los datos de
+      NASA/JPL (`src/data/neo-catalog.json`, generado con `npm run neo`, porque sus API no se pueden consultar desde el
+      navegador):
+      · Lista de riesgo Sentry: los más de 2000 objetos con alguna probabilidad de chocar, con búsqueda y orden por
+        peligro (Palermo), probabilidad, tamaño o fecha; los 40 más peligrosos, con sus fechas de impacto posibles y
+        su energía.
+      · Acercamientos de los próximos 10 años a menos de 19 distancias lunares.
+      · Famosos (Apophis, Bennu, 2024 YR4, Didymos, Eros, Itokawa, Ryugu, 1950 DA, Toutatis, Phaethon, Ganymed,
+        2023 DW): tamaño medido, tipo de órbita, distancia mínima entre órbitas, máximo acercamiento e historia.
+- [x] Cualquiera se simula con un clic: su diámetro, su densidad (la medida, si se conoce), la velocidad de entrada
+      (la de encuentro más la que da la gravedad terrestre) y el ángulo más probable (45°).
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
 
-- [ ] Asteroides reales: catálogo de la NASA (Sentry/CNEOS) con Apophis, 2024 YR4, Bennu…, con su tamaño, velocidad y
-      probabilidad de impacto reales, listos para lanzar.
 - [ ] Traducir los artículos de la enciclopedia a los 7 idiomas.
 
 ## Descartado por ahora

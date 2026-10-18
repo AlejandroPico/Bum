@@ -1055,3 +1055,34 @@ body.touring #present-bar { bottom: 130px; }
 #winview .wv-cal-b { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
 #winview .wv-ok { background: #f97316; }
 #winview .wv-acc { font: 500 11px "IBM Plex Mono", monospace; opacity: .8; min-height: 1.2em; }
+
+/* asteroides reales (NASA) */
+.neo-btn { width: 100%; margin: -4px 0 10px; }
+#neo-pop { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 60; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 60px); display: flex; flex-direction: column; padding: 14px 18px; }
+#neo-pop.hidden { display: none; }
+.neo-head { display: flex; align-items: center; justify-content: space-between; font-size: 15px; }
+.neo-tabs { margin: 8px 0; }
+.neo-body { overflow-y: auto; flex: 1; min-height: 0; padding-right: 4px; }
+.neo-tools { display: flex; gap: 8px; margin: 6px 0; }
+.neo-q { flex: 1; min-width: 0; background: rgba(var(--ink), .05); border: 0; border-bottom: 1px solid var(--line); color: inherit; font: inherit; font-size: 12.5px; padding: 6px 4px; }
+.neo-sort { width: auto; }
+.neo-row { display: grid; grid-template-columns: 1.4fr .8fr 1fr 1fr .6fr; gap: 8px; align-items: baseline; padding: 6px 2px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.neo-row.neo-c { grid-template-columns: .9fr 1.6fr .9fr 1fr 32px; cursor: default; }
+.neo-row:hover:not(.neo-hd) { background: rgba(var(--ink), .04); }
+.neo-hd { font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); cursor: default; }
+.neo-n { font-weight: 600; }
+.neo-hot { color: #fb923c; font-weight: 600; }
+.neo-det { padding: 6px 4px 10px; font-size: 12px; }
+.neo-det p { margin: 0 0 6px; color: var(--muted); }
+.neo-det.hidden { display: none; }
+.neo-vi { display: grid; grid-template-columns: auto auto auto; gap: 2px 16px; justify-content: start; margin-bottom: 8px; font: 500 11.5px var(--mono); }
+.neo-vi .hd { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.neo-go { border: 0; background: var(--accent); color: #fff; width: 28px; height: 24px; cursor: pointer; }
+.neo-more { margin: 8px auto; display: block; }
+.neo-fam { display: flex; flex-direction: column; }
+.neo-f { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.neo-ft b { font-size: 14px; margin-right: 8px; }
+.neo-ft span { font-size: 11.5px; color: var(--muted); }
+.neo-f p { margin: 4px 0 6px; font-size: 12.5px; line-height: 1.45; }
+.neo-src { margin-top: 8px; font-size: 10.5px; color: var(--muted); line-height: 1.4; }
+@media (max-width: 640px) { .neo-row { grid-template-columns: 1.2fr .8fr 1fr .6fr; } .neo-row > :nth-child(4) { display: none; } .neo-row.neo-c { grid-template-columns: .9fr 1.4fr .9fr 32px; } .neo-row.neo-c > :nth-child(4) { display: none; } }

@@ -1,6 +1,6 @@
 {
   "name": "bum",
-  "version": "1.19.0",
+  "version": "1.20.0",
   "description": "Simulador 3D de efectos de armas nucleares e impactos de asteroides",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "check:physics": "tsx scripts/check-physics.ts",
     "test": "tsx tests/physics.test.ts",
-    "i18n": "node scripts/i18n-extract.mjs"
+    "i18n": "node scripts/i18n-extract.mjs",
+    "neo": "node scripts/neo-catalog.mjs"
   },
   "license": "MIT",
   "dependencies": {

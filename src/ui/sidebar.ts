@@ -96,6 +96,8 @@ export interface SidebarEvents {
   onMulti(): void;
   /** llegó el tiempo real del objetivo */
   onWeather?(w: Weather): void;
+  /** abrir el catálogo de asteroides reales */
+  onNeo?(): void;
 }
 
 const logSlider = (min: number, max: number, val: number, step = 0.01) => {
@@ -197,6 +199,8 @@ export class Sidebar {
     if (S.mode === 'other') return S.other.type === 'volcano' ? { ...S.other.volcano } : S.other.type === 'dam' ? { ...S.other.dam } : S.other.type === 'solar' ? { ...S.other.solar } : S.other.type === 'war' ? { ...S.other.war } : { ...S.other.release, source: S.other.type === 'dirtybomb' ? 'dirtybomb' : 'reactor' };
     return S.mode === 'nuclear' ? { ...S.nuke } : { ...S.ast };
   }
+  /** pone un asteroide concreto (catálogo de la NASA) */
+  setAsteroid: (p: { name: string; diameterM: number; densityKgM3: number; velocityKms: number; angleDeg: number; note: string }) => void = () => {};
   /** pone unas condiciones concretas (reconstrucciones históricas) */
   setEnv: (v: Partial<Environment>, note?: string) => void = () => {};
   /** consulta el tiempo real en el objetivo y lo aplica al entorno */
@@ -506,6 +510,16 @@ export class Sidebar {
       aNote.textContent = p.note; aNote.style.display = '';
       updAst();
     });
+    this.setAsteroid = (p) => {
+      this.setMode('asteroid');
+      Object.assign(as, { name: p.name, diameterM: p.diameterM, densityKgM3: p.densityKgM3, velocityKms: Math.min(72, Math.max(11, p.velocityKms)), angleDeg: p.angleDeg, surface: 'auto' });
+      aPreset.value = '';
+      dR.value = String(Math.log10(p.diameterM)); densIn.value = String(p.densityKgM3); vR.value = String(as.velocityKms); angR.value = String(p.angleDeg); tgt.set('auto');
+      comp.value = String(COMPOSITIONS.reduce((b, c) => (Math.abs(c.density - p.densityKgM3) < Math.abs(b.density - p.densityKgM3) ? c : b)).density);
+      aNote.textContent = p.note; aNote.style.display = '';
+      updAst();
+      as.name = p.name;
+    };
     comp.addEventListener('change', () => { densIn.value = comp.value; updAst(); markA(); });
     for (const el of [dR, vR, angR]) el.addEventListener('input', () => { updAst(); markA(); });
     for (const el of [densIn, depthIn]) el.addEventListener('input', () => { updAst(); markA(); });
@@ -522,6 +536,7 @@ export class Sidebar {
     this.astPanel = h('div', {},
       section('Objeto', h('div', {},
         field('Escenario', null, aPreset),
+        h('button', { type: 'button', class: 'btn-line neo-btn', onclick: (e: MouseEvent) => { e.stopPropagation(); this.ev.onNeo?.(); } }, 'Asteroides reales de la NASA (riesgo, acercamientos y famosos)'),
         aNote,
         field('Diámetro', dVal, dR),
         field('Composición', null, comp),

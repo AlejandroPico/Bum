@@ -39,6 +39,7 @@ import { FalloutParticles, type FallSet } from './map/fallout-particles';
 import { WinterLayer } from './map/winter-layer';
 import { ArsenalView, ReconView, type HistTab } from './ui/hist-views';
 import { Presenter, buildPresentPanel, type PresentCtx, type Slide } from './ui/present';
+import { NeoPanel } from './ui/neo-panel';
 import { HISTORIC, type HistCase } from './data/historic';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
@@ -249,6 +250,7 @@ function savePrefs() {
 // ---------------------------------------------------------------------------
 const sidebar = new Sidebar(document.getElementById('sidebar')!, state, {
   onDetonate: () => detonate(),
+  onNeo: () => { void neoPanel.show(); },
   onClear: () => { clearRun(); void refreshHeat(); },
   onTarget: (lat, lon, label, fly) => setTarget(lat, lon, label, fly),
   onEnv: () => { atmosphere = tod(); syncLocalWeather(); },
@@ -570,6 +572,9 @@ function goHistTab(t: HistTab) {
   else { historyBtn.classList.add('on'); if (run) { clearRun(); results.hide(); } reconView.open(); }
 }
 histMode.onTab = arsView.onTab = reconView.onTab = goHistTab;
+// asteroides reales de la NASA (Sentry, acercamientos y famosos)
+const neoPanel = new NeoPanel(document.getElementById('app')!);
+neoPanel.onPick = (p) => sidebar.setAsteroid(p);
 // modo clase / presentación: escenarios guardados como diapositivas
 const PRESENT_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M12 16v4M8 20h8"/><path d="M10 8.5l4 1.5-4 1.5z" fill="currentColor"/></svg>';
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
@@ -1306,7 +1311,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.19';
+const APP_VERSION = '1.20';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
