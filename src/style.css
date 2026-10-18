@@ -877,6 +877,11 @@ body:not(.touring) .tour-btns, body:not(.touring) .tour-btns button { pointer-ev
 #war-hud.hidden { display: none; }
 #war-hud b { font: 600 15px var(--sans, system-ui); letter-spacing: .01em; }
 #war-hud span { font: 500 11.5px var(--mono); color: #ffd28a; }
+#war-hud i { font: 600 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #c9d1dd; font-style: normal; }
+#war-hud .ws.a { color: #ffa07a; } #war-hud .ws.b { color: #8fd3fb; }
+.war-steps { display: flex; justify-content: center; gap: 6px; margin-top: 6px; pointer-events: auto; }
+.war-steps button { width: 34px; height: 28px; border: 0; background: rgba(0, 0, 0, .45); color: #fff; cursor: pointer; font-size: 12px; }
+.war-steps button:hover { background: rgba(0, 0, 0, .7); }
 body.rp-open:not(.rp-min) #war-hud { left: calc(50% - 160px); }
 body:not(.ui-collapsed) #war-hud { margin-left: 160px; }
 @media (max-width: 760px) { #war-hud { top: 58px; margin-left: 0 !important; left: 50% !important; } #war-hud b { font-size: 13px; } }

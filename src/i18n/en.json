@@ -2206,5 +2206,12 @@
  "hidráulico (aguas someras sobre el relieve)": "hydraulic (shallow water over the terrain)",
  "estimación rápida (calculando el hidráulico…)": "quick estimate (computing the hydraulic one…)",
  "{0} min": "{0} min",
- "{0} h": "{0} h"
+ "{0} h": "{0} h",
+ "Fase {0} de {1}": "Phase {0} of {1}",
+ "{0} detecta los misiles y responde antes de que lleguen las ojivas": "{0} detects the missiles and retaliates before the warheads arrive",
+ "{0} ojivas recibidas": "{0} warheads received",
+ "· ≈ {0} muertos": "· ≈ {0} dead",
+ "Fase anterior": "Previous phase",
+ "Fase siguiente": "Next phase",
+ "Reproducir o pausar": "Play or pause"
 }

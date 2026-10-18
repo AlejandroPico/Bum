@@ -2147,5 +2147,12 @@
  "hidráulico (aguas someras sobre el relieve)": "hidràulic (aigües someres sobre el relleu)",
  "estimación rápida (calculando el hidráulico…)": "estimació ràpida (calculant l’hidràulic…)",
  "{0} min": "{0} min",
- "{0} h": "{0} h"
+ "{0} h": "{0} h",
+ "Fase {0} de {1}": "Fase {0} de {1}",
+ "{0} detecta los misiles y responde antes de que lleguen las ojivas": "{0} detecta els míssils i respon abans que arribin les ogives",
+ "{0} ojivas recibidas": "{0} ogives rebudes",
+ "· ≈ {0} muertos": "· ≈ {0} morts",
+ "Fase anterior": "Fase anterior",
+ "Fase siguiente": "Fase següent",
+ "Reproducir o pausar": "Reproduir o pausar"
 }

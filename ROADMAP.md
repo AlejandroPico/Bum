@@ -245,6 +245,13 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       profundidad máxima y hora de llegada para las víctimas. Mientras calcula, se ve la estimación rápida.
 - [x] Mapa partido: el escenario B con sus efectos 3D y al mismo reloj y luz que A.
 
+## 1.11 — Escalada paso a paso (publicada)
+
+- [x] En la guerra nuclear, el rótulo muestra la fase («Fase 2 de 6»: primer ataque, respuesta antes de que lleguen las
+      ojivas, segundas oleadas, incendios, humo en la estratosfera, invierno nuclear) y el balance acumulado de cada
+      bando: ojivas recibidas y muertes por las explosiones (proporcionales a las cifras del escenario). Botones ◀ ⏯ ▶
+      para ir de fase en fase y quedarse en cada una.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
@@ -254,8 +261,6 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 
 - [ ] Refugio más cercano (dentro de «¿Estoy a salvo?»): estaciones de metro, aparcamientos subterráneos y sótanos públicos de OpenStreetMap
       cerca de tu punto, con el tiempo andando y si llegarías antes que la onda o la lluvia.
-- [ ] Escalada: el contraataque y la respuesta, paso a paso, con los vuelos de los misiles de cada bando y el
-      balance acumulado (enlaza con la guerra a gran escala y el invierno nuclear).
 - [ ] «Desde mi ventana»: en el móvil, la cámara y la brújula muestran el tamaño real del hongo y de la bola de
       fuego sobre tu horizonte, según dónde estés.
 - [ ] Hospitales y sanidad: camas y hospitales de la zona frente al número de heridos y quemados (cuántos quedarían

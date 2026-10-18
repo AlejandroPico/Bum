@@ -2215,5 +2215,12 @@
  "hidráulico (aguas someras sobre el relieve)": "hydraulisch (Flachwasser über dem Gelände)",
  "estimación rápida (calculando el hidráulico…)": "Schnellschätzung (hydraulische Berechnung läuft…)",
  "{0} min": "{0} Min.",
- "{0} h": "{0} Std."
+ "{0} h": "{0} Std.",
+ "Fase {0} de {1}": "Phase {0} von {1}",
+ "{0} detecta los misiles y responde antes de que lleguen las ojivas": "{0} erkennt die Raketen und schlägt zurück, bevor die Sprengköpfe einschlagen",
+ "{0} ojivas recibidas": "{0} Sprengköpfe abbekommen",
+ "· ≈ {0} muertos": "· ≈ {0} Tote",
+ "Fase anterior": "Vorherige Phase",
+ "Fase siguiente": "Nächste Phase",
+ "Reproducir o pausar": "Abspielen oder anhalten"
 }

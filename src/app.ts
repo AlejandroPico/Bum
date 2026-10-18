@@ -709,6 +709,26 @@ function setWarLayer(fx: Effects | null) {
 const warHud = h('div', { id: 'war-hud', class: 'hidden' });
 document.getElementById('map')!.parentElement!.append(warHud);
 let warHudKey = '';
+/** fases de la escalada (segundos desde el primer lanzamiento) */
+function warStages(endT: number) {
+  return [0, 420, 1200, endT, endT + 6 * 3600, endT + 5 * 86400];
+}
+/** salta a la fase anterior o siguiente de la escalada y se detiene ahí (paso a paso) */
+function warStep(dir: 1 | -1) {
+  const R = run;
+  if (!R?.fx.war || !warLayer) return;
+  const tx = R.t - R.tStart;
+  const st = warStages(warLayer.endT);
+  const cur = st.reduce((k, s, i) => (tx >= s - 1 ? i : k), 0);
+  const to = st[Math.max(0, Math.min(st.length - 1, cur + dir))];
+  R.t = R.tStart + to + 1; R.playing = false; R.lastOverlay = 0;
+  fxLayer.animating = true;
+  map.triggerRepaint();
+}
+const warBtns = h('div', { class: 'war-steps' },
+  h('button', { type: 'button', title: 'Fase anterior', onclick: () => warStep(-1) }, '◀'),
+  h('button', { type: 'button', title: 'Reproducir o pausar', onclick: () => { if (run) { run.playing = !run.playing; run.lastReal = performance.now(); fxLayer.animating = true; map.triggerRepaint(); } } }, '⏯'),
+  h('button', { type: 'button', title: 'Fase siguiente', onclick: () => warStep(1) }, '▶'));
 function updateWarHud(R: Run, tx: number) {
   const W = R.fx.war;
   if (!W || !warLayer) return;
@@ -717,22 +737,25 @@ function updateWarHud(R: Run, tx: number) {
   const det = Math.round(c.landed[0] * per[0] + c.landed[1] * per[1]);
   const fly = Math.round(c.flying[0] * per[0] + c.flying[1] * per[1]);
   const A = W.first, B = 1 - A;
-  const phase = tx < 300 ? `${W.sides[A]} lanza el primer ataque`
-    : tx < 420 ? `${W.sides[B]} detecta los misiles y decide responder`
-    : tx < 1200 ? `${W.sides[B]} responde antes de que lleguen las ojivas`
-    : tx <= warLayer.endT ? 'Segundas oleadas desde submarinos y bases que quedan'
-    : tx < warLayer.endT + 6 * 3600 ? 'Las ciudades arden: tormentas de fuego'
-    : tx < warLayer.endT + 5 * 86400 ? 'El humo sube a la estratosfera'
-    : 'El hollín rodea el planeta: empieza el invierno nuclear';
+  const st = warStages(warLayer.endT);
+  const stage = st.reduce((k, s, i) => (tx >= s - 1 ? i : k), 0);
+  const phase = [`${W.sides[A]} lanza el primer ataque`, `${W.sides[B]} detecta los misiles y responde antes de que lleguen las ojivas`,
+    'Segundas oleadas desde submarinos y bases que quedan', 'Las ciudades arden: tormentas de fuego', 'El humo sube a la estratosfera',
+    'El hollín rodea el planeta: empieza el invierno nuclear'][stage];
   // trozos en nodos de texto separados: cada uno se traduce por su cuenta
   const parts = [`${fmtNum(det)} de ${fmtNum(W.warheads)} ojivas detonadas`, fly ? ` · ${fmtNum(fly)} en vuelo` : '', ` · ${fmtEnergy(det * W.yieldKt)}`];
-  const key = phase + parts.join('');
+  // balance acumulado de cada bando: ojivas recibidas (las que lanzó el otro) y muertes por las explosiones
+  const side = (k: 0 | 1) => {
+    const got = Math.round(c.landed[1 - k] * per[1 - k]);
+    const dead = (W.directDeathsM * 1e6 * got) / Math.max(1, W.warheads);
+    return [W.sides[k], ": ", `${fmtNum(got)} ojivas recibidas`, ` · ≈ ${fmtNum(Math.round(dead / 1e4) * 1e4)} muertos`];
+  };
+  const key = phase + parts.join('') + side(0).join('') + side(1).join('');
   if (key === warHudKey) return;
   warHudKey = key;
   warHud.innerHTML = '';
-  const line = h('span', {});
-  for (const p of parts) if (p) line.append(document.createTextNode(p));
-  warHud.append(h('b', {}, phase), line);
+  const line = (xs: string[], cls = '') => { const el = h('span', { class: cls }); for (const p of xs) if (p) el.append(document.createTextNode(p)); return el; };
+  warHud.append(h('i', {}, `Fase ${stage + 1} de ${st.length}`), h('b', {}, phase), line(parts), line(side(0), 'ws a'), line(side(1), 'ws b'), warBtns);
   warHud.classList.remove('hidden');
 }
 
@@ -1034,7 +1057,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.10';
+const APP_VERSION = '1.11';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
