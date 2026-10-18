@@ -416,12 +416,18 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
   const fp = {
     fissionKt, contact: buried && !buried.contained ? 1 : contact, cloudTopM: cloud.topM, capBottomM: cloud.capBottomM, capRadiusM: cloud.capRadiusM,
     windAt: (z: number, tH: number) => windAt(env, z, tH), rainMmH: env.rainMmH ?? 0, localFrac, coreFrac,
+    rainAt: env.rainHourly?.length ? (tH: number) => env.rainHourly![Math.min(env.rainHourly!.length - 1, Math.floor(tH))] ?? 0 : undefined,
   };
-  const fallout = sc.kind === 'nuclear' && !chem ? computeFallout(fp) : [];
-  const fModel = fallout.length ? falloutModel(fp) : null;
+  // modelo de partículas (tipo HYSPLIT): se calcula una vez y de él salen los contornos, la tasa y la hora de llegada
+  const wantFallout = sc.kind === 'nuclear' && !chem && fp.contact > 0.01 && fissionKt > 0;
+  const fModel = wantFallout ? falloutModel(fp) : null;
+  const fallout = fModel ? computeFallout(fp, fModel) : [];
   const falloutRateAt = (eM: number, nM: number) => (fModel ? fModel.rateAtLocal(eM, nM) : 0);
   const fU = fModel ? Math.max(4, fModel.axisKmh) : Math.max(4, wEff.kmh);
-  const falloutArrivalH = (eM: number, nM: number) => Math.max(0.25, Math.hypot(eM, nM) / 1000 / fU);
+  const falloutArrivalH = (eM: number, nM: number) => {
+    const a = fModel?.arrivalKm?.(eM / 1000, nM / 1000);
+    return Math.max(0.25, a ?? Math.hypot(eM, nM) / 1000 / fU);
+  };
   /** dosis acumulada (rem) entre t1 y t2 horas tras la explosión, dentro de un refugio de factor pf */
   const falloutDoseAt = (eM: number, nM: number, t1: number, t2: number, pf: number) => {
     const R1 = falloutRateAt(eM, nM);
@@ -440,6 +446,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
 
   if (fallout.length && (env.rainMmH ?? 0) > 0.3) notes.push(`Llueve (${(env.rainMmH ?? 0).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} mm/h): la lluvia arrastra parte de la radiactividad y crea zonas muy contaminadas más cerca de la explosión.`);
   if (fallout.length) notes.push(`Viento de ${Math.round(fModel ? fModel.axisKmh : wEff.kmh)} km/h desde ${compass(fModel ? fModel.axisFromDeg : wEff.fromDeg)}${env.windProfile?.length ? ` (media entre el suelo y ${fmtDist(cloud.topM)}, tiempo real)` : ''}: la lluvia radiactiva se extiende hacia ${compass((fModel ? fModel.axisFromDeg : wEff.fromDeg) + 180)}.`);
+  if (fallout.length && fModel?.particles) notes.push(`Lluvia radiactiva calculada con ${fModel.particles.toLocaleString('es-ES')} partículas (modelo lagrangiano, como HYSPLIT): cada una cae a su velocidad, viaja con el viento de su altura y de su hora${env.windHourly?.length ? ' (previsión hora a hora)' : ''} y se dispersa con la turbulencia${env.rainHourly?.some((r) => r > 0.05) || (env.rainMmH ?? 0) > 0.05 ? '; la lluvia prevista arrastra parte al suelo antes de tiempo' : ''}.`);
   // ---------- pulso electromagnético de gran altitud ----------
   let empInfo: Effects['emp'];
   if (sc.kind === 'nuclear' && !chem && h > 30000) {
@@ -518,7 +525,7 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     if (fModel) {
       const field = densityField(lat, lon, Math.max(50, ...fallout.map((f) => f.maxDownwindKm)) + 50);
       const { minE, maxE, minN, maxN } = fModel.bbox;
-      const NX = 90, NY = 90, dx = (maxE - minE) / NX, dy = (maxN - minN) / NY;
+      const NX = 150, NY = 150, dx = (maxE - minE) / NX, dy = (maxN - minN) / NY;
       for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
         const e = minE + (i + 0.5) * dx, n = minN + (j + 0.5) * dy;
         const R1 = fModel.rateKm(e, n);
@@ -571,6 +578,8 @@ export function computeEffects(scIn: Scenario, env: Environment, lat: number, lo
     doseRemAt,
     falloutRateAt,
     windKmh: fModel ? fModel.axisKmh : wEff.kmh,
+    falloutTracks: fallout.length ? fModel?.tracks : undefined,
+    falloutParticles: fallout.length ? fModel?.particles : undefined,
     windFromDeg: fModel ? fModel.axisFromDeg : wEff.fromDeg,
     buried,
     falloutDoseAt,

@@ -430,6 +430,20 @@ section('Defensa antimisiles');
   truthy('sin defensa en la zona, ninguna intercepción', r4.region === null && r4.intercepted === 0 && r4.pThrough === 1);
 }
 
+section('Lluvia radiactiva: modelo de partículas (tipo HYSPLIT)');
+{
+  const sc = nuke(1000, 'surface');
+  const e = computeEffects(sc, ENV, MADRID[0], MADRID[1]);
+  truthy('Hay trayectorias de partículas para el mapa', (e.falloutTracks?.n ?? 0) > 500 && (e.falloutParticles ?? 0) >= 5000, `(${e.falloutTracks?.n})`);
+  const a20 = e.falloutArrivalH?.(20000, 0) ?? NaN, a150 = e.falloutArrivalH?.(150000, 0) ?? NaN;
+  truthy('Llega antes cerca que lejos', a20 < a150, `(${a20.toFixed(1)} h a 20 km, ${a150.toFixed(1)} h a 150 km)`);
+  const again = computeEffects(sc, ENV, MADRID[0], MADRID[1]);
+  truthy('Mismo escenario, misma pluma (semilla fija)', again.falloutRateAt(80000, 5000) === e.falloutRateAt(80000, 5000));
+  const wet = computeEffects(sc, { ...ENV, rainHourly: Array(48).fill(4) }, MADRID[0], MADRID[1]);
+  const near = (x: typeof e) => x.falloutRateAt(25000, 0) + x.falloutRateAt(35000, 0);
+  truthy('Con lluvia cae más actividad cerca de la zona cero', near(wet) > near(e) * 1.2, `(${fmt(near(wet))} frente a ${fmt(near(e))} R/h)`);
+}
+
 console.log(`\n${pass} correctas, ${fail} fallidas`);
 if (fail) { console.log('\nFallos:\n' + failures.map((f) => '  · ' + f).join('\n')); (globalThis as unknown as { process: { exit(c: number): void } }).process.exit(1); }
 

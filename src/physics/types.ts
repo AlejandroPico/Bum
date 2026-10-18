@@ -107,6 +107,8 @@ export interface Environment {
   windProfile?: WindLevel[] | null;
   /** previsión: perfil de viento para cada hora a partir de la explosión (índice 0 = ahora) */
   windHourly?: WindLevel[][] | null;
+  /** previsión de precipitación (mm/h) para cada hora a partir de la explosión */
+  rainHourly?: number[] | null;
 }
 
 export interface WindLevel {
@@ -235,4 +237,8 @@ export interface Effects {
   missile?: { site: string; country: string; rangeKm: number; flightMin: number; apogeeKm: number; reentryKms: number; warningMin: number; boostMin: number; profile?: 'ballistic' | 'hgv' | 'cruise' | 'aircraft'; profileName?: string; cruiseKm?: number; mirv?: number; targets?: number };
   /** hora de llegada (h) de la lluvia radiactiva a un punto */
   falloutArrivalH?: (eM: number, nM: number) => number;
+  /** trayectorias de una muestra de las partículas de la lluvia radiactiva (modelo lagrangiano) */
+  falloutTracks?: import('./fallout').FalloutTracks;
+  /** partículas simuladas */
+  falloutParticles?: number;
 }

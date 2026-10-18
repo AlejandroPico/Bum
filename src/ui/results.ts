@@ -23,6 +23,8 @@ export interface ResultsEvents {
   /** comparar con otro escenario en el mapa partido */
   onCompare?(): void;
   onHeat?(k: 'off' | 'pop' | 'deaths' | 'fallout'): void;
+  /** invierno nuclear mes a mes en el mapa (guerra) */
+  onWinter?(): void;
   /** «Desde mi ventana»: la explosión vista desde tu sitio */
   onWindow?(): void;
 }
@@ -318,7 +320,7 @@ export class ResultsPanel {
       tabsBar.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
       body.innerHTML = '';
       body.scrollTop = 0;
-      if (t === 'sum') { if (this.abm?.intercepted) body.append(h('div', { class: 'sec-note' }, `La defensa antimisiles derribó ${this.abm.intercepted} de ${this.abm.total} ojivas: los efectos son los de las que llegaron.`)); if (multi) this.multiBlock(body, multi); this.summary(body, fx, hiroTxt); }
+      if (t === 'sum') { if (fx.war && this.ev.onWinter) body.append(h('button', { type: 'button', class: 'btn-line cmp-split', onclick: () => this.ev.onWinter!() }, 'Ver el invierno nuclear mes a mes en el mapa')); if (this.abm?.intercepted) body.append(h('div', { class: 'sec-note' }, `La defensa antimisiles derribó ${this.abm.intercepted} de ${this.abm.total} ojivas: los efectos son los de las que llegaron.`)); if (multi) this.multiBlock(body, multi); this.summary(body, fx, hiroTxt); }
       else if (t === 'eff') this.effects(body, fx);
       else if (t === 'def') { if (fx.scenario.kind === 'asteroid') this.defense(body, fx); else this.abmBlock(body); }
       else if (t === 'after') this.after(body, fx);
@@ -603,6 +605,9 @@ export class ResultsPanel {
       }
     }
     const extra: HTMLElement[] = [];
+    if (fx.falloutTracks?.n) extra.push(this.toggleRow('fallpts', '#facc15', 'Partículas de la lluvia radiactiva', `${fmtNum(fx.falloutParticles ?? 0)}`, h('div', { class: 'meta' },
+      'Una muestra de las partículas del modelo (tipo HYSPLIT) en cada instante: salen del hongo, viajan con el viento de su altura y de su hora, se dispersan con la turbulencia y van cayendo. ',
+      h('span', { class: 'marks' }, ...([['#ffffff', 'Alto (más de 10 km)'], ['#facc15', 'A media altura'], ['#f97316', 'A punto de caer'], ['#3f6212', 'Ya en el suelo']] as const).map(([c, t]) => h('span', {}, h('b', { style: { background: c } }), t))))));
     if (fx.tsunami || fx.rings.some((r) => r.group === 'tsunami')) {
       extra.push(this.toggleRow('tsu-iso', '#7dd3fc', 'Llegada del tsunami (isócronas)', 'cada 1–2 h', h('div', { class: 'meta' }, 'Líneas azules: hasta dónde ha llegado la ola en cada hora, calculado sobre el fondo marino real. Aparecen cuando termina el cálculo.')));
       extra.push(this.toggleRow('tsu-coast', '#facc15', 'Altura de la ola en la costa', '', h('div', { class: 'meta' }, 'Cada punto es un tramo de costa; su color indica la altura de la ola al llegar. Pasa el ratón por encima para ver la altura y la hora de llegada. ',
@@ -647,6 +652,7 @@ export class ResultsPanel {
     const W = fx.war!;
     const A = W.first, B = 1 - A;
     body.append(h('div', { class: 'sec-note' }, 'El mapa cuenta la guerra en el tiempo: dale al play o mueve la línea de tiempo. Cada capa se puede ocultar con un clic.'));
+    if (this.ev.onWinter) body.append(h('button', { type: 'button', class: 'btn-line cmp-split', onclick: () => this.ev.onWinter!() }, 'Ver el invierno nuclear mes a mes en el mapa'));
     body.append(
       this.toggleRow('war-arcs', '#ff6a3d', 'Misiles en vuelo', 'primeros 40 min', h('div', { class: 'meta' }, `Cada línea es un misil hacia uno de los objetivos representativos (en realidad irían muchos más). `,
         h('span', { class: 'marks' }, h('span', {}, h('b', { style: { background: '#ff6a3d' } }), tr(W.sides[0])), h('span', {}, h('b', { style: { background: '#38bdf8' } }), tr(W.sides[1]))),

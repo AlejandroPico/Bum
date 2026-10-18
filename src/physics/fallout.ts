@@ -33,6 +33,10 @@ export interface FalloutParams {
   windAt: (zM: number, tH: number) => { kmh: number; fromDeg: number };
   /** precipitación (mm/h) en el momento de la explosión */
   rainMmH?: number;
+  /** previsión de precipitación (mm/h) a las tH horas, si la hay */
+  rainAt?: (tH: number) => number;
+  /** modelo de partículas (tipo HYSPLIT, por defecto) o de bocanadas (el de antes, más rápido) */
+  lagrangian?: boolean;
   /** fracción de la actividad que cae localmente (por defecto 0,6) */
   localFrac?: number;
   /** fracción en el núcleo junto a la zona cero (partículas gruesas del tallo) */
@@ -62,7 +66,168 @@ function probit(p: number) {
 }
 
 /** Modelo: tasa de dosis a H+1 (R/h) en cualquier punto (m al este, m al norte). */
-export function falloutModel(p: FalloutParams) {
+export function falloutModel(p: FalloutParams): FalloutModel {
+  return p.lagrangian === false ? puffModel(p) : lagrangianModel(p);
+}
+
+export interface FalloutModel {
+  total: number; capR: number;
+  bbox: { minE: number; maxE: number; minN: number; maxN: number };
+  axisFromDeg: number; axisKmh: number;
+  rateAtLocal(eM: number, nM: number): number;
+  rateKm(e: number, n: number): number;
+  /** hora media (h) de llegada de la lluvia radiactiva a un punto (km), si llega */
+  arrivalKm?(e: number, n: number): number | null;
+  /** trayectorias de una muestra de partículas, para dibujarlas en el mapa */
+  tracks?: FalloutTracks;
+  particles?: number;
+}
+
+/** trayectorias de partículas: posiciones (m al este, m al norte, m de altura) cada `dtS` segundos */
+export interface FalloutTracks {
+  n: number; dtS: number;
+  /** inicio de cada partícula en `xyz` (en puntos); off[n] = total */
+  off: Uint32Array;
+  xyz: Float32Array;
+  /** segundo en que toca el suelo (Infinity si sigue en el aire al final) */
+  landS: Float32Array;
+}
+
+/**
+ * Modelo lagrangiano de partículas, al estilo de HYSPLIT: miles de partículas salen del sombrero y
+ * del tronco del hongo, cada una con su velocidad de caída (distribución log-normal de tamaños), y
+ * viajan con el viento de su altura y de su hora (perfil real y previsión horaria), con la
+ * turbulencia como un paseo aleatorio (más fuerte en la capa de mezcla, cerca del suelo). La lluvia
+ * arrastra parte de su actividad al suelo antes de tiempo (lavado por la precipitación). Lo que
+ * llega al suelo se reparte con un núcleo gaussiano que se ensancha con la distancia recorrida.
+ * Las manchas salen con forma real: curvadas si el viento gira, alargadas si hay cizalladura y con
+ * puntos calientes donde llueve.
+ */
+function lagrangianModel(p: FalloutParams): FalloutModel {
+  const total = 7770 * p.fissionKt * (p.localFrac ?? 0.6) * p.contact;
+  const capRm = p.capRadiusM, capR = capRm / 1000;
+  const Htop = p.cloudTopM, Hbot = p.capBottomM ?? Htop * 0.5;
+  const T50 = 1.2 + 2.2 * Math.min(Htop / 1000 / 20, 2.2);
+  const sLn = 0.95;
+  const fCore = p.coreFrac ?? 0.3;
+  const sigCore = Math.max(0.3, capR * 0.35);
+  // semilla fija: el mismo escenario da siempre la misma pluma
+  let seed = (Math.round(p.fissionKt * 1000) ^ Math.round(Htop)) >>> 0 || 1;
+  const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  let spare: number | null = null;
+  const gauss = () => {
+    if (spare !== null) { const v = spare; spare = null; return v; }
+    const u = Math.max(1e-12, rnd()), v = rnd(), r = Math.sqrt(-2 * Math.log(u));
+    spare = r * Math.sin(2 * Math.PI * v); return r * Math.cos(2 * Math.PI * v);
+  };
+  // viento por capas de 250 m y por horas (se calcula una vez por casilla)
+  const DZ = 250, wCache = new Map<number, [number, number]>();
+  const wind = (z: number, tH: number): [number, number] => {
+    const zi = Math.max(0, Math.round(z / DZ)), hi = Math.min(72, Math.floor(tH));
+    const k = hi * 1000 + zi;
+    let w = wCache.get(k);
+    if (!w) { const [u, v] = vec(p.windAt(zi * DZ, hi + 0.5)); w = [u / 3.6, v / 3.6]; wCache.set(k, w); }
+    return w;
+  };
+  const rainAt = (tH: number) => Math.max(0, p.rainAt ? p.rainAt(tH) : (p.rainMmH ?? 0));
+  const N = 5000, SHOW = 900, every = Math.max(1, Math.floor(N / SHOW));
+  const dt = 600, maxS = 48 * 3600;
+  const w = (1 - fCore) / N;
+  // depósitos: posición (km), peso, hora (h) y distancia recorrida (km)
+  const dE: number[] = [], dN: number[] = [], dW: number[] = [], dT: number[] = [], dD: number[] = [];
+  const trOff: number[] = [0], trXYZ: number[] = [], trLand: number[] = [];
+  for (let i = 0; i < N; i++) {
+    const a = rnd() * Math.PI * 2, rr = Math.sqrt(rnd()) * capRm * 0.9;
+    let e = Math.cos(a) * rr, n = Math.sin(a) * rr, z = Hbot + rnd() * (Htop - Hbot);
+    const tTop = T50 * Math.exp(sLn * gauss());
+    const vs = Htop / (tTop * 3600); // m/s
+    let m = w, wet = 0, wetT = 0, wetE = 0, wetN = 0;
+    const keep = i % every === 0 && trLand.length < SHOW;
+    if (keep) trXYZ.push(e, n, z);
+    let t = 0, landed = false;
+    while (t < maxS) {
+      const tH = t / 3600;
+      const [u, v] = wind(z, tH);
+      const K = z < 1500 ? 6000 : 2500; // m²/s: turbulencia horizontal
+      const sd = Math.sqrt(2 * K * dt);
+      e += u * dt + sd * gauss(); n += v * dt + sd * gauss();
+      // lavado por la lluvia por debajo de las nubes de lluvia (≈ 6 km)
+      const R = z < 6000 ? rainAt(tH) : 0;
+      if (R > 0.05) {
+        const f = 1 - Math.exp(-2.5e-4 * Math.pow(R, 0.75) * dt);
+        const dep = m * f; m -= dep;
+        wet += dep; wetT += dep * tH; wetE += dep * e; wetN += dep * n;
+      }
+      z -= vs * dt;
+      t += dt;
+      if (wet > w * 0.02 || (z <= 0 && wet > 0)) {
+        dE.push(wetE / wet / 1000); dN.push(wetN / wet / 1000); dW.push(wet); dT.push(wetT / wet); dD.push(Math.hypot(wetE, wetN) / wet / 1000);
+        wet = wetT = wetE = wetN = 0;
+      }
+      if (keep) trXYZ.push(e, n, Math.max(0, z));
+      if (z <= 0) { landed = true; break; }
+    }
+    if (landed && m > 0) { dE.push(e / 1000); dN.push(n / 1000); dW.push(m); dT.push(t / 3600); dD.push(Math.hypot(e, n) / 1000); }
+    if (keep) { trOff.push(trXYZ.length / 3); trLand.push(landed ? t : Infinity); }
+  }
+  // malla de depósito: núcleo gaussiano que se ensancha con la distancia (menos ruido lejos)
+  const sig = (d: number) => 0.4 + 0.035 * d + capR * 0.1;
+  let minE = -capR * 2, maxE = capR * 2, minN = -capR * 2, maxN = capR * 2;
+  for (let k = 0; k < dE.length; k++) {
+    const s3 = sig(dD[k]) * 3;
+    minE = Math.min(minE, dE[k] - s3); maxE = Math.max(maxE, dE[k] + s3); minN = Math.min(minN, dN[k] - s3); maxN = Math.max(maxN, dN[k] + s3);
+  }
+  const span = Math.max(maxE - minE, maxN - minN);
+  const cell = Math.max(0.05, span / 220);
+  const nx = Math.max(2, Math.ceil((maxE - minE) / cell) + 1), ny = Math.max(2, Math.ceil((maxN - minN) / cell) + 1);
+  const D = new Float32Array(nx * ny), A = new Float32Array(nx * ny);
+  for (let k = 0; k < dE.length; k++) {
+    const s = Math.max(cell * 0.7, sig(dD[k])), rc = Math.ceil((3 * s) / cell);
+    const ci = (dE[k] - minE) / cell, cj = (dN[k] - minN) / cell;
+    const i0 = Math.max(0, Math.floor(ci - rc)), i1 = Math.min(nx - 1, Math.ceil(ci + rc)), j0 = Math.max(0, Math.floor(cj - rc)), j1 = Math.min(ny - 1, Math.ceil(cj + rc));
+    let sum = 0;
+    const inv = 1 / (2 * (s / cell) ** 2);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) sum += Math.exp(-((i - ci) ** 2 + (j - cj) ** 2) * inv);
+    if (sum <= 0) continue;
+    const q = (dW[k] * total) / (sum * cell * cell);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const g = Math.exp(-((i - ci) ** 2 + (j - cj) ** 2) * inv) * q;
+      D[j * nx + i] += g; A[j * nx + i] += g * dT[k];
+    }
+  }
+  const bil = (G: Float32Array, e: number, n: number) => {
+    const x = (e - minE) / cell, y = (n - minN) / cell;
+    if (x < 0 || y < 0 || x > nx - 1 || y > ny - 1) return 0;
+    const i = Math.min(nx - 2, Math.floor(x)), j = Math.min(ny - 2, Math.floor(y)), fx = x - i, fy = y - j;
+    const k = j * nx + i;
+    return G[k] * (1 - fx) * (1 - fy) + G[k + 1] * fx * (1 - fy) + G[k + nx] * (1 - fx) * fy + G[k + nx + 1] * fx * fy;
+  };
+  const core = (e: number, n: number) => ((fCore * total) / (2 * Math.PI * sigCore * sigCore)) * Math.exp(-(e * e + n * n) / (2 * sigCore * sigCore));
+  const rateKm = (e: number, n: number) => (total <= 0 ? 0 : core(e, n) + bil(D, e, n));
+  // dirección y velocidad efectivas (centro de masas de lo depositado)
+  let ce = 0, cn = 0, cw = 0, ct = 0;
+  for (let k = 0; k < dE.length; k++) { ce += dE[k] * dW[k]; cn += dN[k] * dW[k]; cw += dW[k]; ct += dT[k] * dW[k]; }
+  if (cw > 0) { ce /= cw; cn /= cw; ct /= cw; }
+  return {
+    total, capR,
+    bbox: { minE, maxE, minN, maxN },
+    axisFromDeg: ((Math.atan2(-ce, -cn) * 180) / Math.PI + 360) % 360,
+    axisKmh: Math.hypot(ce, cn) / Math.max(0.1, ct),
+    rateAtLocal: (eM: number, nM: number) => rateKm(eM / 1000, nM / 1000),
+    rateKm,
+    arrivalKm: (e: number, n: number) => {
+      const d = bil(D, e, n);
+      if (d <= 1e-6) return null;
+      // la hora media pesa mucho la cola: la llegada se adelanta algo respecto a la media
+      return Math.max(0.1, (bil(A, e, n) / d) * 0.85);
+    },
+    tracks: { n: trLand.length, dtS: dt, off: Uint32Array.from(trOff), xyz: Float32Array.from(trXYZ), landS: Float32Array.from(trLand) },
+    particles: N,
+  };
+}
+
+/** modelo de bocanadas (capas × clases de caída, sin turbulencia aleatoria) */
+function puffModel(p: FalloutParams): FalloutModel {
   const total = 7770 * p.fissionKt * (p.localFrac ?? 0.6) * p.contact; // R/h·km²
   const capR = p.capRadiusM / 1000; // km
   const Htop = p.cloudTopM;
@@ -122,7 +287,7 @@ export function falloutModel(p: FalloutParams) {
   let maxE = capR * 2, minE = -capR * 2, maxN = capR * 2, minN = -capR * 2;
   for (const pf of puffs) { const s = Math.sqrt(pf.s2) * 2.5; maxE = Math.max(maxE, pf.e + s); minE = Math.min(minE, pf.e - s); maxN = Math.max(maxN, pf.n + s); minN = Math.min(minN, pf.n - s); }
   return {
-    total, capR, puffs,
+    total, capR,
     bbox: { minE, maxE, minN, maxN },
     axisFromDeg: axisFrom, axisKmh,
     /** tasa en un punto (m al este, m al norte) */
@@ -131,9 +296,9 @@ export function falloutModel(p: FalloutParams) {
   };
 }
 
-export function computeFallout(p: FalloutParams): FalloutContour[] {
+export function computeFallout(p: FalloutParams, model?: FalloutModel): FalloutContour[] {
   if (p.contact <= 0.01 || p.fissionKt <= 0) return [];
-  const M = falloutModel(p);
+  const M = model ?? falloutModel(p);
   const { minE, maxE, minN, maxN } = M.bbox;
   const W = maxE - minE, Hh = maxN - minN;
   const nx = W > Hh ? 280 : Math.max(60, Math.round((280 * W) / Hh));

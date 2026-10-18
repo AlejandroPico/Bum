@@ -35,6 +35,8 @@ import { fetchInfrastructure, fetchBuildingCounts, fetchShelters, fetchHospitals
 import { assessHealth, type HealthReport } from './physics/health';
 import { engage, type DefenseResult } from './data/defense';
 import { WindowView } from './ui/window-view';
+import { FalloutParticles, type FallSet } from './map/fallout-particles';
+import { WinterLayer } from './map/winter-layer';
 import { LAUNCH_SITES, greatCirclePath } from './data/launch';
 import { WAR_PRESETS, warSchedule } from './data/war';
 import { WarLayer } from './map/war-layer';
@@ -261,6 +263,7 @@ const enc = new Encyclopedia((preset) => {
 const results = new ResultsPanel(document.getElementById('results')!, {
   onBook: (name) => { void enc.openBest(name); },
   onWindow: () => openWindow(),
+  onWinter: () => openWinter(),
   onToggle: () => syncHidden(),
   onHover: (id) => { overlays.highlight = id; overlays.refresh(); if (run) run.domes.highlight = id; map.triggerRepaint(); },
   onShare: () => share(),
@@ -712,6 +715,26 @@ function applyBasemapTo(m: maplibregl.Map) {
 
 // guerra a gran escala: misiles por oleadas, explosiones, zonas de daño y humo
 let warLayer: WarLayer | null = null;
+/** invierno nuclear mes a mes en el mapa */
+let winter: WinterLayer | null = null;
+function openWinter() {
+  if (!run?.fx.war) return;
+  winter ??= new WinterLayer(map);
+  // el velo de hollín de la guerra taparía el mapa del clima
+  const hadSmoke = warLayer?.hidden.has('war-smoke') ?? false;
+  if (warLayer) { warLayer.hidden.add('war-smoke'); warLayer.update(run.t - run.tStart); }
+  run.playing = false;
+  winter.open(run.fx.war, document.getElementById('app')!);
+  winter.onClose = () => { if (warLayer && !hadSmoke && !results.hidden.has('war-smoke')) { warLayer.hidden.delete('war-smoke'); if (run) warLayer.update(run.t - run.tStart); } };
+  if (!state.view.globe) applyProjection(true);
+}
+/** partículas de la lluvia radiactiva (modelo lagrangiano) */
+let fallPts: FalloutParticles | null = null;
+function setFallParticles(list: FallSet[]) {
+  if (!fallPts) { if (!list.length) return; fallPts = new FalloutParticles(map); }
+  fallPts.hidden = results.hidden.has('fallpts');
+  fallPts.set(list);
+}
 function setWarLayer(fx: Effects | null) {
   const W = fx?.war;
   if (!W) { warLayer?.set(null); warHud.classList.add('hidden'); return 0; }
@@ -1169,7 +1192,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.16';
+const APP_VERSION = '1.17';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1380,6 +1403,8 @@ function syncHidden() {
   overlays.setHidden(new Set(results.hidden));
   if (run) { run.domes.hidden = new Set(results.hidden); for (const x of run.extras) x.domes.hidden = new Set(results.hidden); }
   showBlackRain(blackRainWant);
+  fallPts?.setHidden(results.hidden.has('fallpts'));
+  if (run) fallPts?.update(run.t);
   if (run?.fx.solar) setSolarLayer(run.fx, Math.max(0, run.t));
   if (run?.fx.war && warLayer) { warLayer.hidden = new Set(results.hidden); warLayer.update(run.t - run.tStart); }
   const hv = results.hidden.has('hosp') ? 'none' : 'visible';
@@ -1535,6 +1560,8 @@ function clearRun() {
   setHospitalLayer(null); results.setHealth(null);
   setShadowLayer(null, 0, 0);
   setBlackRainLayer([]); showBlackRain(false);
+  setFallParticles([]);
+  if (winter?.active) winter.close();
   setSolarLayer(null);
   setWarLayer(null);
   if (map.getMinZoom() < 0) map.setMinZoom(0);
@@ -1852,6 +1879,7 @@ async function detonate() {
         }, () => { if (token === infraToken) results.setHealth('error'); });
       } else results.setHealth(null);
       setBlackRainLayer([{ br: fx.blackRain, lat, lon }, ...extras.map((x) => ({ br: x.fx.blackRain, lat: x.lat, lon: x.lon }))]);
+      setFallParticles([{ fx, lat, lon, delay: 0 }, ...extras].filter((x) => x.fx.falloutTracks).map((x) => ({ tracks: x.fx.falloutTracks!, lat: x.lat, lon: x.lon, delay: x.delay })));
       // sombra del relieve sobre el destello (líneas de visión con el modelo del terreno)
       const burnR = Math.min(40000, fx.rings.find((r) => r.id === 'burn2')?.radiusM ?? fx.rings.find((r) => r.id === 'burn1')?.radiusM ?? 0);
       results.setShadow(null);
@@ -2132,6 +2160,7 @@ function onFxFrame(ctx: FrameCtx) {
   // cielo y luz del mapa durante el destello (limitado a ~8 Hz)
   if (now - R.lastOverlay > 120) {
     R.lastOverlay = now;
+    fallPts?.update(t);
     if (heat > 0.03 && t > 0) {
       const k = Math.min(1, heat) * 0.85 * (R.flashReal < 0 ? 1 : 0.2 + 0.8 * Math.exp(-(now - R.flashReal) / 5000)) * flashMul(1, 0.3);
       const mix = (a: string, b: string, x: number) => '#' + new FX.Color(a).lerp(new FX.Color(b), x).getHexString();

@@ -311,6 +311,22 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
       disipa; las detonaciones secundarias de un ataque múltiple llevan menos partículas y sin escombros; con la
       batería baja y sin cargar se pasa a Mínima; «Desde mi ventana» con menos resolución y menos detalle.
 
+## 1.17 — Lluvia radiactiva con partículas e invierno nuclear en el mapa (publicada)
+
+- [x] Lluvia radiactiva con un modelo lagrangiano de partículas, al estilo de HYSPLIT (`src/physics/fallout.ts`):
+      5000 partículas salen del sombrero y del tronco del hongo con su velocidad de caída (distribución log-normal),
+      viajan con el viento de su altura y de su hora (perfil real y previsión horaria), se dispersan con la
+      turbulencia (más en la capa de mezcla) y la lluvia prevista hora a hora (Open-Meteo) arrastra parte al suelo
+      antes de tiempo. Lo que cae se reparte con un núcleo que se ensancha con la distancia: manchas curvadas y
+      alargadas en lugar de la elipse. La hora de llegada a cada punto sale del propio modelo. Semilla fija: el mismo
+      escenario da siempre la misma pluma.
+- [x] Las partículas en el mapa (`src/map/fallout-particles.ts`), en su sitio de cada instante y coloreadas por su
+      altura; ocultables en Efectos.
+- [x] Invierno nuclear en el mapa (`src/map/winter-layer.ts`), en las guerras: mes a mes durante diez años, la bajada
+      de temperatura en cada lugar (los continentes, su interior, el hemisferio norte y el verano se enfrían más) y
+      las cosechas perdidas, ajustadas a la media del escenario. Máscara de tierra y mar a 1° (Natural Earth,
+      `scripts/landmask.mjs`).
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
@@ -321,9 +337,6 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
       Cheliábinsk con su fecha y viento; comparación del modelo con lo que pasó de verdad.
 - [ ] Arsenales del mundo 1945–hoy: cabezas nucleares por país año a año, con el pico de 1986 y los tratados
       (INF, START…) en la línea de tiempo.
-- [ ] Invierno nuclear en el mapa: mapa mundial animado mes a mes de la bajada de temperatura y las cosechas perdidas.
-- [ ] Lluvia radiactiva más realista (tipo HYSPLIT): partículas que caen desde cada altura del hongo con el viento
-      real de cada capa y cada hora; manchas curvadas en lugar de la elipse.
 - [ ] Modo clase / presentación: una secuencia de escenarios que se pasa como diapositivas, con el recorrido
       cinematográfico en cada una.
 - [ ] «Desde mi ventana», segunda parte: grietas y estruendo también al saltar con la barra, montañas reales en el

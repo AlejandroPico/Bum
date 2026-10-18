@@ -56,6 +56,8 @@ export interface Weather {
   profile: WindLevel[];
   /** previsión: perfil de cada hora desde ahora (48 h) */
   hourly?: WindLevel[][];
+  /** previsión de lluvia (mm/h) hora a hora */
+  rainHourly?: number[];
   humidity: number;
   visibilityKm: number;
   tempC: number;
@@ -84,14 +86,14 @@ function cacheSet(key: string, v: unknown) {
 }
 
 export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
-  const key = `bum:wx3:${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const key = `bum:wx4:${lat.toFixed(2)},${lon.toFixed(2)}`;
   const hit = cacheGet<Weather>(key, CACHE_MS);
   if (hit) return hit;
   const lv = LEVELS.map(([l]) => `wind_speed_${l},wind_direction_${l},geopotential_height_${l}`).join(',');
   const url = 'https://api.open-meteo.com/v1/forecast'
     + `?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
     + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation'
-    + `&hourly=visibility,wind_speed_10m,wind_direction_10m,${lv}`
+    + `&hourly=visibility,precipitation,wind_speed_10m,wind_direction_10m,${lv}`
     + '&forecast_hours=48&wind_speed_unit=kmh&timezone=auto';
   const ctl = new AbortController();
   const to = setTimeout(() => ctl.abort(), 8000);
@@ -125,6 +127,8 @@ export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
       }
       hourly.push(p0);
     }
+    const rainHourly: number[] = [];
+    for (let i = 0; i < nH; i++) rainHourly.push(at('precipitation', i) ?? 0);
     // la hora 0 es la observación actual
     if (hourly.length) hourly[0] = profile;
     const time: string = cur.time ?? '';
@@ -138,6 +142,7 @@ export async function fetchWeather(lat: number, lon: number): Promise<Weather> {
       tempC: +(cur.temperature_2m ?? 15),
       cloudPct: +(cur.cloud_cover ?? 0),
       rainMmH: +(cur.precipitation ?? 0),
+      rainHourly: rainHourly.length > 2 ? rainHourly : undefined,
       hour, localTime: tm ? `${tm[1]}:${tm[2]}` : '—',
     };
     cacheSet(key, w);

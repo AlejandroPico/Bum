@@ -693,7 +693,7 @@ export class Sidebar {
     const E = S.env;
     const wVal = h('b'), wR = linSlider(0, 150, E.windKmh, 1);
     const wdVal = h('b');
-    const wComp = compassInput(E.windFromDeg, (deg) => { E.windFromDeg = deg; E.windProfile = null; E.windHourly = null; updEnv(); if (wxNote) wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
+    const wComp = compassInput(E.windFromDeg, (deg) => { E.windFromDeg = deg; E.windProfile = null; E.windHourly = null; E.rainHourly = null; updEnv(); if (wxNote) wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
     const humVal = h('b'), humR = linSlider(0, 100, E.humidity, 1);
     const visVal = h('b'), visR = linSlider(2, 80, E.visibilityKm, 1);
     const hrVal = h('b'), hrR = linSlider(0, 24, E.hour, 0.25);
@@ -714,8 +714,8 @@ export class Sidebar {
       outVal.textContent = E.outdoorPct == null ? `auto · ${autoOut} %` : `${E.outdoorPct} %`;
       if (!silent) this.ev.onEnv();
     };
-    rainR.addEventListener('input', () => updEnv());
-    for (const r of [wR, humR, visR, hrR]) r.addEventListener('input', () => { if (r === wR) { E.windProfile = null; E.windHourly = null; } updEnv(); wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
+    rainR.addEventListener('input', () => { E.rainHourly = null; updEnv(); });
+    for (const r of [wR, humR, visR, hrR]) r.addEventListener('input', () => { if (r === wR) { E.windProfile = null; E.windHourly = null; } E.rainHourly = null; updEnv(); wxNote.textContent = 'Valores manuales (viento uniforme en altura).'; });
     outR.addEventListener('input', () => { E.outdoorPct = +outR.value; updEnv(); });
     outVal.title = 'Doble clic: automático según la hora';
     outVal.addEventListener('dblclick', () => { E.outdoorPct = null; updEnv(); });
@@ -733,6 +733,7 @@ export class Sidebar {
       updEnv();
       E.windProfile = w.profile;
       E.windHourly = w.hourly ?? null;
+      E.rainHourly = w.rainHourly ? [w.rainMmH ?? 0, ...w.rainHourly.slice(1)] : null;
       const top = w.profile[w.profile.length - 1];
       wxNote.textContent = `Open-Meteo · ${w.localTime} · ${Math.round(w.tempC)} °C · nubes ${Math.round(w.cloudPct)} %${w.rainMmH > 0 ? ` · lluvia ${String(w.rainMmH).replace('.', DEC)} mm/h` : ''} · viento a ${(top.zM / 1000).toFixed(0)} km: ${Math.round(top.kmh)} km/h desde ${dirName(top.fromDeg)}. La nube y la lluvia radiactiva usan el perfil de viento hasta la altura real de la nube${w.hourly ? ` y la previsión hora a hora de las próximas ${w.hourly.length} h` : ''}.`;
     };
