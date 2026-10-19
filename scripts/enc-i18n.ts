@@ -35,7 +35,8 @@ function marks(s: string) {
   const links = [...s.matchAll(/\[\[([a-z0-9-]+)(?:\|[^\]]*)?\]\]/g)].map((m) => m[1]).sort().join(',');
   const urls = [...s.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)].map((m) => m[1]).sort().join(',');
   const bold = (s.match(/\*\*/g) ?? []).length;
-  const sup = (s.match(/[\^_]\{/g) ?? []).length;
+  // los ordinales franceses o ingleses (1^{er}, 2^{e}…) no cuentan
+  const sup = (s.replace(/\^\{(er|re|e|ère|ème|nd|st|rd|th|o|a)\}/g, '').match(/[\^_]\{/g) ?? []).length;
   return { links, urls, bold, sup };
 }
 function validate(es: string, t: string): string | null {

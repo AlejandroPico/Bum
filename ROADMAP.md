@@ -400,10 +400,12 @@ Desde la 1.21 los artículos se traducen con paquetes por idioma (ver 1.21); rev
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
 
-- [ ] Terminar de traducir la enciclopedia: inglés y catalán, completos (artículos, esquemas, gráficos y
-      «¿Estoy a salvo?»); francés, alemán, portugués e italiano, pendientes (lo que falta se ve en castellano).
+- [x] 1.21.1: la enciclopedia en francés (artículos, esquemas, gráficos y «¿Estoy a salvo?»). El validador acepta
+      los ordinales franceses (1^{er}).
+- [ ] Terminar de traducir la enciclopedia, un idioma por entrega: inglés, catalán y francés, completos; alemán,
+      portugués e italiano, pendientes (lo que falta se ve en castellano). Al terminar, versión 2.0.
       Para seguir: `npx tsx scripts/enc-i18n.ts todo` (los trozos de enc-todo/ ya sirven para los cuatro idiomas),
-      traducir siguiendo `enc-todo/RULES.md` y `merge`; las cadenas de interfaz que faltan, con `npm run i18n`.
+      traducir siguiendo `scripts/enc-i18n-rules.md` y `merge`; las cadenas de interfaz que faltan, con `npm run i18n`.
 
 ## Descartado por ahora
 
