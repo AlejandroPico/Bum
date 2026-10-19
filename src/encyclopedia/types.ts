@@ -74,7 +74,14 @@ export type DiagramId =
   | 'thermal'       // pulso térmico y alcance de las quemaduras
   | 'fallout'       // nube, partículas que caen con el viento y regla del 7-10
   | 'emp'           // pulso electromagnético de gran altitud
-  | 'impact';       // entrada de un asteroide: fricción, fragmentación, explosión aérea o cráter
+  | 'impact'        // entrada de un asteroide: fricción, fragmentación, explosión aérea o cráter
+  | 'mirv'          // bus de un misil MIRV que suelta ojivas una a una hacia blancos distintos
+  | 'trajectory'    // vuelo de un misil balístico: propulsión, fase intermedia en el espacio, reentrada
+  | 'abm'           // defensa antimisiles por capas: detección, interceptores en cada fase, señuelos
+  | 'shelter'       // protección frente a la lluvia radiactiva: factor de protección de cada lugar de un edificio
+  | 'dispersion'    // partículas que suben con la nube, el viento las lleva y caen; la lluvia las arrastra
+  | 'winter'        // invierno nuclear: incendios, humo en la estratosfera, luz y temperatura que caen
+  | 'flashbang';    // a distancia: primero el destello y el calor, luego el estruendo y la onda (343 m/s)
 
 export type Block =
   | { t: 'p'; text: string }

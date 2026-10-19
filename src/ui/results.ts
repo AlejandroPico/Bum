@@ -49,7 +49,8 @@ const TABS: [Tab, string][] = [['hist', 'Lo que pasó'], ['sum', 'Resumen'], ['e
 export class ResultsPanel {
   el: HTMLElement;
   private ev: ResultsEvents;
-  hidden = new Set<string>();
+  /** capas ocultas del mapa (los hospitales vienen ocultos: se activan aquí o en «¿Estoy a salvo?») */
+  hidden = new Set<string>(['hosp']);
   private tab: Tab = 'sum';
   private anim = 0;
 
@@ -167,6 +168,9 @@ export class ResultsPanel {
 
   /** hospitales y sanidad (llegan después, de OpenStreetMap) */
   private health: HealthReport | 'loading' | 'error' | null = null;
+  get healthReport() { return this.health; }
+  /** vuelve a pintar la pestaña abierta (p. ej. tras cambiar una capa desde fuera) */
+  refresh() { this.reshow?.(); }
   setHealth(r: HealthReport | 'loading' | 'error' | null) { this.health = r; if (this.tab === 'pop' || this.tab === 'after' || this.tab === 'eff') this.reshow?.(); }
   private healthBlock(body: HTMLElement) {
     const r = this.health;

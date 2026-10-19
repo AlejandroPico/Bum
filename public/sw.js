@@ -1,5 +1,5 @@
 /* Service worker de Bum: la app funciona sin conexión y guarda en caché teselas y datos. */
-const VERSION = 'bum-v1.20';
+const VERSION = 'bum-v1.21';
 const SHELL = `${VERSION}-shell`;
 // teselas y datos se conservan entre versiones: sólo se renueva la propia aplicación
 const TILES = 'bum-tiles';

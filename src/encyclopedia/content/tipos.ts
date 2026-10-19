@@ -596,7 +596,7 @@ export const ARTICLES: Article[] = [
         { date: '13 jun. 1944', text: 'Alemania lanza la primera bomba volante V-1 contra Londres: el antepasado de todos los misiles de crucero.' },
         { date: 'Años cincuenta', text: 'Estados Unidos despliega misiles de crucero nucleares como el Regulus (lanzado desde submarinos y buques), el intercontinental Snark y el Hound Dog de los B-52. El Reino Unido desarrolla el Blue Steel.' },
         { date: '1957–1964', text: 'Proyecto Plutón: Estados Unidos estudia un misil de crucero de propulsión nuclear, el SLAM, que habría sobrevolado el territorio enemigo esparciendo radiación con su reactor. Se prueba el motor en Nevada y se cancela en 1964.' },
-        { date: '1982–1983', text: 'Entran en servicio el ALCM (AGM-86B) de los bombarderos y las versiones nucleares del Tomahawk, lanzadas desde buques, submarinos y lanzadores terrestres.' },
+        { date: '1982–1984', text: 'Entran en servicio el ALCM (AGM-86B) de los bombarderos y las versiones nucleares del Tomahawk, lanzadas desde buques, submarinos y lanzadores terrestres.' },
         { date: '1983', text: 'El despliegue de misiles de crucero terrestres en Europa provoca grandes protestas, como el campamento de mujeres de Greenham Common (Reino Unido).' },
         { date: '8 dic. 1987', text: 'El Tratado INF elimina todos los misiles terrestres de 500 a 5500 km de alcance. Estados Unidos lo abandona en 2019, acusando a Rusia de violarlo con el misil 9M729.' },
         { date: '2013', text: 'Estados Unidos retira el Tomahawk nuclear; años después decide desarrollar un nuevo misil de crucero nuclear naval (SLCM-N).' },

@@ -181,7 +181,7 @@ de un MIRV llegan a la vez.
       vuela, también en el recorrido), opción «Empezar con el recorrido» (el recorrido arranca solo al detonar) y la
       línea de tiempo vuelve a aparecer si algo la ocultó con una simulación en marcha.
 
-Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias entregas); revisar textos nuevos en cada versión.
+Desde la 1.21 los artículos se traducen con paquetes por idioma (ver 1.21); revisar textos nuevos en cada versión.
 
 ## 1.8.1 — Todas las marcas del mapa en «Efectos» (publicada)
 
@@ -367,11 +367,43 @@ Pendiente: traducir los artículos de la enciclopedia (por idiomas, en varias en
 - [x] Cualquiera se simula con un clic: su diámetro, su densidad (la medida, si se conoce), la velocidad de entrada
       (la de encuentro más la que da la gravedad terrestre) y el ángulo más probable (45°).
 
+## 1.21 — Enciclopedia revisada y ampliada, traducible, y «¿Estoy a salvo?» completo (publicada)
+
+- [x] 11 artículos nuevos: una guerra nuclear, cómo viaja la lluvia radiactiva, ver una explosión de lejos,
+      sanidad y hospitales, los días después, defensa antimisiles, roturas de presas, erupciones volcánicas,
+      tormentas solares, Apofis y 2024 YR4 (`content/nuevos-efectos.ts`, `content/nuevos-otros.ts`).
+- [x] 34 artículos cortos ampliados con secciones, tablas, cronologías y citas nuevas (`content/extra-2.ts` y
+      `extra-3.ts`, que se añaden al final de cada artículo como `extra.ts`); invierno nuclear rehecho a fondo.
+      Algunas erratas corregidas (DEFCON 2 el 24 de octubre, la línea directa de 1963, la directriz de riesgo
+      radiológico de 2010, los Tomahawk nucleares de 1983–1984). 192 artículos y unas 184 000 palabras.
+- [x] 7 esquemas animados nuevos (23 en total): MIRV, vuelo de un misil balístico, defensa antimisiles por capas,
+      factor de protección de un refugio, dispersión de la lluvia radiactiva, invierno nuclear y «el destello y el
+      estruendo» (la onda a 343 m/s).
+- [x] Unas 75 fotos, vídeos y animaciones nuevas de Wikimedia Commons (`content/media-extra.ts`), comprobadas una
+      a una: imágenes para los artículos que no tenían (historias guiadas, invierno nuclear) y para los nuevos, y
+      vídeo o GIF para muchos que no tenían ninguno (pruebas de defensa antimisiles, DART, Apofis 2029, la
+      fulguración X8,7 de 2024, Wigwam, el Tratado INF, el monte Santa Helena…).
+- [x] Traducción de la enciclopedia: cada idioma tiene un paquete `src/encyclopedia/i18n/<idioma>.json` (huella del
+      texto castellano → traducción), que se carga sólo al abrirla. Si un texto castellano cambia, su traducción
+      deja de aplicarse sola y se ve en castellano hasta que se vuelva a traducir. `npx tsx scripts/enc-i18n.ts
+      todo` saca lo que falta en trozos (`enc-todo/`, fuera de git), `merge` recoge y valida las traducciones
+      (enlaces internos, URL, negritas, superíndices, longitud) y `check` da la cobertura. Los textos de la
+      interfaz de la enciclopedia, de los esquemas y de los gráficos pasan por `tr()`. La búsqueda funciona en el
+      idioma elegido y también en castellano.
+- [x] «¿Estoy a salvo?» por pestañas: Tu punto, Qué hacer (plan minuto a minuto y hacia dónde irse, en
+      perpendicular al viento), Refugio (factor de protección de cada sitio, dosis en 48 h y dos semanas, cuándo
+      salir con la regla del 7-10, refugios cercanos), Sanidad (hospitales más cercanos que seguirían abiertos,
+      primeros auxilios, yoduro potásico) y Mochila (lista de emergencia guardada en el navegador y plan familiar).
+      La capa de hospitales afectados viene oculta y se activa desde Efectos o desde el propio panel.
+
 ## Propuestas para las próximas versiones
 
 Cada una se puede hacer por separado; el orden es una sugerencia y el número de versión se asigna al hacerla.
 
-- [ ] Traducir los artículos de la enciclopedia a los 7 idiomas.
+- [ ] Terminar de traducir la enciclopedia: inglés y catalán, completos (artículos, esquemas, gráficos y
+      «¿Estoy a salvo?»); francés, alemán, portugués e italiano, pendientes (lo que falta se ve en castellano).
+      Para seguir: `npx tsx scripts/enc-i18n.ts todo` (los trozos de enc-todo/ ya sirven para los cuatro idiomas),
+      traducir siguiendo `enc-todo/RULES.md` y `merge`; las cadenas de interfaz que faltan, con `npm run i18n`.
 
 ## Descartado por ahora
 

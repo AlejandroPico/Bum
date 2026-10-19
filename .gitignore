@@ -7,3 +7,4 @@ Claude outputs/
 *.tgz
 *.bundle
 i18n-textos.json
+enc-todo/

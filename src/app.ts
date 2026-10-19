@@ -28,7 +28,8 @@ import { Tour } from './tour';
 import { WeatherLayer } from './map/weather';
 import { perf, detectLowPower, pixelRatioFor, maxFpsFor } from './perf';
 import type { Weather } from './ui/geo';
-import { assessPoint, type SafetyReport } from './physics/safety';
+import { assessPoint, localOffset, type SafetyReport } from './physics/safety';
+import { planBlock, refugeBlock, healthBlock, kitBlock } from './ui/safe-extra';
 import { nearestCity, haversineKm, setRealPopulation } from './data/cities';
 import { loadRealPopulation } from './data/worldpop';
 import { fetchInfrastructure, fetchBuildingCounts, fetchShelters, fetchHospitals, SHELTER_KINDS, type Shelter } from './data/osm';
@@ -1000,8 +1001,9 @@ function setHospitalLayer(rep: HealthReport | null) {
   if (src) { src.setData(fc); return; }
   if (!rep) return;
   map.addSource('fx-hosp', { type: 'geojson', data: fc });
-  map.addLayer({ id: 'fx-hosp', type: 'circle', source: 'fx-hosp', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 14, 7], 'circle-color': ['get', 'c'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5 } });
-  map.addLayer({ id: 'fx-hosp-lbl', type: 'symbol', source: 'fx-hosp', minzoom: 12.5, layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-font': ['Noto Sans Regular'], 'text-max-width': 10 }, paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 1.2 } });
+  const hv = results.hidden.has('hosp') ? 'none' : 'visible';
+  map.addLayer({ id: 'fx-hosp', type: 'circle', source: 'fx-hosp', layout: { visibility: hv }, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 14, 7], 'circle-color': ['get', 'c'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5 } });
+  map.addLayer({ id: 'fx-hosp-lbl', type: 'symbol', source: 'fx-hosp', minzoom: 12.5, layout: { visibility: hv, 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-font': ['Noto Sans Regular'], 'text-max-width': 10 }, paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 1.2 } });
 }
 
 // lluvia negra (aparece en el mapa a los ~20 min de la explosión)
@@ -1195,9 +1197,18 @@ function openWindow() {
   navigator.geolocation.getCurrentPosition((p) => { setSafePoint(p.coords.latitude, p.coords.longitude, 'Tu ubicación'); go({ lat: p.coords.latitude, lon: p.coords.longitude, label: 'Tu ubicación' }); }, fallback, { enableHighAccuracy: false, timeout: 9000, maximumAge: 600000 });
 }
 
+let safeTab: 'punto' | 'plan' | 'refugio' | 'sanidad' | 'mochila' = 'punto';
+let safePlace = 'house';
+let shelterMarkersOn = true;
+const SAFE_TABS = [['punto', 'Tu punto'], ['plan', 'Qué hacer'], ['refugio', 'Refugio'], ['sanidad', 'Sanidad'], ['mochila', 'Mochila']] as const;
 function buildSafePop() {
+  const scroll = safePop.scrollTop;
   safePop.innerHTML = '';
   safePop.append(h('div', { class: 'sp-h' }, '¿Estoy a salvo?'));
+  safePop.append(h('div', { class: 'sp-tabs' }, ...SAFE_TABS.map(([id, name]) => h('button', { type: 'button', class: safeTab === id ? 'on' : '', onclick: (ev: MouseEvent) => { ev.stopPropagation(); safeTab = id; buildSafePop(); safePop.scrollTop = 0; } }, name))));
+  const done = () => { requestAnimationFrame(() => { safePop.scrollTop = scroll; }); };
+  // la mochila y el plan familiar no dependen de la simulación
+  if (safeTab === 'mochila') { safePop.append(...kitBlock()); done(); return; }
   const locBtn = h('button', { type: 'button', class: 'btn-line', onclick: (ev: MouseEvent) => {
     ev.stopPropagation();
     if (!navigator.geolocation) { toast('Este navegador no permite conocer tu ubicación'); return; }
@@ -1209,28 +1220,54 @@ function buildSafePop() {
     ev.stopPropagation(); safePick = true; safePop.classList.add('hidden'); safeBtn.classList.remove('on');
     toast('Toca el mapa en el punto que quieres comprobar', 4000);
   } }, 'Elegir en el mapa');
-  safePop.append(h('div', { class: 'sp-btns' }, locBtn, pickBtn));
-  if (!run) { safePop.append(h('p', { class: 'sp-note' }, 'Lanza primero una simulación. Después podrás ver qué efectos llegarían a tu casa, tu trabajo o cualquier otro punto, cuándo llegarían y qué convendría hacer.')); return; }
-  if (!safePoint) { safePop.append(h('p', { class: 'sp-note' }, 'Elige un punto: se calcularán la onda expansiva, el calor, la radiación y la lluvia radiactiva que le llegarían, con la hora de llegada y consejos de protección civil.')); return; }
+  if (safeTab === 'punto' || !run || !safePoint) safePop.append(h('div', { class: 'sp-btns' }, locBtn, pickBtn));
+  if (!run) { safePop.append(h('p', { class: 'sp-note' }, 'Lanza primero una simulación. Después podrás ver qué efectos llegarían a tu casa, tu trabajo o cualquier otro punto, cuándo llegarían, dónde refugiarte y qué convendría hacer. La mochila de emergencia y el plan familiar se pueden preparar ya.')); done(); return; }
+  if (!safePoint) { safePop.append(h('p', { class: 'sp-note' }, 'Elige un punto: se calcularán la onda expansiva, el calor, la radiación y la lluvia radiactiva que le llegarían, con la hora de llegada, el mejor refugio, los hospitales que seguirían abiertos y consejos de protección civil.')); done(); return; }
   // detonación más cercana (en un ataque múltiple)
   const all = [{ fx: run.fx, lat: run.lat, lon: run.lon }, ...run.extras];
   const order = ['fuera', 'bajo', 'riesgo', 'grave', 'extremo'];
-  let rep: SafetyReport | null = null;
-  for (const s of all) { const r = assessPoint(s.fx, s.lat, s.lon, safePoint.lat, safePoint.lon); if (!rep || order.indexOf(r.level) > order.indexOf(rep.level) || (r.level === rep.level && r.distanceKm < rep.distanceKm)) rep = r; }
+  let rep: SafetyReport | null = null, src = all[0];
+  for (const s of all) { const r = assessPoint(s.fx, s.lat, s.lon, safePoint.lat, safePoint.lon); if (!rep || order.indexOf(r.level) > order.indexOf(rep.level) || (r.level === rep.level && r.distanceKm < rep.distanceKm)) { rep = r; src = s; } }
   const R = rep!;
   const dir = ['norte', 'noreste', 'este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste'][Math.round(R.bearingDeg / 45) % 8];
   const pct = (x: number) => (x < 0.005 ? '< 1 %' : `${Math.round(x * 100)} %`);
-  safePop.append(
-    h('div', { class: `sp-verdict lv-${R.level}` }, h('b', {}, R.headline), h('span', {}, `${safePoint.label} · a ${R.distanceKm < 10 ? R.distanceKm.toFixed(1).replace('.', DEC) : Math.round(R.distanceKm)} km al ${dir} de la zona cero`)),
-  );
-  if (!run.fx.release && !run.fx.volcano && !run.fx.dam && !run.fx.solar && !run.fx.war) safePop.append(h('div', { class: 'sp-prob' }, h('span', {}, 'Probabilidad de morir ', h('b', {}, pct(R.pDeath))), h('span', {}, 'de resultar herido ', h('b', {}, pct(R.pInjury)))));
-  const list = h('div', { class: 'sp-items' });
-  for (const it of R.items) list.append(h('div', { class: `sp-it lv-${it.level}` }, h('div', {}, h('b', {}, it.label), h('span', {}, it.value)), h('p', {}, it.detail)));
-  if (!R.items.length) list.append(h('p', { class: 'sp-note' }, 'Ningún efecto calculado llega a este punto.'));
-  if (!run.allDown && !run.fx.release && !run.fx.volcano && !run.fx.dam && !run.fx.solar && !run.fx.war) safePop.append(h('button', { type: 'button', class: 'btn-line sp-win', onclick: (ev: MouseEvent) => { ev.stopPropagation(); safePop.classList.add('hidden'); safeBtn.classList.remove('on'); openWindow(); } }, 'Verlo desde aquí (cámara del móvil)'));
-  safePop.append(list, h('div', { class: 'sp-h2' }, 'Qué hacer'), h('ul', { class: 'sp-adv' }, ...R.advice.map((a) => h('li', {}, a))),
-    ...shelterBlock(R),
-    h('p', { class: 'sp-note' }, 'Estimación orientativa con los mismos modelos del simulador. En una emergencia real, sigue siempre las instrucciones de las autoridades.'));
+  const plain = !run.fx.release && !run.fx.volcano && !run.fx.dam && !run.fx.solar && !run.fx.war;
+  safePop.append(h('div', { class: `sp-verdict lv-${R.level}` }, h('b', {}, R.headline), h('span', {}, `${safePoint.label} · a ${R.distanceKm < 10 ? R.distanceKm.toFixed(1).replace('.', DEC) : Math.round(R.distanceKm)} km al ${dir} de la zona cero`)));
+  const off = localOffset(src.lat, src.lon, safePoint.lat, safePoint.lon);
+  const mapToggles = () => {
+    const tg = (label: string, on: boolean, f: (v: boolean) => void) => {
+      const cb = h('input', { type: 'checkbox', checked: on, onclick: (ev: Event) => ev.stopPropagation(), onchange: () => f(cb.checked) }) as HTMLInputElement;
+      return h('label', { onclick: (ev: Event) => ev.stopPropagation() }, cb, h('span', {}, label));
+    };
+    const HR = results.healthReport;
+    const items: HTMLElement[] = [];
+    if (HR && HR !== 'loading' && HR !== 'error' && HR.hospitals.length) items.push(tg(`Hospitales afectados (${fmtNum(HR.hospitals.length)})`, !results.hidden.has('hosp'), (v) => { if (v) results.hidden.delete('hosp'); else results.hidden.add('hosp'); syncHidden(); results.refresh(); }));
+    if (Array.isArray(shelters.list) && shelters.list.length) items.push(tg('Refugios cercanos', shelterMarkersOn, (v) => { shelterMarkersOn = v; for (const m of shelterMarkers) m.getElement().style.display = v ? '' : 'none'; }));
+    return items.length ? [h('div', { class: 'sp-h2' }, 'En el mapa'), h('div', { class: 'sp-tgs' }, ...items)] : [];
+  };
+  if (safeTab === 'punto') {
+    if (plain) safePop.append(h('div', { class: 'sp-prob' }, h('span', {}, 'Probabilidad de morir ', h('b', {}, pct(R.pDeath))), h('span', {}, 'de resultar herido ', h('b', {}, pct(R.pInjury)))));
+    const list = h('div', { class: 'sp-items' });
+    for (const it of R.items) list.append(h('div', { class: `sp-it lv-${it.level}` }, h('div', {}, h('b', {}, it.label), h('span', {}, it.value)), h('p', {}, it.detail)));
+    if (!R.items.length) list.append(h('p', { class: 'sp-note' }, 'Ningún efecto calculado llega a este punto.'));
+    if (!run.allDown && plain) safePop.append(h('button', { type: 'button', class: 'btn-line sp-win', onclick: (ev: MouseEvent) => { ev.stopPropagation(); safePop.classList.add('hidden'); safeBtn.classList.remove('on'); openWindow(); } }, 'Verlo desde aquí (cámara del móvil)'));
+    safePop.append(list, h('div', { class: 'sp-h2' }, 'Qué hacer'), h('ul', { class: 'sp-adv' }, ...R.advice.map((a) => h('li', {}, a))));
+    shelterBlock(R); // empieza a buscar los refugios para las otras pestañas
+    safePop.append(...mapToggles());
+  } else if (safeTab === 'plan') {
+    safePop.append(...planBlock(R, src.fx, off.bearing, src.fx.release ? 0 : src.fx.falloutRateAt(off.e, off.n)));
+    safePop.append(h('div', { class: 'sp-h2' }, 'Consejos de protección civil'), h('ul', { class: 'sp-adv' }, ...R.advice.map((a) => h('li', {}, a))));
+  } else if (safeTab === 'refugio') {
+    if (!src.fx.release) safePop.append(...refugeBlock(src.fx, off.e, off.n, R, safePlace, (id) => { safePlace = id; buildSafePop(); }));
+    safePop.append(...shelterBlock(R), ...mapToggles());
+  } else if (safeTab === 'sanidad') {
+    safePop.append(...healthBlock(results.healthReport, safePoint.lat, safePoint.lon, R.falloutH != null || !!run.fx.release, (lat, lon) => {
+      if (results.hidden.has('hosp')) { results.hidden.delete('hosp'); syncHidden(); results.refresh(); }
+      map.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 14.5), duration: 900 });
+    }), ...mapToggles());
+  }
+  safePop.append(h('p', { class: 'sp-note' }, 'Estimación orientativa con los mismos modelos del simulador. En una emergencia real, sigue siempre las instrucciones de las autoridades.'));
+  done();
 }
 
 // refugio más cercano: metro, aparcamientos subterráneos y refugios de OpenStreetMap, andando
@@ -1252,6 +1289,7 @@ function shelterBlock(R: SafetyReport): HTMLElement[] {
       shelters.list = l;
       for (const sh of (l ?? []).slice(0, 8)) {
         const el = h('div', { class: 'shelter-mk', title: `${tr(SHELTER_KINDS[sh.kind].label)}${sh.name ? ' · ' + sh.name : ''}`, style: { background: SHELTER_COLORS[sh.kind] } });
+        if (!shelterMarkersOn) el.style.display = 'none';
         shelterMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([sh.lon, sh.lat]).addTo(map));
       }
       if (!safePop.classList.contains('hidden')) buildSafePop();
@@ -1311,7 +1349,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.20';
+const APP_VERSION = '1.21';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1962,6 +2000,7 @@ async function detonate() {
     const dObs = haversineKm(camLL.lat, camLL.lng, lat, lon) * 1000;
 
     results.hidden.clear();
+    results.hidden.add('hosp'); // los hospitales afectados vienen ocultos: se activan en Efectos o en «¿Estoy a salvo?»
     overlays.setHidden(new Set());
     if (allDown) overlays.set(null); else overlays.set(fx, lat, lon, fx.windKmh);
     overlays.extras = extras.map((x) => ({ fx: x.fx, lat: x.lat, lon: x.lon, delay: x.delay, reveal: (t: number) => revealFor(x.plan, t), gateT: x.plan.fbDone, falloutDelayS: Math.max(x.plan.fbDone, x.plan.tau) }));
@@ -1999,6 +2038,7 @@ async function detonate() {
           const rep = assessHealth([{ fx, lat, lon }, ...extras.map((x) => ({ fx: x.fx, lat: x.lat, lon: x.lon }))], l, hr);
           results.setHealth(rep);
           setHospitalLayer(rep);
+          if (!safePop.classList.contains('hidden')) buildSafePop();
         }, () => { if (token === infraToken) results.setHealth('error'); });
       } else results.setHealth(null);
       setBlackRainLayer([{ br: fx.blackRain, lat, lon }, ...extras.map((x) => ({ br: x.fx.blackRain, lat: x.lat, lon: x.lon }))]);

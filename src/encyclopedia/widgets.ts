@@ -1,6 +1,7 @@
 import type { ChartId, WidgetId } from './types';
 import { computeEffects, fmtDist, fmtEnergy } from '../physics/effects';
 import type { Environment, NuclearInput } from '../physics/types';
+import { tr } from '../i18n';
 
 /**
  * Gráficos interactivos y pequeñas calculadoras de la enciclopedia. Se dibujan con el color del
@@ -75,9 +76,9 @@ export function mountChart(id: ChartId, slot: HTMLElement): Mounted {
   };
   const hide = () => { tip.style.display = 'none'; };
   if (id === 'arsenals') lineChart(wrap, show, hide);
-  else if (id === 'tests-per-year') barChart(wrap, TESTS_YEAR, 'pruebas', show, hide, '#ff8a3d');
-  else if (id === 'tests-by-country') hBars(wrap, TESTS_COUNTRY.map(([n, v, c, d]) => ({ n, v, c, d })), 'pruebas', show, hide, false);
-  else if (id === 'yields') hBars(wrap, YIELDS.map(([n, v]) => ({ n, v, c: '#ff8a3d', d: fmtEnergy(v) })), 'kt', show, hide, true);
+  else if (id === 'tests-per-year') barChart(wrap, TESTS_YEAR, (v) => tr(`${nf(v)} pruebas`), show, hide, '#ff8a3d');
+  else if (id === 'tests-by-country') hBars(wrap, TESTS_COUNTRY.map(([n, v, c, d]) => ({ n, v, c, d })), (v) => tr(`${nf(v)} pruebas`), show, hide, false);
+  else if (id === 'yields') hBars(wrap, YIELDS.map(([n, v]) => ({ n, v, c: '#ff8a3d', d: fmtEnergy(v) })), null, show, hide, true);
   else if (id === 'doomsday') doomsday(wrap, show, hide);
   return { destroy() { slot.innerHTML = ''; } };
 }
@@ -91,12 +92,14 @@ function lineChart(wrap: HTMLElement, show: Show, hide: () => void) {
   const W = 900, H = 380, L = 56, R = 14, T = 12, B = 30;
   const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'ch-svg' });
   const ctl = h('div', 'ch-leg');
-  const logBtn = h('span', '', '<i style="background:transparent;box-shadow:inset 0 0 0 1px currentColor"></i>Escala logarítmica');
+  const logBtn = h('span', '', '<i style="background:transparent;box-shadow:inset 0 0 0 1px currentColor"></i>');
+  logBtn.append(tr('Escala logarítmica'));
   logBtn.classList.add('off');
   logBtn.onclick = () => { log = !log; logBtn.classList.toggle('off', !log); draw(); };
   ctl.append(logBtn);
   for (const a of ARSENALS) {
-    const s = h('span', '', `<i style="background:${a.color}"></i>${a.name}`);
+    const s = h('span', '', `<i style="background:${a.color}"></i>`);
+    s.append(tr(a.name));
     s.onclick = () => { if (on.has(a.name)) on.delete(a.name); else on.add(a.name); s.classList.toggle('off', !on.has(a.name)); draw(); };
     leg.append(s);
   }
@@ -124,7 +127,7 @@ function lineChart(wrap: HTMLElement, show: Show, hide: () => void) {
       const yr = Math.round(1945 + ((px - L) / (W - L - R)) * (2026 - 1945));
       cursor.setAttribute('x1', String(x(yr))); cursor.setAttribute('x2', String(x(yr))); cursor.setAttribute('visibility', 'visible');
       const rows = vis.map((a) => [a, interp(a.pts, yr)] as const).filter(([, v]) => v > 0).sort((p, q) => q[1] - p[1]);
-      show(e as MouseEvent, `<b>${yr}</b><br>${rows.map(([a, v]) => `<span style="color:${a.color}">■</span> ${a.name}: <b>${nf(v)}</b>`).join('<br>') || 'Sin armas'}<br>Total: <b>${nf(rows.reduce((s, r) => s + r[1], 0))}</b>`);
+      show(e as MouseEvent, `<b>${yr}</b><br>${rows.map(([a, v]) => `<span style="color:${a.color}">■</span> ${tr(a.name)}: <b>${nf(v)}</b>`).join('<br>') || tr('Sin armas')}<br>${tr('Total')}: <b>${nf(rows.reduce((s, r) => s + r[1], 0))}</b>`);
     });
     hit.addEventListener('mouseleave', () => { hide(); cursor.setAttribute('visibility', 'hidden'); });
   };
@@ -144,7 +147,7 @@ function niceTicks(max: number, n: number) {
   return out;
 }
 
-function barChart(wrap: HTMLElement, data: [number, number][], unit: string, show: Show, hide: () => void, color: string) {
+function barChart(wrap: HTMLElement, data: [number, number][], fmt: (v: number) => string, show: Show, hide: () => void, color: string) {
   const W = 900, H = 300, L = 40, R = 10, T = 10, B = 28;
   const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'ch-svg' });
   wrap.append(svg);
@@ -155,7 +158,7 @@ function barChart(wrap: HTMLElement, data: [number, number][], unit: string, sho
     const bh = (v / (max * 1.05)) * (H - T - B);
     const r = sv('rect', { x: L + i * bw + 0.5, y: H - B - bh, width: Math.max(1, bw - 1.5), height: Math.max(0, bh), fill: color, 'fill-opacity': 0.85 }, svg);
     const hitR = sv('rect', { x: L + i * bw, y: T, width: bw, height: H - T - B, fill: 'transparent' }, svg);
-    hitR.addEventListener('mousemove', (e) => { r.setAttribute('fill-opacity', '1'); show(e as MouseEvent, `<b>${yr}</b>: ${nf(v)} ${unit}`); });
+    hitR.addEventListener('mousemove', (e) => { r.setAttribute('fill-opacity', '1'); show(e as MouseEvent, `<b>${yr}</b>: ${fmt(v)}`); });
     hitR.addEventListener('mouseleave', () => { r.setAttribute('fill-opacity', '0.85'); hide(); });
     if (yr % 10 === 0) sv('text', { x: L + i * bw + bw / 2, y: H - 8, 'text-anchor': 'middle' }, svg).textContent = String(yr);
   });
@@ -166,11 +169,11 @@ function barChart(wrap: HTMLElement, data: [number, number][], unit: string, sho
     if (i < 0) continue;
     const xx = L + i * bw + bw / 2;
     sv('line', { x1: xx, x2: xx, y1: T, y2: H - B, stroke: 'currentColor', 'stroke-opacity': 0.35, 'stroke-dasharray': '3 3' }, svg);
-    sv('text', { x: xx + 4, y: T + 12 }, svg).textContent = txt;
+    sv('text', { x: xx + 4, y: T + 12 }, svg).textContent = tr(txt);
   }
 }
 
-function hBars(wrap: HTMLElement, rows: { n: string; v: number; c: string; d: string }[], unit: string, show: Show, hide: () => void, log: boolean) {
+function hBars(wrap: HTMLElement, rows: { n: string; v: number; c: string; d: string }[], fmt: ((v: number) => string) | null, show: Show, hide: () => void, log: boolean) {
   const W = 900, rowH = 30, L = 190, R = 90;
   const H = rows.length * rowH + 8;
   const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'ch-svg' });
@@ -179,15 +182,15 @@ function hBars(wrap: HTMLElement, rows: { n: string; v: number; c: string; d: st
   const f = (v: number) => log ? Math.log10(v / 0.01 + 1) / Math.log10(max / 0.01 + 1) : v / max;
   rows.forEach((r, i) => {
     const y = 4 + i * rowH;
-    sv('text', { x: L - 10, y: y + rowH / 2 + 4, 'text-anchor': 'end' }, svg).textContent = r.n;
+    sv('text', { x: L - 10, y: y + rowH / 2 + 4, 'text-anchor': 'end' }, svg).textContent = tr(r.n);
     const w = Math.max(2, f(r.v) * (W - L - R));
     const b = sv('rect', { x: L, y: y + 5, width: w, height: rowH - 10, fill: r.c, 'fill-opacity': 0.85 }, svg);
-    sv('text', { x: L + w + 8, y: y + rowH / 2 + 4 }, svg).textContent = unit === 'kt' ? r.d : nf(r.v);
+    sv('text', { x: L + w + 8, y: y + rowH / 2 + 4 }, svg).textContent = fmt ? nf(r.v) : r.d;
     const hit = sv('rect', { x: 0, y, width: W, height: rowH, fill: 'transparent' }, svg);
-    hit.addEventListener('mousemove', (e) => { b.setAttribute('fill-opacity', '1'); show(e as MouseEvent, `<b>${r.n}</b><br>${unit === 'kt' ? r.d : `${nf(r.v)} ${unit}`}${unit !== 'kt' ? `<br>${r.d}` : ''}`); });
+    hit.addEventListener('mousemove', (e) => { b.setAttribute('fill-opacity', '1'); show(e as MouseEvent, `<b>${tr(r.n)}</b><br>${fmt ? `${fmt(r.v)}<br>${tr(r.d)}` : r.d}`); });
     hit.addEventListener('mouseleave', () => { b.setAttribute('fill-opacity', '0.85'); hide(); });
   });
-  if (log) { const n = h('div', 'w-note', 'Escala logarítmica: cada salto equivale a multiplicar la potencia muchas veces.'); wrap.append(n); }
+  if (log) { const n = h('div', 'w-note'); n.textContent = tr('Escala logarítmica: cada salto equivale a multiplicar la potencia muchas veces.'); wrap.append(n); }
 }
 
 function doomsday(wrap: HTMLElement, show: Show, hide: () => void) {
@@ -196,15 +199,15 @@ function doomsday(wrap: HTMLElement, show: Show, hide: () => void) {
   wrap.append(svg);
   const x = (y: number) => L + ((y - 1945) / (2027 - 1945)) * (W - L - R);
   const y = (s: number) => T + (s / 1080) * (H - T - B);
-  for (const m of [0, 3, 6, 9, 12, 15, 18]) { sv('line', { x1: L, x2: W - R, y1: y(m * 60), y2: y(m * 60), class: 'ch-grid' }, svg); sv('text', { x: L - 8, y: y(m * 60) + 4, 'text-anchor': 'end' }, svg).textContent = `${m} min`; }
+  for (const m of [0, 3, 6, 9, 12, 15, 18]) { sv('line', { x1: L, x2: W - R, y1: y(m * 60), y2: y(m * 60), class: 'ch-grid' }, svg); sv('text', { x: L - 8, y: y(m * 60) + 4, 'text-anchor': 'end' }, svg).textContent = tr(`${m} min`); }
   for (let yr = 1950; yr <= 2025; yr += 10) sv('text', { x: x(yr), y: H - 8, 'text-anchor': 'middle' }, svg).textContent = String(yr);
   let d = '';
   DOOMSDAY.forEach(([yr, s], i) => { const nx = i + 1 < DOOMSDAY.length ? DOOMSDAY[i + 1][0] : 2027; d += `${i ? 'L' : 'M'}${x(yr)},${y(s)}H${x(nx)}`; });
   sv('path', { d, fill: 'none', stroke: '#ff5a1f', 'stroke-width': 2.4 }, svg);
-  sv('text', { x: L + 6, y: T + 12 }, svg).textContent = 'Medianoche ↑';
+  sv('text', { x: L + 6, y: T + 12 }, svg).textContent = tr('Medianoche ↑');
   DOOMSDAY.forEach(([yr, s]) => {
     const c = sv('circle', { cx: x(yr), cy: y(s), r: 4, fill: '#ff5a1f' }, svg);
-    c.addEventListener('mousemove', (e) => show(e as MouseEvent, `<b>${yr}</b>: ${s >= 120 ? `${nf(s / 60, 1)} minutos` : `${s} segundos`} para la medianoche`));
+    c.addEventListener('mousemove', (e) => show(e as MouseEvent, `<b>${yr}</b>: ${s >= 120 ? tr(`${nf(s / 60, 1)} minutos para la medianoche`) : tr(`${s} segundos para la medianoche`)}`));
     c.addEventListener('mouseleave', hide);
   });
 }
@@ -218,12 +221,12 @@ function slider(label: string, min: number, max: number, step: number, value: nu
   const val = h('b');
   const inp = document.createElement('input');
   inp.type = 'range'; inp.min = String(min); inp.max = String(max); inp.step = String(step); inp.value = String(value);
-  lab.append(document.createTextNode(label), val, inp);
+  lab.append(document.createTextNode(tr(label)), val, inp);
   const fill = () => { inp.style.setProperty('--p', `${((+inp.value - min) / (max - min)) * 100}%`); val.textContent = fmt(+inp.value); };
   inp.addEventListener('input', fill); fill();
   return { el: lab, inp };
 }
-const out = (pairs: [string, string][]) => pairs.map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join('');
+const out = (pairs: [string, string][]) => pairs.map(([k, v]) => `<div>${tr(k)}<b>${tr(v)}</b></div>`).join('');
 
 export function mountWidget(id: WidgetId, slot: HTMLElement): Mounted {
   slot.innerHTML = '';
@@ -248,26 +251,26 @@ export function mountWidget(id: WidgetId, slot: HTMLElement): Mounted {
         const max = Math.max(...rows.map((x) => x[1]));
         svg.innerHTML = '';
         for (const [, v, c] of [...rows].sort((a, b) => b[1] - a[1])) sv('circle', { cx: 150, cy: 80, r: Math.max(0.6, (v / max) * 76), fill: c, 'fill-opacity': 0.12, stroke: c, 'stroke-width': 1.4 }, svg);
-        note.textContent = `Ley de la raíz cúbica: multiplicar la potencia por 1000 sólo multiplica por 10 los radios de la onda expansiva. Con ${fmtEnergy(Y)}, la zona de daño grave mide ${nf(Math.PI * (r('psi5') / 1000) ** 2, 1)} km².`;
+        note.textContent = tr(`Ley de la raíz cúbica: multiplicar la potencia por 1000 sólo multiplica por 10 los radios de la onda expansiva. Con ${fmtEnergy(Y)}, la zona de daño grave mide ${nf(Math.PI * (r('psi5') / 1000) ** 2, 1)} km².`);
       } else {
         const D = Math.pow(10, +d!.inp.value);
         const psi = fx.pressurePsiAt(D), q = fx.thermalFluenceAt(D), dose = fx.doseRemAt(D);
         const sev = psi >= 20 ? 'destrucción total' : psi >= 5 ? 'la mayoría de los edificios se derrumban' : psi >= 1 ? 'cristales rotos, heridos por los fragmentos' : 'apenas daños';
         res.innerHTML = out([['Sobrepresión', `${nf(psi, psi < 1 ? 2 : 1)} psi`], ['Calor recibido', `${nf(q / 4.184e4, 1)} cal/cm²`], ['Radiación inicial', `${nf(dose, dose < 10 ? 1 : 0)} rem`], ['Llegada de la onda', `${nf(fx.shock ? interpT(fx.shock, D) : D / 340, 1)} s`]]);
-        note.textContent = `A ${fmtDist(D)}: ${sev}. ${q / 4.184e4 >= 8 ? 'Quemaduras de tercer grado en la piel expuesta.' : q / 4.184e4 >= 3 ? 'Quemaduras de primer o segundo grado.' : ''} ${dose >= 500 ? 'Dosis de radiación probablemente mortal.' : ''}`;
+        note.textContent = [tr(`A ${fmtDist(D)}: ${sev}.`), tr(q / 4.184e4 >= 8 ? 'Quemaduras de tercer grado en la piel expuesta.' : q / 4.184e4 >= 3 ? 'Quemaduras de primer o segundo grado.' : ''), tr(dose >= 500 ? 'Dosis de radiación probablemente mortal.' : '')].filter(Boolean).join(' ');
       }
     };
     y.inp.addEventListener('input', upd); d?.inp.addEventListener('input', upd); upd();
   } else if (id === 'decay') {
     const r1 = slider('Tasa de dosis a H+1', 0, 3, 0.01, 2, (v) => `${nf(Math.pow(10, v), 0)} R/h`);
-    const t = slider('Horas desde la explosión', 0, 3, 0.01, Math.log10(24), (v) => { const hh = Math.pow(10, v); return hh < 48 ? `${nf(hh, 1)} h` : `${nf(hh / 24, 1)} días`; });
+    const t = slider('Horas desde la explosión', 0, 3, 0.01, Math.log10(24), (v) => { const hh = Math.pow(10, v); return hh < 48 ? `${nf(hh, 1)} h` : tr(`${nf(hh / 24, 1)} días`); });
     row.append(r1.el, t.el);
     const upd = () => {
       const R1 = Math.pow(10, +r1.inp.value), T = Math.pow(10, +t.inp.value);
       const rate = R1 * Math.pow(T, -1.2);
       const dose = (a: number, b: number) => 5 * R1 * (Math.pow(a, -0.2) - Math.pow(b, -0.2));
       res.innerHTML = out([['Tasa de dosis ahora', `${nf(rate, rate < 1 ? 2 : 1)} R/h`], ['Dosis acumulada a la intemperie', `${nf(dose(1, Math.max(1.0001, T)), 0)} R`], ['Restante (10 % del inicial a las 7 h)', `${nf((rate / R1) * 100, 2)} %`]]);
-      note.textContent = 'Regla del 7-10: cada vez que el tiempo se multiplica por 7, la radiactividad se divide por 10. Quedarse a cubierto las primeras 24–48 horas evita la mayor parte de la dosis.';
+      note.textContent = tr('Regla del 7-10: cada vez que el tiempo se multiplica por 7, la radiactividad se divide por 10. Quedarse a cubierto las primeras 24–48 horas evita la mayor parte de la dosis.');
     };
     r1.inp.addEventListener('input', upd); t.inp.addEventListener('input', upd); upd();
   } else if (id === 'energy') {
@@ -277,7 +280,7 @@ export function mountWidget(id: WidgetId, slot: HTMLElement): Mounted {
       const K = kt(+e.inp.value), J = K * 4.184e12;
       const mag = (2 / 3) * (Math.log10(J) - 4.8);
       res.innerHTML = out([['Julios', J.toExponential(2).replace('.', ',').replace('e+', ' · 10^')], ['Bombas de Hiroshima', nf(K / 15, K < 15 ? 3 : 0)], ['Kilovatios hora', nf(J / 3.6e6, 0)], ['Rayos', nf(J / 1e9, 0)], ['Terremoto equivalente', `magnitud ${nf(mag, 1)}`], ['Masa convertida (E = mc²)', `${nf((J / 9e16) * 1000, 3)} g`]]);
-      note.textContent = 'La magnitud equivale a un terremoto que liberase toda esa energía en ondas sísmicas; una explosión real sólo convierte en ondas una pequeña parte.';
+      note.textContent = tr('La magnitud equivale a un terremoto que liberase toda esa energía en ondas sísmicas; una explosión real sólo convierte en ondas una pequeña parte.');
     };
     e.inp.addEventListener('input', upd); upd();
   } else if (id === 'asteroid') {
@@ -292,7 +295,7 @@ export function mountWidget(id: WidgetId, slot: HTMLElement): Mounted {
       const perYear = 3.7 * Math.pow(E, -0.9);
       const every = 1 / perYear;
       res.innerHTML = out([['Masa', m > 1e9 ? `${nf(m / 1e9, 1)} millones de t` : `${nf(m / 1000, 0)} t`], ['Energía', fmtEnergy(E)], ['Bombas de Hiroshima', nf(E / 15, 0)], ['Frecuencia', every < 1 ? `${nf(perYear, 1)} al año` : every < 1e6 ? `una vez cada ${nf(every, 0)} años` : `una vez cada ${nf(every / 1e6, 1)} millones de años`]]);
-      note.textContent = d < 25 ? 'Los objetos de este tamaño suelen estallar en la alta atmósfera: el peligro es la onda expansiva (como en Cheliábinsk), no el cráter.' : d < 1000 ? 'Un objeto así arrasaría una región entera; si cae al mar, provocaría un tsunami.' : 'A partir de un kilómetro, las consecuencias son globales: el polvo y el hollín enfriarían el planeta.';
+      note.textContent = tr(d < 25 ? 'Los objetos de este tamaño suelen estallar en la alta atmósfera: el peligro es la onda expansiva (como en Cheliábinsk), no el cráter.' : d < 1000 ? 'Un objeto así arrasaría una región entera; si cae al mar, provocaría un tsunami.' : 'A partir de un kilómetro, las consecuencias son globales: el polvo y el hollín enfriarían el planeta.');
     };
     for (const s of [D, v, rho]) s.inp.addEventListener('input', upd);
     upd();

@@ -2,7 +2,11 @@ import type { Article, Block, CatId, GlossaryTerm, ImgRef } from './types';
 import { CATEGORIES } from './types';
 import { slug } from './slug';
 import type { VidRef } from './content/videos';
-import { lang } from '../i18n';
+import { lang, tr } from '../i18n';
+import { applyPack } from './i18n';
+
+/** paquetes de traducción de los artículos (se cargan sólo si hacen falta) */
+const PACKS = import.meta.glob<{ default: Record<string, string> }>('./i18n/*.json');
 
 /**
  * Enciclopedia de Bum: panel a pantalla completa con índice por categorías, buscador,
@@ -52,7 +56,7 @@ export class Encyclopedia {
     this.el.id = 'enc';
     this.el.className = 'hidden';
     this.el.setAttribute('role', 'dialog');
-    this.el.setAttribute('aria-label', 'Enciclopedia');
+    this.el.setAttribute('aria-label', tr('Enciclopedia'));
     document.getElementById('app')!.append(this.el);
     this.el.innerHTML = `
       <aside class="enc-side">
@@ -63,8 +67,6 @@ export class Encyclopedia {
       </aside>
       <main class="enc-main" data-i18n-skip></main>
       <div class="enc-top"><button class="enc-back" type="button" title="Atrás">←</button><button class="enc-close" type="button" title="Cerrar (Esc)">✕</button></div>`;
-    // los artículos sólo están en castellano por ahora: se avisa en los demás idiomas
-    if (lang !== 'es') (this.el.querySelector('.enc-lang') as HTMLElement).textContent = 'Los artículos de la enciclopedia todavía están sólo en castellano.';
     this.nav = this.el.querySelector('.enc-nav')!;
     this.main = this.el.querySelector('.enc-main')!;
     this.search = this.el.querySelector('.enc-search input')!;
@@ -100,7 +102,18 @@ export class Encyclopedia {
 
   private load() {
     if (!this.loaded) {
-      this.loaded = import('./content/index').then((m) => {
+      this.loaded = import('./content/index').then(async (m) => {
+        // en otro idioma, se traducen los textos con su paquete (lo que falte se ve en castellano)
+        const pack = lang !== 'es' ? PACKS[`./i18n/${lang}.json`] : undefined;
+        if (pack) {
+          try {
+            applyPack({ articles: m.ALL_ARTICLES, glossary: m.GLOSSARY, images: m.IMAGES, videos: m.VIDEOS, math: m.MATH }, (await pack()).default);
+            m.GLOSSARY.sort((a, b) => a.term.localeCompare(b.term, lang));
+          } catch (e) {
+            console.warn('enciclopedia', lang, e);
+            (this.el.querySelector('.enc-lang') as HTMLElement).textContent = tr('No se ha podido cargar la traducción de los artículos: se muestran en castellano.');
+          }
+        }
         this.articles = m.ALL_ARTICLES;
         this.glossary = m.GLOSSARY;
         this.images = m.IMAGES;
@@ -120,7 +133,7 @@ export class Encyclopedia {
   async open(id = '') {
     this.el.classList.remove('hidden');
     document.body.classList.add('enc-open');
-    if (!this.loaded) this.main.innerHTML = '<div class="enc-loading">Cargando la enciclopedia…</div>';
+    if (!this.loaded) this.main.innerHTML = `<div class="enc-loading">${tr('Cargando la enciclopedia…')}</div>`;
     await this.load();
     this.show(id || this.current || 'inicio');
   }
@@ -152,26 +165,26 @@ export class Encyclopedia {
   // ---------------------------------------------------------------- índice
   private buildNav() {
     const out: string[] = [];
-    out.push(`<a class="enc-nav-home" data-go="inicio">Inicio</a>`);
+    out.push(`<a class="enc-nav-home" data-go="inicio">${tr('Inicio')}</a>`);
     for (const c of CATEGORIES) {
       const list = this.inCat(c.id);
-      out.push(`<details class="enc-cat" data-cat="${c.id}"><summary><span>${c.name}</span><i>${list.length}</i></summary><div>`);
+      out.push(`<details class="enc-cat" data-cat="${c.id}"><summary><span>${tr(c.name)}</span><i>${list.length}</i></summary><div>`);
       if (c.id === 'cat') {
         for (const g of CAT_GROUPS) {
           const items = list.filter((a) => (a.order ?? 0) >= g.from && (a.order ?? 0) <= g.to);
           if (!items.length) continue;
-          out.push(`<div class="enc-sub">${g.name}</div>`);
+          out.push(`<div class="enc-sub">${tr(g.name)}</div>`);
           for (const a of items) out.push(`<a data-go="${a.id}">${esc(a.title)}</a>`);
         }
       } else for (const a of list) out.push(`<a data-go="${a.id}">${esc(a.title)}</a>`);
       out.push('</div></details>');
     }
-    out.push(`<a class="enc-nav-home" data-go="glosario">Glosario</a>`);
+    out.push(`<a class="enc-nav-home" data-go="glosario">${tr('Glosario')}</a>`);
     this.nav.innerHTML = out.join('');
   }
 
   private inCat(c: CatId) {
-    return this.articles.filter((a) => a.cat === c).sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.title.localeCompare(b.title, 'es'));
+    return this.articles.filter((a) => a.cat === c).sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.title.localeCompare(b.title, lang));
   }
 
   // ---------------------------------------------------------------- navegación
@@ -186,7 +199,7 @@ export class Encyclopedia {
     else if (id.startsWith('cat:')) html = this.catPage(id.slice(4) as CatId);
     else {
       const a = this.byId.get(id);
-      html = a ? this.article(a) : `<div class="enc-art"><h1>No encontrado</h1><p>No hay ningún artículo con ese identificador.</p></div>`;
+      html = a ? this.article(a) : `<div class="enc-art"><h1>${tr('No encontrado')}</h1><p>${tr('No hay ningún artículo con ese identificador.')}</p></div>`;
     }
     this.main.innerHTML = html;
     this.main.scrollTop = 0;
@@ -227,18 +240,18 @@ export class Encyclopedia {
   private home() {
     const count = this.articles.length;
     const words = Math.round(this.articles.reduce((s, a) => s + JSON.stringify(a.blocks).split(/\s+/).length, 0) / 1000);
-    const cats = CATEGORIES.map((c) => `<a class="enc-card" data-go="cat:${c.id}"><b>${c.name}</b><span>${c.desc}</span><i>${this.inCat(c.id).length} artículos</i></a>`).join('');
+    const cats = CATEGORIES.map((c) => `<a class="enc-card" data-go="cat:${c.id}"><b>${tr(c.name)}</b><span>${tr(c.desc)}</span><i>${tr(`${this.inCat(c.id).length} artículos`)}</i></a>`).join('');
     const path = PATH.filter((p) => this.byId.has(p)).map((p, i) => `<a data-go="${p}"><b>${i + 1}</b>${esc(this.byId.get(p)!.title)}</a>`).join('');
     return `<div class="enc-art enc-home">
-      <div class="enc-kicker">Bum · Enciclopedia</div>
-      <h1>Todo sobre las armas nucleares, sus efectos y los impactos cósmicos</h1>
-      <p class="enc-lead">De qué está hecho un átomo y por qué puede liberar tanta energía; cómo funcionaban Little Boy y Fat Man, qué fue el Proyecto Manhattan, cómo nació la bomba de hidrógeno y qué ocurre en cada segundo de una explosión. Con esquemas animados y modelos 3D que puedes girar, cortar y desmontar.</p>
-      <div class="enc-stats"><span><b>${count}</b> artículos</span><span><b>≈ ${words} 000</b> palabras</span><span><b>${this.glossary.length}</b> términos en el glosario</span></div>
-      <h2>Empieza por aquí</h2>
+      <div class="enc-kicker">Bum · ${tr('Enciclopedia')}</div>
+      <h1>${tr('Todo sobre las armas nucleares, sus efectos y los impactos cósmicos')}</h1>
+      <p class="enc-lead">${tr('De qué está hecho un átomo y por qué puede liberar tanta energía; cómo funcionaban Little Boy y Fat Man, qué fue el Proyecto Manhattan, cómo nació la bomba de hidrógeno y qué ocurre en cada segundo de una explosión. Con esquemas animados, vídeos y modelos 3D que puedes girar, cortar y desmontar.')}</p>
+      <div class="enc-stats"><span><b>${count}</b> ${tr('artículos')}</span><span><b>≈ ${words} 000</b> ${tr('palabras')}</span><span><b>${this.glossary.length}</b> ${tr('términos en el glosario')}</span></div>
+      <h2>${tr('Empieza por aquí')}</h2>
       <div class="enc-path">${path}</div>
-      <h2>Secciones</h2>
-      <div class="enc-cards">${cats}<a class="enc-card" data-go="glosario"><b>Glosario</b><span>Definiciones breves de los términos técnicos.</span><i>${this.glossary.length} términos</i></a></div>
-      <p class="enc-disc">Contenido divulgativo, al nivel de un museo o de una enciclopedia general: explica los principios, la historia y las partes de cada arma tal como se han mostrado públicamente. No incluye ni pretende incluir información para fabricar armas; el diseño interior de las armas modernas es secreto y aquí sólo se representa de forma genérica.</p>
+      <h2>${tr('Secciones')}</h2>
+      <div class="enc-cards">${cats}<a class="enc-card" data-go="glosario"><b>${tr('Glosario')}</b><span>${tr('Definiciones breves de los términos técnicos.')}</span><i>${tr(`${this.glossary.length} términos`)}</i></a></div>
+      <p class="enc-disc">${tr('Contenido divulgativo, al nivel de un museo o de una enciclopedia general: explica los principios, la historia y las partes de cada arma tal como se han mostrado públicamente. No incluye ni pretende incluir información para fabricar armas; el diseño interior de las armas modernas es secreto y aquí sólo se representa de forma genérica.')}</p>
     </div>`;
   }
 
@@ -248,9 +261,9 @@ export class Encyclopedia {
     let body = '';
     const row = (a: Article) => `<a class="enc-row" data-go="${a.id}"><b>${esc(a.title)}</b><span>${this.md(a.summary)}</span></a>`;
     if (c === 'cat') {
-      for (const g of CAT_GROUPS) { const items = list.filter((a) => (a.order ?? 0) >= g.from && (a.order ?? 0) <= g.to); if (items.length) body += `<h2>${g.name}</h2>${items.map(row).join('')}`; }
+      for (const g of CAT_GROUPS) { const items = list.filter((a) => (a.order ?? 0) >= g.from && (a.order ?? 0) <= g.to); if (items.length) body += `<h2>${tr(g.name)}</h2>${items.map(row).join('')}`; }
     } else body = list.map(row).join('');
-    return `<div class="enc-art"><div class="enc-kicker">Sección</div><h1>${cat.name}</h1><p class="enc-lead">${cat.desc}</p>${body}</div>`;
+    return `<div class="enc-art"><div class="enc-kicker">${tr('Sección')}</div><h1>${tr(cat.name)}</h1><p class="enc-lead">${tr(cat.desc)}</p>${body}</div>`;
   }
 
   private glossaryPage() {
@@ -258,9 +271,9 @@ export class Encyclopedia {
     const items = this.glossary.map((g) => {
       const L = norm(g.term)[0].toUpperCase();
       const head = L !== letter ? `<h2 id="gl-${L}">${(letter = L)}</h2>` : '';
-      return `${head}<div class="enc-gl"><b>${esc(g.term)}</b><span>${this.md(g.def)}${g.see && this.byId.has(g.see) ? ` <a data-go="${g.see}">Ver artículo →</a>` : ''}</span></div>`;
+      return `${head}<div class="enc-gl"><b>${esc(g.term)}</b><span>${this.md(g.def)}${g.see && this.byId.has(g.see) ? ` <a data-go="${g.see}">${tr('Ver artículo')} →</a>` : ''}</span></div>`;
     }).join('');
-    return `<div class="enc-art"><div class="enc-kicker">Referencia</div><h1>Glosario</h1>${items}</div>`;
+    return `<div class="enc-art"><div class="enc-kicker">${tr('Referencia')}</div><h1>${tr('Glosario')}</h1>${items}</div>`;
   }
 
   private searchPage(q: string) {
@@ -278,9 +291,9 @@ export class Encyclopedia {
       return { a, s };
     }).filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 40);
     const gl = this.glossary.filter((g) => words.every((w) => norm(g.term + ' ' + g.def).includes(w))).slice(0, 8);
-    const rows = scored.map(({ a }) => `<a class="enc-row" data-go="${a.id}"><b>${esc(a.title)}</b><span>${this.md(a.summary)}</span><i>${CATEGORIES.find((c) => c.id === a.cat)?.name ?? ''}</i></a>`).join('');
-    const glr = gl.map((g) => `<div class="enc-gl"><b>${esc(g.term)}</b><span>${this.md(g.def)}${g.see && this.byId.has(g.see) ? ` <a data-go="${g.see}">Ver artículo →</a>` : ''}</span></div>`).join('');
-    return `<div class="enc-art"><div class="enc-kicker">Búsqueda</div><h1>«${esc(q)}»</h1>${rows || '<p>No hay artículos que coincidan.</p>'}${glr ? `<h2>En el glosario</h2>${glr}` : ''}</div>`;
+    const rows = scored.map(({ a }) => `<a class="enc-row" data-go="${a.id}"><b>${esc(a.title)}</b><span>${this.md(a.summary)}</span><i>${tr(CATEGORIES.find((c) => c.id === a.cat)?.name ?? '')}</i></a>`).join('');
+    const glr = gl.map((g) => `<div class="enc-gl"><b>${esc(g.term)}</b><span>${this.md(g.def)}${g.see && this.byId.has(g.see) ? ` <a data-go="${g.see}">${tr('Ver artículo')} →</a>` : ''}</span></div>`).join('');
+    return `<div class="enc-art"><div class="enc-kicker">${tr('Búsqueda')}</div><h1>«${esc(q)}»</h1>${rows || `<p>${tr('No hay artículos que coincidan.')}</p>`}${glr ? `<h2>${tr('En el glosario')}</h2>${glr}` : ''}</div>`;
   }
 
   private article(a: Article) {
@@ -311,11 +324,11 @@ export class Encyclopedia {
       if (i === 6 && midVid) blocks.push(this.media(midVid));
     });
     flushStory();
-    if (math.length) { toc.push(`<a data-anchor="s-math">Las matemáticas</a>`); blocks.push(`<h2 id="s-math">Las matemáticas</h2>`, ...math.map((b, i) => this.block(b, 1000 + i))); }
-    if (vids.length) { toc.push(`<a data-anchor="s-vid">En movimiento</a>`); blocks.push(`<h2 id="s-vid">En movimiento</h2>`, ...vids.map((v) => this.media(v))); }
+    if (math.length) { toc.push(`<a data-anchor="s-math">${tr('Las matemáticas')}</a>`); blocks.push(`<h2 id="s-math">${tr('Las matemáticas')}</h2>`, ...math.map((b, i) => this.block(b, 1000 + i))); }
+    if (vids.length) { toc.push(`<a data-anchor="s-vid">${tr('En movimiento')}</a>`); blocks.push(`<h2 id="s-vid">${tr('En movimiento')}</h2>`, ...vids.map((v) => this.media(v))); }
     const rest = imgs.slice(2);
-    if (rest.length) { toc.push(`<a data-anchor="s-img">Imágenes</a>`); blocks.push(`<h2 id="s-img">Imágenes</h2>`, this.gallery(rest)); }
-    if (src.length) { toc.push(`<a data-anchor="s-src">Fuentes</a>`); blocks.push(`<h2 id="s-src">Fuentes y lecturas</h2>`, this.block({ t: 'sources', items: src }, 2000)); }
+    if (rest.length) { toc.push(`<a data-anchor="s-img">${tr('Imágenes')}</a>`); blocks.push(`<h2 id="s-img">${tr('Imágenes')}</h2>`, this.gallery(rest)); }
+    if (src.length) { toc.push(`<a data-anchor="s-src">${tr('Fuentes')}</a>`); blocks.push(`<h2 id="s-src">${tr('Fuentes y lecturas')}</h2>`, this.block({ t: 'sources', items: src }, 2000)); }
     const rel = (a.related ?? []).filter((r) => this.byId.has(r)).map((r) => `<a data-go="${r}">${esc(this.byId.get(r)!.title)}</a>`).join('');
     const list = this.inCat(a.cat);
     const i = list.indexOf(a);
@@ -323,7 +336,7 @@ export class Encyclopedia {
     const hero = imgs[0] ? this.figure(imgs[0], true) : '';
     return `<article class="enc-art enc-wide">
       <header class="enc-hd">
-        <div class="enc-kicker"><a data-go="cat:${a.cat}">${cat.name}</a></div>
+        <div class="enc-kicker"><a data-go="cat:${a.cat}">${tr(cat.name)}</a></div>
         <h1>${esc(a.title)}</h1>
         <p class="enc-lead">${this.md(a.summary)}</p>
       </header>
@@ -331,12 +344,12 @@ export class Encyclopedia {
         <div class="enc-body">
           ${hero}
           ${blocks.join('')}
-          ${rel ? `<h2>Artículos relacionados</h2><div class="enc-rel">${rel}</div>` : ''}
+          ${rel ? `<h2>${tr('Artículos relacionados')}</h2><div class="enc-rel">${rel}</div>` : ''}
           <div class="enc-pn">${prev ? `<a data-go="${prev.id}">← ${esc(prev.title)}</a>` : '<span></span>'}${next ? `<a data-go="${next.id}">${esc(next.title)} →</a>` : ''}</div>
         </div>
         <aside class="enc-aside">
-          ${facts ? `<div class="enc-box"><div class="enc-box-h">Ficha</div>${this.block(facts, fi)}</div>` : ''}
-          ${toc.length > 1 ? `<div class="enc-box enc-toc"><div class="enc-box-h">En este artículo</div>${toc.join('')}</div>` : ''}
+          ${facts ? `<div class="enc-box"><div class="enc-box-h">${tr('Ficha')}</div>${this.block(facts, fi)}</div>` : ''}
+          ${toc.length > 1 ? `<div class="enc-box enc-toc"><div class="enc-box-h">${tr('En este artículo')}</div>${toc.join('')}</div>` : ''}
         </aside>
       </div>
     </article>`;
@@ -350,10 +363,10 @@ export class Encyclopedia {
     return `<span class="enc-credit">${parts.join(' · ')}${parts.length ? ' · ' : ''}<a href="${this.imgPage(r.file)}" target="_blank" rel="noopener">Wikimedia Commons</a></span>`;
   }
   private figure(r: ImgRef, hero: boolean) {
-    return `<figure class="enc-photo${hero ? ' hero' : ''}"><button type="button" class="enc-zoom" data-zoom="${esc(r.file)}" data-cap="${esc(r.caption)}" aria-label="Ampliar"><img loading="lazy" decoding="async" src="${this.imgUrl(r.file, hero ? 1600 : 1100)}" alt="${esc(r.caption)}" /></button><figcaption>${this.md(r.caption)} ${this.credit(r)}</figcaption></figure>`;
+    return `<figure class="enc-photo${hero ? ' hero' : ''}"><button type="button" class="enc-zoom" data-zoom="${esc(r.file)}" data-cap="${esc(r.caption)}" aria-label="${tr('Ampliar')}"><img loading="lazy" decoding="async" src="${this.imgUrl(r.file, hero ? 1600 : 1100)}" alt="${esc(r.caption)}" /></button><figcaption>${this.md(r.caption)} ${this.credit(r)}</figcaption></figure>`;
   }
   private gallery(items: ImgRef[]) {
-    return `<div class="enc-gal">${items.map((r) => `<figure><button type="button" class="enc-zoom" data-zoom="${esc(r.file)}" data-cap="${esc(r.caption)}" aria-label="Ampliar"><img loading="lazy" decoding="async" src="${this.imgUrl(r.file, 700)}" alt="${esc(r.caption)}" /></button><figcaption>${this.md(r.caption)} ${this.credit(r)}</figcaption></figure>`).join('')}</div>`;
+    return `<div class="enc-gal">${items.map((r) => `<figure><button type="button" class="enc-zoom" data-zoom="${esc(r.file)}" data-cap="${esc(r.caption)}" aria-label="${tr('Ampliar')}"><img loading="lazy" decoding="async" src="${this.imgUrl(r.file, 700)}" alt="${esc(r.caption)}" /></button><figcaption>${this.md(r.caption)} ${this.credit(r)}</figcaption></figure>`).join('')}</div>`;
   }
   /** vídeo (webm/ogv) o animación GIF de Commons */
   private media(v: VidRef) {
@@ -362,16 +375,16 @@ export class Encyclopedia {
     const inner = v.kind === 'gif'
       ? `<img loading="lazy" decoding="async" src="${raw}" alt="${esc(v.caption)}"${ratio} />`
       : `<video controls preload="none" playsinline poster="${this.imgUrl(v.file, 960)}" src="${raw}"${ratio}></video>`;
-    return `<figure class="enc-photo enc-media enc-${v.kind}">${inner}<figcaption>${v.kind === 'video' ? '<b class="enc-badge">Vídeo</b> ' : '<b class="enc-badge">Animación</b> '}${this.md(v.caption)} ${this.credit({ file: v.file, caption: v.caption, credit: v.credit, license: v.license })}</figcaption></figure>`;
+    return `<figure class="enc-photo enc-media enc-${v.kind}">${inner}<figcaption><b class="enc-badge">${tr(v.kind === 'video' ? 'Vídeo' : 'Animación')}</b> ${this.md(v.caption)} ${this.credit({ file: v.file, caption: v.caption, credit: v.credit, license: v.license })}</figcaption></figure>`;
   }
   /** relato por pasos con navegación */
   private storyHtml(steps: Extract<Block, { t: 'step' }>[]) {
     const dots = steps.map((s, i) => `<button type="button" class="${i === 0 ? 'on' : ''}" data-step="${i}" title="${esc(s.title)}"><b>${esc(s.time)}</b></button>`).join('');
     const panes = steps.map((s, i) => `<section class="enc-step${i === 0 ? ' on' : ''}" data-i="${i}">
         ${s.file ? `<figure class="enc-photo"><button type="button" class="enc-zoom" data-zoom="${esc(s.file)}" data-cap="${esc(s.title)}"><img loading="lazy" src="${this.imgUrl(s.file, 1200)}" alt="${esc(s.title)}" /></button>${s.credit ? `<figcaption>${this.credit({ file: s.file, caption: '', credit: s.credit })}</figcaption>` : ''}</figure>` : ''}
-        <div class="enc-step-t"><div class="enc-step-time">${esc(s.time)}</div><h3>${this.md(s.title)}</h3><p>${this.md(s.text)}</p>${s.sim ? `<button class="enc-sim" type="button" data-sim="${esc(s.sim)}"><span>▶</span>Verlo en el simulador</button>` : ''}</div>
+        <div class="enc-step-t"><div class="enc-step-time">${esc(s.time)}</div><h3>${this.md(s.title)}</h3><p>${this.md(s.text)}</p>${s.sim ? `<button class="enc-sim" type="button" data-sim="${esc(s.sim)}"><span>▶</span>${tr('Verlo en el simulador')}</button>` : ''}</div>
       </section>`).join('');
-    return `<div class="enc-story" data-n="${steps.length}"><div class="enc-story-bar">${dots}</div>${panes}<div class="enc-story-nav"><button type="button" data-step-d="-1">← Anterior</button><span class="enc-story-c">1 / ${steps.length}</span><button type="button" data-step-d="1">Siguiente →</button></div></div>`;
+    return `<div class="enc-story" data-n="${steps.length}"><div class="enc-story-bar">${dots}</div>${panes}<div class="enc-story-nav"><button type="button" data-step-d="-1">← ${tr('Anterior')}</button><span class="enc-story-c">1 / ${steps.length}</span><button type="button" data-step-d="1">${tr('Siguiente')} →</button></div></div>`;
   }
 
   private block(b: Block, i: number): string {
@@ -385,8 +398,8 @@ export class Encyclopedia {
       case 'timeline': return `<ol class="enc-tl">${b.items.map((x) => `<li><b>${this.md(x.date)}</b><span>${this.md(x.text)}</span></li>`).join('')}</ol>`;
       case 'compare': return `<div class="enc-tw"><table><thead><tr>${b.head.map((x) => `<th>${this.md(x)}</th>`).join('')}</tr></thead><tbody>${b.rows.map((r) => `<tr>${r.map((x) => `<td>${this.md(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
       case 'diagram': return `<figure class="enc-fig" data-diagram="${b.id}" data-i="${i}"><div class="enc-slot"></div>${b.caption ? `<figcaption>${this.md(b.caption)}</figcaption>` : ''}</figure>`;
-      case 'model': return `<figure class="enc-fig enc-model" data-model="${b.id}" data-params='${esc(JSON.stringify(b.params ?? {})).replace(/'/g, '&#39;')}'><div class="enc-slot enc-mslot"><span>Modelo 3D · ${esc(b.params?.label ?? b.id)}</span></div>${b.caption ? `<figcaption>${this.md(b.caption)}</figcaption>` : ''}</figure>`;
-      case 'sim': return `<button class="enc-sim" type="button" data-sim="${esc(b.preset)}"><span>▶</span>${esc(b.label ?? `Simular ${b.preset} en el mapa`)}</button>`;
+      case 'model': return `<figure class="enc-fig enc-model" data-model="${b.id}" data-params='${esc(JSON.stringify(b.params ?? {})).replace(/'/g, '&#39;')}'><div class="enc-slot enc-mslot"><span>${tr('Modelo 3D')} · ${esc(b.params?.label ?? b.id)}</span></div>${b.caption ? `<figcaption>${this.md(b.caption)}</figcaption>` : ''}</figure>`;
+      case 'sim': return `<button class="enc-sim" type="button" data-sim="${esc(b.preset)}"><span>▶</span>${esc(b.label ?? tr(`Simular ${b.preset} en el mapa`))}</button>`;
       case 'img': return this.figure(b, !!b.wide);
       case 'gallery': return this.gallery(b.items);
       case 'math': return `<div class="enc-math"><div class="enc-f">${this.tex(b.f)}</div>${b.caption ? `<p class="enc-math-c">${this.md(b.caption)}</p>` : ''}${b.vars?.length ? `<dl>${b.vars.map(([k, v]) => `<dt>${this.tex(k)}</dt><dd>${this.md(v)}</dd>`).join('')}</dl>` : ''}</div>`;
@@ -474,7 +487,7 @@ export class Encyclopedia {
           live.destroy();
           (fig as unknown as { _m?: Mounted })._m = undefined;
           this.mounted = this.mounted.filter((x) => x !== live);
-          slot.innerHTML = `<span>Modelo 3D</span>`;
+          slot.innerHTML = `<span>${tr('Modelo 3D')}</span>`;
         }
       }
     }, { root: this.main, rootMargin: '400px 0px' });
@@ -486,7 +499,7 @@ export class Encyclopedia {
   private lightbox(file: string, cap: string) {
     const box = document.createElement('div');
     box.className = 'enc-lb';
-    box.innerHTML = `<img src="${this.imgUrl(file, 2400)}" alt="${esc(cap)}" /><div class="enc-lb-c">${esc(cap)} · <a href="${this.imgPage(file)}" target="_blank" rel="noopener">ver en Wikimedia Commons</a></div><button type="button" class="enc-lb-x" title="Cerrar">✕</button>`;
+    box.innerHTML = `<img src="${this.imgUrl(file, 2400)}" alt="${esc(cap)}" /><div class="enc-lb-c">${esc(cap)} · <a href="${this.imgPage(file)}" target="_blank" rel="noopener">${tr('ver en Wikimedia Commons')}</a></div><button type="button" class="enc-lb-x" title="${tr('Cerrar')}">✕</button>`;
     const close = () => { box.remove(); window.removeEventListener('keydown', key, true); };
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } };
     box.addEventListener('click', (e) => { if (!(e.target as HTMLElement).closest('a')) close(); });

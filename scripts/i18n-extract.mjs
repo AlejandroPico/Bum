@@ -8,7 +8,7 @@ import path from 'path';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../src');
 const files = [];
 (function walk(d) { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) { if (!p.includes('/encyclopedia')) walk(p); } else if (p.endsWith('.ts') && !p.endsWith('.worker.ts')) files.push(p); } })(root);
-files.push(root + '/encyclopedia/Encyclopedia.ts');
+for (const f of ['Encyclopedia.ts', 'types.ts', 'diagrams.ts', 'widgets.ts']) files.push(root + '/encyclopedia/' + f);
 const BLOCK_CALLEE = new Set(['querySelector', 'querySelectorAll', 'getElementById', 'addEventListener', 'removeEventListener', 'add', 'remove', 'toggle', 'contains', 'setLayoutProperty', 'setPaintProperty', 'getLayer', 'getSource', 'removeLayer', 'removeSource', 'addSource', 'getPaintProperty', 'getLayoutProperty', 'setFilter', 'setProperty', 'getItem', 'setItem', 'removeItem', 'createElement', 'getContext', 'getExtension', 'on', 'off', 'once', 'warn', 'error', 'log', 'matchMedia', 'setAttribute', 'getAttribute', 'import', 'require', 'fetch', 'Worker', 'URL', 'includes', 'startsWith', 'endsWith', 'split', 'replace', 'test', 'match', 'padStart', 'join', 'toLocaleString', 'getParameter', 'postMessage', 'setStyle', 'setSky', 'getStyle', 'querySourceFeatures', 'queryRenderedFeatures']);
 const out = new Map();
 const isCodey = (s) => {

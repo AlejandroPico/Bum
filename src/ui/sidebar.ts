@@ -671,11 +671,12 @@ export class Sidebar {
     });
     this.selectOther = (name: string) => {
       const vi = VOL_PRESETS.findIndex((p) => p.v.name === name), ri = REL_PRESETS.findIndex((p) => p.r.name === name);
-      if (vi < 0 && ri < 0) return false;
+      const di = DAM_PRESETS.findIndex((p) => p.d.name === name), si = SOLAR_PRESETS.findIndex((p) => p.s.name === name), wi = WAR_PRESETS.findIndex((p) => p.name === name || p.id === name);
+      if (vi < 0 && ri < 0 && di < 0 && si < 0 && wi < 0) return false;
       this.setMode('other');
-      O.type = vi >= 0 ? 'volcano' : REL_PRESETS[ri].type;
+      O.type = vi >= 0 ? 'volcano' : ri >= 0 ? REL_PRESETS[ri].type : di >= 0 ? 'dam' : si >= 0 ? 'solar' : 'war';
       oType.set(O.type); updOther();
-      oPreset.value = String(vi >= 0 ? vi : ri);
+      oPreset.value = String(vi >= 0 ? vi : ri >= 0 ? ri : di >= 0 ? di : si >= 0 ? si : wi);
       oPreset.dispatchEvent(new Event('change'));
       return true;
     };

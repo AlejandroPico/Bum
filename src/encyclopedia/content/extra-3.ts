@@ -1,0 +1,237 @@
+import type { Block } from '../types';
+
+/** Ampliaciones de la versión 1.21 (segunda parte): secciones nuevas que se añaden al final de artículos existentes (antes de sus botones de simulación). */
+export const EXTRA3: Record<string, { blocks: Block[]; related?: string[] }> = {
+  'escalas-de-riesgo': {
+    blocks: [
+      { t: 'h', text: 'Alertas que hicieron historia' },
+      { t: 'p', text: 'Las escalas nacieron de un susto. El 11 de marzo de 1998, el Centro de Planetas Menores de la Unión Astronómica Internacional anunció que el asteroide **1997 XF11**, de más de un kilómetro, pasaría en octubre de 2028 muy cerca de la Tierra y que un choque, aunque improbable, no podía descartarse del todo. La noticia dio la vuelta al mundo. Al día siguiente aparecieron imágenes del mismo objeto tomadas en 1990, en las que nadie lo había identificado; con ellas la órbita se afinó y el impacto quedó descartado. El episodio dejó claras dos cosas: hacía falta un lenguaje común para comunicar riesgos inciertos, y los cálculos debían contrastarse entre varios equipos antes de hacerse públicos.' },
+      { t: 'timeline', items: [
+        { date: 'Marzo de 1998', text: 'Falsa alarma de 1997 XF11. Se descarta en un día gracias a imágenes antiguas.' },
+        { date: 'Junio de 1999', text: 'Se adopta la escala de Turín en un congreso internacional celebrado en esa ciudad.' },
+        { date: 'Julio de 2002', text: '**2002 NT7** se convierte en el primer objeto con un valor positivo en la escala de Palermo, por un posible impacto en 2019. Nuevas observaciones lo descartan en pocas semanas.' },
+        { date: 'Diciembre de 2004', text: '[[apofis|Apofis]] alcanza el nivel 4 de Turín y alrededor de +1,1 en Palermo, los récords de ambas escalas. A los pocos días, imágenes anteriores a su descubrimiento descartan el choque en 2029.' },
+        { date: '2005', text: 'Se revisan los textos de la escala de Turín para que sus niveles bajos suenen menos alarmantes: el nivel 1 pasa a describirse como «normal».' },
+        { date: 'Octubre de 2008', text: '**2008 TC3** es el primer asteroide descubierto antes de chocar: cae en el desierto de Nubia (Sudán) unas veinte horas después. Pese a una probabilidad del 100 %, le correspondía un 0 en la escala de Turín, porque, con unos 4 metros, se desintegraría en la atmósfera, como ocurrió.' },
+        { date: 'Enero de 2025', text: '[[2024-yr4|2024 YR4]] llega al nivel 3. Por primera vez, la Red Internacional de Alerta de Asteroides, creada bajo el auspicio de la ONU, emite un aviso formal de posible impacto.' },
+      ] },
+      { t: 'h', text: 'Lo que las escalas no dicen' },
+      { t: 'p', text: 'Las dos escalas condensan en un solo número dos magnitudes distintas, la probabilidad y la energía, y por eso pierden información. Un mismo nivel 1 de Turín puede corresponder a un objeto grande con una probabilidad minúscula o a uno pequeño con una probabilidad algo mayor. La escala de Turín, además, sólo se aplica a los posibles impactos de los próximos cien años y no tiene en cuenta los objetos tan pequeños que se desintegrarían en el aire. La de Palermo sí distingue entre un riesgo cercano y uno lejano, pero su escala logarítmica resulta poco intuitiva fuera de los especialistas. Por eso los centros de cálculo publican también la probabilidad, la fecha y el tamaño estimado: las escalas resumen, pero no sustituyen a los datos.' },
+      { t: 'p', text: 'Hay otra limitación más profunda: las escalas sólo valoran los objetos **conocidos**. Se han descubierto casi todos los asteroides cercanos a la Tierra de más de un kilómetro, los capaces de causar una catástrofe global, y ninguno amenaza con chocar en los próximos siglos. Pero de los de más de 140 metros, capaces de arrasar una región, se conoce menos de la mitad. El riesgo de los que aún no se han visto supera al de todos los que figuran en las listas. Por eso son tan importantes los nuevos programas de búsqueda, como el Observatorio Vera C. Rubin, en Chile, que empezó a funcionar en 2025, y el telescopio espacial NEO Surveyor de la NASA, cuyo lanzamiento está previsto hacia 2027; véanse [[lista-sentry|la lista Sentry]] y [[defensa-planetaria|defensa planetaria]].' },
+    ],
+    related: ['apofis', '2024-yr4'],
+  },
+
+  'radiacion-inicial': {
+    blocks: [
+      { t: 'h', text: 'Un minuto que no llega todo a la vez' },
+      { t: 'p', text: 'La radiación inicial no es un único pulso. Los rayos gamma inmediatos y los neutrones llegan en una fracción de segundo, demasiado deprisa para cualquier reacción. Los rayos gamma de los productos de fisión, en cambio, siguen llegando durante varios segundos, mientras la bola de fuego asciende y se aleja. En las armas pequeñas, buena parte de esa dosis se recibe en el primer segundo o dos; en las de megatones el reparto se alarga, y Glasstone señala que ponerse a cubierto de inmediato tras el destello podría reducirla algo.' },
+      { t: 'p', text: 'En las explosiones grandes interviene además un fenómeno que los manuales llaman **refuerzo hidrodinámico**. La onda de choque empuja el aire hacia fuera y deja tras de sí una región enrarecida, mucho menos densa, entre la bola de fuego y los observadores. Mientras dura, los rayos gamma de los productos de fisión atraviesan esa zona con menos absorción, y por eso la dosis gamma crece con la potencia algo más deprisa de lo que cabría esperar. Aun así, la onda y el calor crecen todavía más, de modo que en las armas de megatones la radiación inicial sigue siendo un efecto secundario.' },
+      { t: 'compare', head: ['Componente', 'Cuándo llega', 'Qué la frena mejor'], rows: [
+        ['Neutrones', 'En una fracción de segundo', 'Materiales con mucho hidrógeno: agua, tierra húmeda, hormigón'],
+        ['Rayos gamma inmediatos y de captura', 'En menos de una décima de segundo', 'Materiales densos y gruesos: tierra, hormigón, acero'],
+        ['Rayos gamma de los productos de fisión', 'Durante unos segundos, mientras sube la bola de fuego', 'Materiales densos y cualquier obstáculo que tape la línea de visión con la bola de fuego'],
+      ] },
+      { t: 'h', text: 'Medir la radiación de Hiroshima y Nagasaki' },
+      { t: 'p', text: 'Casi todo lo que se sabe sobre el riesgo de cáncer causado por la radiación procede del **Estudio de Duración de Vida**, que sigue desde 1950 a unos 120 000 habitantes de las dos ciudades. Para que sirviera de algo había que saber qué dosis había recibido cada superviviente, y eso dependía de dónde estaba y de qué tenía alrededor. Los investigadores entrevistaron a miles de personas sobre su posición exacta en el momento de la explosión: la distancia al hipocentro, el tipo de casa, la habitación, si había una pared o una colina en medio.' },
+      { t: 'p', text: 'Faltaba saber cuánta radiación había emitido cada bomba. En 1962, en el polígono de Nevada, el proyecto **Ichiban** subió un pequeño reactor sin blindaje a lo alto de una torre de 465 metros, la torre BREN, sobre réplicas de casas japonesas, para medir cómo atravesaba la radiación sus paredes de madera y sus tejados. De aquellos ensayos salió el primer sistema de dosimetría, el T65D (1965), al que siguieron el DS86 (1986) y el **DS02** (2002).' },
+      { t: 'p', text: 'Entre uno y otro surgió un rompecabezas. Las mediciones de la radiactividad que los neutrones habían dejado en materiales de la ciudad, como el cobalto del acero o el europio de las piedras, sugerían que en Hiroshima habían llegado lejos del hipocentro más neutrones de los que predecía el DS86. Para resolverlo se midió el níquel-63 formado en objetos de cobre, como pararrayos, con espectrómetros de masas de acelerador, y se recalcularon la potencia y la altura de la explosión. El DS02 concluyó que la discrepancia se debía sobre todo a lo difícil que es medir señales tan débiles, y fijó la potencia de Little Boy en unos 16 kilotones y su altura en unos 600 metros. Esas dosis reconstruidas son la base de los límites de exposición que se aplican hoy en hospitales y centrales nucleares; véase [[efectos-en-la-salud|efectos en la salud]].' },
+    ],
+  },
+
+  'artilleria-nuclear': {
+    blocks: [
+      { t: 'h', text: '«Un perfeccionamiento de la artillería»' },
+      { t: 'p', text: 'Para los países en cuyo territorio iban a usarse, aquellas armas no eran una abstracción. En junio de 1955, la OTAN realizó el ejercicio **Carte Blanche**, que simulaba una guerra en Europa Central con 335 explosiones nucleares, la mayoría sobre Alemania Occidental. Las estimaciones posteriores hablaban de 1,7 millones de alemanes muertos y 3,5 millones de heridos en los dos primeros días, sin contar la lluvia radiactiva. Cuando se conocieron, las cifras causaron un escándalo en la República Federal, que estaba a punto de crear su ejército.' },
+      { t: 'p', text: 'Dos años después, el canciller Konrad Adenauer defendió que la Bundeswehr se equipara con armas nucleares tácticas, y le quitó importancia al asunto con una frase que se hizo célebre:' },
+      { t: 'quote', text: 'Las armas atómicas tácticas no son en el fondo más que un perfeccionamiento de la artillería.', by: 'Konrad Adenauer, rueda de prensa del 5 de abril de 1957' },
+      { t: 'p', text: 'Una semana más tarde, dieciocho científicos nucleares de Alemania Occidental, entre ellos Otto Hahn, el [[descubrimiento-de-la-fision|descubridor de la fisión]], Max Born, Werner Heisenberg y Carl Friedrich von Weizsäcker, publicaron el **Manifiesto de Gotinga**. Recordaban que una sola de esas armas «pequeñas» podía tener efectos comparables a los de la bomba de [[hiroshima|Hiroshima]] y anunciaban que ninguno de ellos participaría en la fabricación, las pruebas o el uso de armas nucleares. Alemania nunca tuvo armas propias, pero durante la Guerra Fría sus unidades de artillería se entrenaron para disparar proyectiles nucleares estadounidenses, que permanecían bajo custodia de Estados Unidos hasta el momento de su uso.' },
+      { t: 'h', text: 'En el mar y bajo llave' },
+      { t: 'p', text: 'La Armada estadounidense también tuvo su artillería nuclear: el proyectil **Mark 23**, apodado *Katie*, para los cañones de 406 milímetros de los acorazados de la clase Iowa, estuvo en servicio entre 1956 y 1962. Fiel a su política de no confirmar ni desmentir la presencia de armas nucleares a bordo, la Armada nunca ha aclarado públicamente si llegaron a embarcarse.' },
+      { t: 'p', text: 'Repartir miles de proyectiles entre pequeñas unidades obligó a inventar salvaguardias. En 1960, una delegación del Congreso estadounidense que visitó bases de la OTAN descubrió armas nucleares cargadas en aviones aliados en alerta, con un solo centinela estadounidense como garantía de la «custodia». A raíz de aquello se generalizaron los **dispositivos de enlace permisivo** (PAL, por sus siglas en inglés), cerraduras que impiden armar el arma sin un código enviado por la cadena de mando, y la **regla de los dos hombres**, según la cual nadie puede quedarse a solas con un arma nuclear. Los primeros proyectiles de artillería no tenían esos cierres; los diseños posteriores ya los incorporaron.' },
+      { t: 'timeline', items: [
+        { date: 'Mayo de 1953', text: 'Prueba Grable: el único disparo nuclear de un cañón.' },
+        { date: 'Junio de 1955', text: 'Ejercicio Carte Blanche de la OTAN.' },
+        { date: '1956', text: 'Entra en servicio el proyectil naval Mark 23 *Katie*.' },
+        { date: '12 abr. 1957', text: 'Manifiesto de Gotinga.' },
+        { date: '1961', text: 'Se despliegan los primeros Davy Crockett en Europa.' },
+        { date: 'Junio de 1962', text: 'El presidente Kennedy ordena instalar cierres PAL en las armas nucleares asignadas a la OTAN.' },
+        { date: '27 sep. 1991', text: 'Iniciativas Nucleares Presidenciales: Estados Unidos renuncia a la artillería nuclear.' },
+        { date: 'Finales de 1991', text: 'Salen de Corea del Sur las últimas armas nucleares estadounidenses.' },
+        { date: 'Hacia 2003', text: 'Se desmantelan los últimos proyectiles nucleares estadounidenses, los W79.' },
+      ] },
+    ],
+  },
+
+  'torpedo-nuclear': {
+    blocks: [
+      { t: 'h', text: 'Ensayos bajo el mar' },
+      { t: 'p', text: 'Para saber qué le haría una explosión nuclear a un submarino, Estados Unidos realizó varias pruebas submarinas. En **Wigwam**, el 14 de mayo de 1955, una carga de unos 30 kilotones estalló a unos 600 metros de profundidad en el Pacífico, a cientos de kilómetros al suroeste de San Diego, rodeada a distintas distancias de cascos de submarino sin tripulación llenos de instrumentos. En 1958, las pruebas **Wahoo**, en aguas profundas, y **Umbrella**, en el fondo de la laguna de Enewetak, de unos 9 y 8 kilotones, completaron los datos sobre la onda de choque en el agua y sus efectos en los buques.' },
+      { t: 'p', text: 'La más realista fue **Swordfish**, el 11 de mayo de 1962, durante la Operación Dominic: el destructor USS *Agerholm* disparó un cohete ASROC con su carga nuclear real, que cayó al mar a unos 4 kilómetros y estalló bajo el agua. Fue una de las pocas veces que se ha ensayado un sistema de armas nuclear completo, del lanzamiento a la explosión. La URSS hizo pruebas parecidas en Nueva Zembla, incluido el disparo de un torpedo nuclear desde un submarino en 1957 y otro a principios de los años sesenta.' },
+      { t: 'h', text: 'El final de las armas nucleares navales tácticas' },
+      { t: 'compare', head: ['Arma', 'País', 'En servicio', 'Cómo se lanzaba'], rows: [
+        ['T-5', 'URSS', 'Desde finales de los años cincuenta', 'Torpedo disparado desde un submarino'],
+        ['ASROC con ojiva W44', 'EE. UU.', '1961–1989', 'Cohete disparado desde un buque que soltaba una carga de profundidad'],
+        ['Mk 45 ASTOR', 'EE. UU.', '1963–1976', 'Torpedo guiado por cable desde un submarino'],
+        ['SUBROC', 'EE. UU.', '1965–1990', 'Cohete lanzado desde un submarino sumergido que salía del agua y volvía a caer junto al blanco'],
+        ['B57', 'EE. UU.', '1963–1993', 'Carga de profundidad lanzada desde aviones y helicópteros'],
+        ['Poseidón', 'Rusia', 'En desarrollo', 'Dron submarino lanzado desde submarinos especiales'],
+      ] },
+      { t: 'p', text: 'Las armas antisubmarinas nucleares tenían un problema evidente: para ser útiles había que emplearlas pronto, en alta mar y lejos de cualquier testigo, de modo que la decisión podía recaer en buena medida en el comandante de un barco o de un submarino aislado, como mostró el caso del B-59. En las Iniciativas Nucleares Presidenciales de 1991, George H. W. Bush ordenó retirar todas las armas nucleares tácticas de los buques de superficie, los submarinos de ataque y la aviación naval, y Gorbachov anunció medidas parecidas. Desde entonces, la Armada estadounidense sólo despliega en el mar los misiles de sus submarinos estratégicos, aunque en la década de 2020 se ha vuelto a proponer un misil de crucero nuclear para sus buques y submarinos.' },
+      { t: 'p', text: 'La historia de Arjípov tardó cuarenta años en conocerse. Salió a la luz en octubre de 2002, en una conferencia celebrada en La Habana por el aniversario de la crisis, gracias al testimonio de antiguos tripulantes del B-59 como el oficial de comunicaciones Vadim Orlov. Arjípov había muerto en 1998. En 2017, el Instituto Future of Life le concedió a título póstumo su primer premio.' },
+      { t: 'quote', text: 'Un hombre llamado Vasili Arjípov salvó el mundo.', by: 'Thomas Blanton, director del Archivo de Seguridad Nacional de EE. UU., en 2002' },
+    ],
+  },
+
+  'combustibles-de-fusion': {
+    blocks: [
+      { t: 'h', text: 'De Ivy Mike a la ignición en el laboratorio' },
+      { t: 'p', text: 'Desde 1952 se sabe liberar enormes cantidades de energía de fusión en una explosión. Hacerlo de forma controlada ha resultado muchísimo más difícil. Hay dos grandes caminos. El **confinamiento magnético** mantiene un plasma de deuterio y tritio, a más de cien millones de grados, suspendido dentro de una cámara en forma de rosquilla mediante potentes campos magnéticos: es el principio del **tokamak**, inventado en la URSS en los años cincuenta. El **confinamiento inercial** comprime en unas milmillonésimas de segundo, con láseres, una diminuta cápsula de combustible, de modo que la fusión ocurre antes de que tenga tiempo de dispersarse.' },
+      { t: 'p', text: 'El éxito se mide con el **factor de ganancia**, *Q*: la energía de fusión producida dividida por la que se aporta para calentar el combustible. Con *Q* = 1 se alcanza el «punto de equilibrio». El 5 de diciembre de 2022, la Instalación Nacional de Ignición (NIF) del Laboratorio Lawrence Livermore, en California, lo superó por primera vez: obtuvo 3,15 megajulios de fusión con 2,05 megajulios de luz láser. Fue la primera **ignición** en un laboratorio. Pero los láseres habían consumido de la red eléctrica cien veces más energía, así que la producción neta de electricidad sigue muy lejos. El NIF tiene además un fin militar: sus experimentos sirven para mantener los arsenales sin [[pruebas-nucleares|pruebas nucleares]].' },
+      { t: 'timeline', items: [
+        { date: '1952', text: '[[ivy-mike|Ivy Mike]], primera liberación de energía de fusión a gran escala.' },
+        { date: 'Enero de 1958', text: 'El reactor británico ZETA anuncia neutrones de fusión. Meses después se admite que no procedían de reacciones termonucleares.' },
+        { date: '1968–1969', text: 'El tokamak soviético T-3 alcanza unos 10 millones de grados; un equipo británico lo confirma en Moscú con mediciones láser, y el tokamak se impone en todo el mundo.' },
+        { date: 'Noviembre de 1991', text: 'El JET europeo, en Culham (Inglaterra), produce por primera vez una potencia de fusión importante con deuterio y tritio.' },
+        { date: '1997', text: 'Récord de potencia del JET: 16 megavatios, con un factor de ganancia de alrededor de 0,67.' },
+        { date: 'Diciembre de 2021', text: 'El JET produce 59 megajulios en cinco segundos.' },
+        { date: '5 dic. 2022', text: 'Primera ignición en el NIF.' },
+        { date: 'Octubre de 2023', text: 'Último récord del JET, 69 megajulios, poco antes de cerrar tras cuarenta años de funcionamiento.' },
+        { date: '2025', text: 'El NIF supera los 8 megajulios, con una ganancia de más de 4.' },
+        { date: 'Década de 2030', text: 'Según el calendario revisado en 2024, ITER, en Cadarache (Francia), empezará a investigar con plasma hacia 2034 y con deuterio y tritio hacia 2039. Su objetivo es *Q* = 10.' },
+      ] },
+      { t: 'h', text: 'Dos gases escasos' },
+      { t: 'p', text: 'Las primeras centrales de fusión necesitarán tritio para arrancar, y el mundo tiene muy poco. La principal fuente civil son los reactores **CANDU** de agua pesada: en su moderador, el deuterio captura neutrones y se convierte poco a poco en tritio, que Canadá extrae en la central de Darlington (Ontario) para venderlo. De ahí saldrá buena parte del combustible de ITER. Como muchos de esos reactores se acercan al final de su vida, varios estudios advierten de que el tritio disponible podría escasear justo cuando más se necesite. Por eso es tan importante que los futuros reactores demuestren que pueden fabricar el suyo con mantas de litio.' },
+      { t: 'p', text: 'El tritio tiene además una «hija» muy codiciada: al desintegrarse se convierte en **helio-3**, un gas que apenas existe en la Tierra y que se usa para detectar neutrones y para enfriar experimentos cerca del cero absoluto. Casi todo el helio-3 de Estados Unidos procedía del tritio de su programa de armas, que se va desintegrando en los almacenes. Después del 11 de septiembre de 2001, el despliegue masivo de detectores de radiación en puertos y fronteras disparó la demanda y, hacia 2008, provocó una grave escasez. Es un ejemplo curioso de cómo los arsenales nucleares, la ciencia básica y la seguridad fronteriza dependen de las mismas existencias de un isótopo.' },
+    ],
+  },
+
+  'relato-chernobil': {
+    blocks: [
+      { t: 'h', text: 'Epílogo: la zona, cuarenta años después' },
+      { t: 'p', text: 'Alrededor de la central sigue existiendo la **zona de exclusión**, de unos 2600 km² en Ucrania, a la que se suma al otro lado de la frontera la Reserva Radioecológica Estatal de Polesia, en Bielorrusia, de algo más de 2000 km². Pripiat continúa vacía, con sus bloques de pisos invadidos por los árboles. Algunos vecinos de las aldeas, sobre todo mujeres mayores, volvieron por su cuenta a finales de los años ochenta: son los *samosely*, «los que se asentaron por sí mismos». Al principio eran más de mil; hoy quedan muy pocos.' },
+      { t: 'p', text: 'La central no se cerró con el accidente. Los otros tres reactores siguieron produciendo electricidad durante años, y sus trabajadores se instalaron en **Slavútich**, una ciudad nueva levantada para ellos fuera de la zona. El reactor 2 se paró tras un incendio en 1991, el 1 en 1996 y el 3, el último, el 15 de diciembre de 2000. Sin personas, la naturaleza ha ocupado el territorio: los censos han encontrado lobos, alces, jabalíes, ciervos y linces, y los caballos de Przewalski que se soltaron en los años noventa se han reproducido. Los biólogos siguen discutiendo cuánto daño causa la radiación a esos animales; lo que parece claro es que la ausencia humana pesa más.' },
+      { t: 'timeline', items: [
+        { date: '1991', text: 'Incendio en el reactor 2. Tras la disolución de la URSS, la central pasa a Ucrania.' },
+        { date: '15 dic. 2000', text: 'Se apaga el reactor 3: Chernóbil deja de producir electricidad.' },
+        { date: '2011', text: 'Ucrania abre oficialmente la zona a las visitas turísticas organizadas.' },
+        { date: 'Noviembre de 2016', text: 'El Nuevo Confinamiento Seguro se desliza sobre el viejo sarcófago. Está diseñado para durar un siglo.' },
+        { date: '2019', text: 'La serie de televisión *Chernobyl* multiplica el número de visitantes.' },
+        { date: '24 feb. 2022', text: 'Las tropas rusas toman la central en su avance hacia Kiev. Durante semanas, el personal trabaja sin relevo; los soldados cavan trincheras en el suelo contaminado del Bosque Rojo. Se retiran el 31 de marzo.' },
+        { date: '14 feb. 2025', text: 'Un dron golpea el Nuevo Confinamiento Seguro y abre un agujero en su cubierta exterior. Según el OIEA, los niveles de radiación no cambiaron, pero a finales de año una inspección concluyó que el arco había perdido parte de su función de confinamiento hasta que se repare.' },
+      ] },
+      { t: 'p', text: 'Cuarenta años después, el reactor 4 sigue ahí, bajo dos capas de hormigón y acero. Desmontar sus ruinas y retirar el combustible fundido, la llamada «pata de elefante» y el resto de la lava solidificada, es la tarea pendiente para la que se construyó el gran arco. Nadie espera terminarla antes de varias décadas.' },
+    ],
+  },
+
+  'relato-hiroshima': {
+    blocks: [
+      { t: 'h', text: 'Epílogo: la ciudad que decidió recordar' },
+      { t: 'p', text: 'Durante la ocupación aliada, la censura limitó lo que la prensa japonesa podía publicar sobre la bomba, y muchas fotografías de la ciudad destruida no se difundieron hasta 1952. En Estados Unidos, la imagen que tenía el público era la de la nube vista desde el avión. Eso cambió el 31 de agosto de 1946, cuando la revista *The New Yorker* dedicó un número entero al reportaje *Hiroshima*, de John Hersey, que contaba la historia de seis supervivientes. Para millones de lectores fue la primera vez que vieron la bomba desde el suelo.' },
+      { t: 'p', text: 'En 1947, Estados Unidos creó en la ciudad la Comisión de Víctimas de la Bomba Atómica para estudiar a los supervivientes. Estudiaba, pero no trataba, lo que generó un hondo resentimiento; en 1975 la sustituyó la Fundación para la Investigación de los Efectos de la Radiación, japonesa y estadounidense a partes iguales, cuyos datos siguen siendo la base de la protección radiológica en todo el mundo. En 1949 una ley convirtió Hiroshima en «ciudad conmemorativa de la paz», y el arquitecto Kenzo Tange diseñó el parque y el museo, inaugurado en 1955. Ese mismo año murió de leucemia **Sadako Sasaki**, que tenía dos años el día de la bomba y que, según la tradición japonesa, quiso plegar mil grullas de papel para curarse; su estatua, en el Monumento a los Niños por la Paz, está cubierta de grullas enviadas desde todo el mundo.' },
+      { t: 'quote', text: 'Descansad en paz, porque no repetiremos el error.', by: 'Inscripción del cenotafio del Parque Conmemorativo de la Paz (1952)' },
+      { t: 'p', text: 'Cada 6 de agosto, a las 08:15, la ciudad guarda un minuto de silencio y su alcalde lee una Declaración de Paz dirigida al mundo. Los supervivientes fundaron en 1956 la confederación **Nihon Hidankyo**, que durante casi setenta años ha llevado su testimonio a escuelas, congresos y a las Naciones Unidas.' },
+      { t: 'timeline', items: [
+        { date: '31 ago. 1946', text: 'Se publica *Hiroshima*, de John Hersey.' },
+        { date: '6 ago. 1952', text: 'Se inaugura el cenotafio, que guarda los nombres de las víctimas.' },
+        { date: '1955', text: 'Abre el Museo Conmemorativo de la Paz. Muere Sadako Sasaki.' },
+        { date: '1956', text: 'Nace Nihon Hidankyo, la confederación de organizaciones de [[hibakusha|hibakusha]].' },
+        { date: '1996', text: 'La Cúpula de la Bomba Atómica es declarada Patrimonio de la Humanidad.' },
+        { date: '27 may. 2016', text: 'Barack Obama es el primer presidente de Estados Unidos en ejercicio que visita Hiroshima: «Hace setenta y un años, en una mañana luminosa y sin nubes, la muerte cayó del cielo y el mundo cambió».' },
+        { date: 'Mayo de 2023', text: 'Los líderes del G7, reunidos en Hiroshima, visitan el museo.' },
+        { date: '10 dic. 2024', text: 'Nihon Hidankyo recibe el Premio Nobel de la Paz.' },
+        { date: '2025', text: 'Ochenta años después, el número de hibakusha reconocidos baja por primera vez de 100 000. Su edad media supera los 86 años.' },
+      ] },
+    ],
+  },
+
+  'proteccion-civil': {
+    blocks: [
+      { t: 'h', text: 'El factor de protección, paso a paso' },
+      { t: 'p', text: 'Lo que hace peligrosa la lluvia radiactiva no es tanto tocarla como estar cerca de ella: el polvo posado en tejados, calles y jardines emite rayos gamma que atraviesan decenas de metros de aire. Por eso protegen dos cosas. La **masa** que se interpone entre el polvo y las personas: tierra, hormigón, ladrillo, incluso estanterías llenas de libros. Y la **distancia** al tejado y al suelo contaminados. Una casa ligera apenas ayuda; en un sótano rodeado de tierra, la dosis se divide por diez o más.' },
+      { t: 'diagram', id: 'shelter', caption: 'Dónde se recibe menos radiación cuando cae la lluvia radiactiva: al aire libre, en una casa ligera, en un sótano, en el centro de un edificio grande y en un refugio enterrado.' },
+      { t: 'compare', head: ['Lugar', 'Factor de protección aproximado', 'Dosis frente a la de la calle'], rows: [
+        ['Al aire libre', '1', 'Toda'],
+        ['Dentro de un coche', '1–2', 'Casi toda'],
+        ['Planta baja de una casa ligera', '2–3', 'Entre la mitad y un tercio'],
+        ['Sótano de una casa', '10–20', 'Una décima parte o menos'],
+        ['Centro de las plantas intermedias de un edificio grande', '50–100 o más', 'Una centésima parte o menos'],
+        ['Sótano de un gran edificio o aparcamiento subterráneo', 'Más de 100', 'Menos de una centésima parte'],
+        ['Túnel profundo o refugio enterrado', '1000 o más', 'Una milésima parte o menos'],
+      ] },
+      { t: 'p', text: 'Son valores orientativos de las guías de la Agencia Federal para la Gestión de Emergencias de Estados Unidos (FEMA) y del Laboratorio Nacional Lawrence Livermore; cada edificio es distinto. Dentro de cualquiera de ellos, las mejores posiciones son las más alejadas del tejado y de las paredes exteriores.' },
+      { t: 'h', text: 'Lo que dicen los estudios modernos' },
+      { t: 'p', text: 'Tras los atentados del 11 de septiembre de 2001, Estados Unidos volvió a estudiar qué pasaría si un grupo terrorista hiciera estallar una bomba de unos 10 kilotones en una ciudad. De ese trabajo salió en 2010 una guía oficial de planificación, revisada en 2022, que divide el entorno de la explosión en zonas: la de **daños graves**, donde casi nadie sobreviviría al aire libre; la de **daños moderados**, donde los rescates rápidos salvarían más vidas; la de **daños leves**, sobre todo cristales rotos; y la **zona de lluvia radiactiva peligrosa**, donde la tasa de dosis supera los 0,1 gray por hora en las primeras horas y que puede extenderse mucho más allá de los daños visibles.' },
+      { t: 'p', text: 'Los modelos del Laboratorio Lawrence Livermore para ese tipo de escenarios mostraron que refugiarse bien desde el principio reduce las víctimas de la radiación mucho más que cualquier evacuación improvisada. Quien sale a la carretera durante la primera hora puede quedarse atascado bajo la nube dentro de un coche, que casi no protege, y recibir una dosis mayor que si se hubiera quedado en casa. La evacuación tiene sentido después, cuando las autoridades sepan por dónde ha caído la lluvia radiactiva; lo que se hace en esos días se explica en [[los-dias-despues|los días después]], y la respuesta sanitaria en [[sanidad-y-hospitales|sanidad y hospitales]].' },
+      { t: 'p', text: 'La teoría choca a menudo con la realidad. El 13 de enero de 2018, un empleado de la agencia de emergencias de Hawái envió por error a todos los móviles del archipiélago este mensaje:' },
+      { t: 'quote', text: 'AMENAZA DE MISIL BALÍSTICO HACIA HAWÁI. BUSQUE REFUGIO INMEDIATAMENTE. ESTO NO ES UN SIMULACRO.', by: 'Alerta enviada por error en Hawái, 13 de enero de 2018 (traducción)' },
+      { t: 'p', text: 'La rectificación tardó 38 minutos. Durante ese tiempo hubo quien metió a sus hijos en alcantarillas o se refugió en el coche, y muchos descubrieron que no sabían adónde ir. La lección para las autoridades fue doble: los sistemas de alerta necesitan salvaguardias contra los errores, y la población necesita saber de antemano qué hacer cuando suene uno de verdad.' },
+    ],
+    related: ['los-dias-despues', 'sanidad-y-hospitales'],
+  },
+
+  'misil-balistico': {
+    blocks: [
+      { t: 'h', text: 'Una piedra lanzada alrededor del planeta' },
+      { t: 'diagram', id: 'trajectory', caption: 'Las tres fases del vuelo de un misil intercontinental: propulsión, fase intermedia en el espacio y reentrada. La escala vertical está exagerada.' },
+      { t: 'p', text: 'Cuando se apagan los motores, la ojiva se convierte en un pequeño satélite cuya órbita corta la superficie terrestre. Todo depende de la velocidad que tenga en ese momento: hacen falta unos 3 km/s para recorrer unos 1000 km, unos 6 km/s para 5000 km y algo más de 7 km/s para los 10 000 km de un vuelo intercontinental, muy cerca de la velocidad necesaria para entrar en órbita, de unos 7,9 km/s. Para cada distancia hay una trayectoria que exige la menor velocidad posible, llamada de **mínima energía**. Pero no es la única.' },
+      { t: 'compare', head: ['Trayectoria', 'Cómo es', 'Para qué se usa'], rows: [
+        ['De mínima energía', 'El arco más eficiente; en un ICBM, el punto más alto ronda los 1200 km', 'Conseguir el máximo alcance con cada misil'],
+        ['Elevada', 'Casi vertical: sube muchísimo y avanza poco', 'Ensayos. Corea del Norte prueba así sus ICBM para que caigan en el mar del Japón sin sobrevolar otros países'],
+        ['Deprimida', 'Más baja y rápida, a costa de alcance', 'Reducir el tiempo de aviso y el tiempo que los radares ven la ojiva, sobre todo con misiles lanzados desde submarinos'],
+        ['Orbital fraccionada', 'La carga entra en órbita baja y desciende antes de dar una vuelta completa', 'Atacar desde direcciones inesperadas, por ejemplo por el Polo Sur. La URSS la desplegó entre 1969 y 1983'],
+      ] },
+      { t: 'p', text: 'Las trayectorias elevadas permiten deducir el alcance real de un misil sin dispararlo a plena distancia. El 31 de octubre de 2024, por ejemplo, un Hwasong-19 norcoreano voló unos 86 minutos y, según el Ministerio de Defensa de Japón, subió a más de 7000 km de altura, aunque cayó a sólo unos 1000 km del punto de lanzamiento. Según los analistas, en una trayectoria normal esa energía bastaría para alcanzar cualquier punto de Estados Unidos.' },
+      { t: 'h', text: 'Volver del espacio' },
+      { t: 'p', text: 'El mayor problema técnico de los primeros misiles no fue subir, sino bajar. A 7 km/s, el aire que choca con la ojiva se comprime y se calienta a miles de grados: un objeto puntiagudo se fundiría. A principios de los años cincuenta, **H. Julian Allen** y Alfred Eggers, del laboratorio Ames de la NACA, la antecesora de la NASA, encontraron una solución contraria a la intuición: una forma **roma**, que crea delante de sí una onda de choque separada de la superficie y desvía hacia el aire la mayor parte del calor.' },
+      { t: 'p', text: 'Las primeras ojivas eran cuerpos romos y pesados que absorbían el calor en una gruesa capa de metal. Después llegaron los escudos **ablativos**, materiales que se carbonizan y se desprenden capa a capa llevándose el calor consigo. Los vehículos de reentrada modernos son conos esbeltos que atraviesan la atmósfera mucho más deprisa, lo que reduce la desviación causada por el viento y mejora la precisión. Las cápsulas que traen astronautas, en cambio, siguen siendo romas, porque su objetivo es frenar.' },
+      { t: 'p', text: 'Los misiles se prueban disparándolos hacia zonas de impacto vigiladas: los estadounidenses, desde la base de Vandenberg (California) hasta el atolón de Kwajalein, en las islas Marshall, a unos 6700 km; los rusos, desde Plesetsk o desde submarinos hasta el polígono de Kura, en Kamchatka. Las ojivas de prueba no llevan carga nuclear. Sólo en contadas ocasiones se ha disparado un misil balístico con una ojiva real: la URSS lo hizo por primera vez en febrero de 1956 con un R-5M, y Estados Unidos, una sola vez, en la prueba **Frigate Bird** del 6 de mayo de 1962, cuando el submarino USS *Ethan Allen* lanzó un Polaris que estalló sobre el Pacífico. Cómo se intenta interceptar una ojiva en cada fase se explica en [[defensa-antimisiles|defensa antimisiles]].' },
+    ],
+    related: ['defensa-antimisiles'],
+  },
+
+  'invierno-nuclear': {
+    blocks: [
+      { t: 'h', text: 'De Marte a los dinosaurios' },
+      { t: 'p', text: 'La idea no surgió de la estrategia militar sino de la ciencia planetaria. En 1971, la sonda Mariner 9 llegó a Marte en plena tormenta de polvo global, y científicos como Carl Sagan, James Pollack y Owen Toon vieron cómo el polvo suspendido calentaba la atmósfera alta y enfriaba la superficie. En 1980, Luis y Walter Álvarez propusieron que un gran impacto había acabado con los dinosaurios al oscurecer el cielo (véase [[chicxulub|Chicxulub]]), y Toon y Pollack calcularon aquel «invierno de impacto». Cuando Crutzen y Birks plantearon en 1982 el problema del humo, el equipo de TTAPS ya tenía las herramientas: era el mismo cálculo con otro material.' },
+      { t: 'p', text: 'El nombre de **invierno nuclear** lo propuso Richard Turco. Los resultados se presentaron el 31 de octubre y el 1 de noviembre de 1983 en una conferencia en Washington, con una conexión por satélite con científicos soviéticos. El día anterior, Sagan los había adelantado en la revista dominical *Parade*, leída por millones de personas, antes de que el estudio apareciera en *Science*; esa forma de presentarlos le valió duras críticas de algunos colegas. En el mismo número de *Science*, un grupo de biólogos analizó las consecuencias para los seres vivos y llegó a una conclusión que conmocionó a la opinión pública:' },
+      { t: 'quote', text: 'No puede excluirse la posibilidad de la extinción del *Homo sapiens*.', by: 'Paul Ehrlich y otros biólogos, *Science*, diciembre de 1983' },
+      { t: 'p', text: 'Llegaron después los grandes informes. En 1985, el Consejo Nacional de Investigación de Estados Unidos concluyó que un enfriamiento importante era una posibilidad real, aunque con grandes incertidumbres. Entre 1985 y 1986, el proyecto ENUWAR del Comité Científico sobre Problemas del Medio Ambiente (SCOPE), con más de 300 científicos de una treintena de países, añadió la conclusión que hoy sigue en pie: las pérdidas de cosechas podrían matar a muchas más personas, también en países lejanos a la guerra, que las propias explosiones. Los modelos más completos de la época que dieron lugar al «otoño nuclear» tenían una limitación: el humo apenas duraba unos meses porque no subía lo bastante.' },
+      { t: 'h', text: 'Por qué los modelos actuales dan más frío durante más tiempo' },
+      { t: 'p', text: 'La clave está en la **autoelevación**. El hollín absorbe la luz del Sol, se calienta y calienta el aire que lo rodea, que sube. Los modelos modernos, que llegan hasta unos 80 km de altura, muestran que así el humo asciende hasta la estratosfera alta, donde tarda años en desaparecer. Desde 2007, el equipo de Alan Robock en la Universidad Rutgers usó el modelo ModelE de la NASA; en 2019, **Joshua Coupe** y sus colaboradores repitieron el caso de una guerra entre Estados Unidos y Rusia con un modelo independiente, el WACCM del Centro Nacional de Investigación Atmosférica, y obtuvieron un enfriamiento máximo parecido, de unos 8 a 9 °C de media mundial, con una caída de las lluvias de un tercio o más.' },
+      { t: 'p', text: 'La naturaleza ha ofrecido desde entonces una comprobación a pequeña escala. Los grandes incendios forestales de la Columbia Británica (Canadá) en 2017 y de Australia en 2019 y 2020 formaron nubes de tormenta de fuego que inyectaron humo en la estratosfera, en cantidades del orden de un teragramo o menos. Los satélites vieron cómo ese humo subía por sí solo, en el caso australiano hasta unos 35 km, y permanecía muchos meses, tal como predecían los modelos del invierno nuclear.' },
+      { t: 'diagram', id: 'winter', caption: 'Del fuego al frío: las ciudades arden, las tormentas de fuego suben el hollín a la estratosfera, el humo rodea el planeta en unas semanas y la superficie se oscurece y se enfría.' },
+      { t: 'p', text: 'Los estudios recientes han añadido otros efectos. Al calentarse la estratosfera, la capa de ozono perdería una parte enorme de su espesor, hasta tres cuartas partes en el peor escenario según un estudio de 2021, y la radiación ultravioleta sería extrema cuando el humo empezara a disiparse. El Pacífico respondería con un calentamiento parecido al de El Niño, el «Niño nuclear», que duraría años. Y los océanos, que se enfriarían más despacio que la tierra, también tardarían mucho más en recuperarse: el hielo marino del Ártico se extendería y, en el caso más grave, el océano tardaría décadas en volver a su estado anterior.' },
+      { t: 'h', text: 'Del humo al hambre' },
+      { t: 'p', text: 'En 2022, Lili **Xia** y sus colaboradores combinaron esos resultados climáticos con modelos de los cultivos de maíz, arroz, soja y trigo, de la pesca y de la ganadería. Suponían que el comercio internacional se interrumpiría y que cada país tendría que alimentarse con lo que produjera, aunque dejara de alimentar al ganado y de desperdiciar comida. Estas son sus cifras para seis escenarios:' },
+      { t: 'compare', head: ['Escenario', 'Hollín', 'Muertos por las explosiones', 'Personas sin alimentos suficientes al final del segundo año'], rows: [
+        ['India–Pakistán, 100 armas de 15 kt', '5 Tg', '27 millones', '255 millones'],
+        ['India–Pakistán, 250 armas de 15 kt', '16 Tg', '52 millones', '926 millones'],
+        ['India–Pakistán, 250 armas de 50 kt', '27 Tg', '97 millones', '1426 millones'],
+        ['India–Pakistán, 250 armas de 100 kt', '37 Tg', '127 millones', '2081 millones'],
+        ['India–Pakistán, 500 armas de 100 kt', '47 Tg', '164 millones', '2512 millones'],
+        ['EE. UU. y aliados–Rusia, 4400 armas de 100 kt', '150 Tg', '360 millones', '5341 millones'],
+      ] },
+      { t: 'p', text: 'Incluso en el caso más pequeño, el enfriamiento medio del planeta rondaría 1–1,5 °C y las lluvias bajarían algunos puntos, suficiente para recortar las cosechas de las latitudes medias del hemisferio norte. En el mayor, la producción de calorías caería alrededor de un 90 % a los tres o cuatro años. Los países del hemisferio sur, como Australia, Nueva Zelanda o Argentina, sufrirían mucho menos, pero no se librarían.' },
+      { t: 'p', text: 'Las incertidumbres siguen siendo grandes. Además del estudio de Los Álamos de 2018, otro del Laboratorio Lawrence Livermore de 2020 obtuvo, para una guerra regional, menos humo en la estratosfera y un enfriamiento más breve. En 2025, un informe de las Academias Nacionales de Ciencias de Estados Unidos encargado por el Congreso revisó todo el campo: concluyó que cada eslabón de la cadena (cuánto arde, cuánto hollín se forma y cuánto sube) es difícil de cuantificar, pero que no pueden descartarse efectos climáticos graves, y pidió más investigación.' },
+      { t: 'note', text: '**Cómo lo calcula Bum.** Desde la versión 1.17, en el modo de [[guerra-nuclear|guerra nuclear]], el botón «Ver el invierno nuclear mes a mes en el mapa» abre un panel con los diez años siguientes a la guerra, que se recorren mes a mes con una barra o en animación, con las fechas reales a partir del mes actual. Cada escenario tiene su cantidad de hollín, su enfriamiento máximo y su caída de las lluvias, tomados de Xia y otros (2022), Toon y otros (2019), Robock y otros (2007) y Coupe y otros (2019), o estimados por comparación en los escenarios que esos estudios no cubren. La evolución en el tiempo es una curva sencilla: el frío llega en pocos meses, se mantiene hasta el segundo año y después se disipa lentamente, más despacio cuanto más hollín hay. Ese enfriamiento medio se reparte por el planeta en una malla de alrededor de un grado con el patrón de los modelos climáticos: la tierra se enfría dos o tres veces más que el océano, el interior de los continentes más que la costa, las latitudes medias y altas del hemisferio norte mucho más que los trópicos, y el verano de cada hemisferio más que el invierno. El patrón se ajusta para que la media del planeta coincida con la del escenario. La vista «Cosechas» calcula la pérdida en las tierras de cultivo a partir del frío y de la falta de lluvia, y la calibra para que la media del segundo año coincida con la caída de calorías del estudio. Es un reparto aproximado, no una simulación climática: muestra dónde y cuándo se notaría más el frío, pero no predice el tiempo de ningún lugar concreto.' },
+    ],
+    related: ['guerra-nuclear'],
+  },
+
+  // ── solo enlaces relacionados con los artículos nuevos ──
+  'lluvia-radiactiva': { blocks: [], related: ['dispersion-de-la-lluvia-radiactiva', 'los-dias-despues'] },
+  'efectos-en-la-salud': { blocks: [], related: ['sanidad-y-hospitales'] },
+  'bola-de-fuego': { blocks: [], related: ['ver-una-explosion-de-lejos'] },
+  'onda-expansiva': { blocks: [], related: ['ver-una-explosion-de-lejos'] },
+  'radiacion-termica': { blocks: [], related: ['ver-una-explosion-de-lejos'] },
+  'pulso-electromagnetico': { blocks: [], related: ['tormentas-solares'] },
+  'defensa-planetaria': { blocks: [], related: ['apofis', '2024-yr4'] },
+  'asteroides-y-cometas': { blocks: [], related: ['apofis', '2024-yr4'] },
+  'chernobil': { blocks: [], related: ['dispersion-de-la-lluvia-radiactiva'] },
+  'fukushima': { blocks: [], related: ['dispersion-de-la-lluvia-radiactiva'] },
+  'destruccion-mutua-asegurada': { blocks: [], related: ['guerra-nuclear'] },
+  'arsenales-actuales': { blocks: [], related: ['guerra-nuclear'] },
+  'falsas-alarmas': { blocks: [], related: ['guerra-nuclear'] },
+  'tratados': { blocks: [], related: ['defensa-antimisiles'] },
+};

@@ -1,6 +1,6 @@
 {
   "name": "bum",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "description": "Simulador 3D de efectos de armas nucleares e impactos de asteroides",
   "scripts": {
     "dev": "vite",
