@@ -11,6 +11,7 @@ import { ISOTOPES } from '../physics/other';
 import type { ThemeChoice } from './theme';
 import { LOCALE, DEC } from '../i18n/locale';
 import { LANGS, systemLang, langPref, setLangPref, tr, lang } from '../i18n';
+import { FLAGS, AUTO_ICON } from './flags';
 
 export interface ViewOptions {
   domes: boolean; rings: boolean; fallout: boolean; damage: boolean; fires: boolean; sound: boolean; cinematic: boolean; labels: boolean;
@@ -797,12 +798,18 @@ export class Sidebar {
     this.projSeg = seg<string>([['flat', 'Plano 2D'], ['globe', 'Globo 3D']], V.globe ? 'globe' : 'flat', (v) => { V.globe = v === 'globe'; this.ev.onProjection(V.globe); });
     // la visualización vive en su propio menú de la barra de arriba (botón del ojo)
     // idioma: el del sistema o uno elegido (los nombres de los idiomas no se traducen)
-    const langSel = h('select', { 'data-i18n-skip': '' }) as HTMLSelectElement;
+    // selector propio (un <select> no admite iconos): bandera a la izquierda de cada idioma
     const sys = LANGS.find((x) => x.id === systemLang())!;
-    langSel.append(h('option', { value: 'auto' }, `${tr('Automático')} · ${sys.name}`));
-    for (const L of LANGS) langSel.append(h('option', { value: L.id }, L.name));
-    langSel.value = langPref();
-    langSel.addEventListener('change', () => setLangPref(langSel.value as 'auto'));
+    const cur = langPref();
+    const opts: { id: string; icon: string; name: string }[] = [{ id: 'auto', icon: FLAGS[sys.id] ?? AUTO_ICON, name: `${tr('Automático')} · ${sys.name}` }, ...LANGS.map((L) => ({ id: L.id, icon: FLAGS[L.id] ?? '', name: L.name }))];
+    const curO = opts.find((o) => o.id === cur) ?? opts[0];
+    const list = h('div', { class: 'lang-list hidden', role: 'listbox' }, ...opts.map((o) => h('button', { type: 'button', class: 'lang-opt' + (o.id === cur ? ' on' : ''), role: 'option', onclick: (e: MouseEvent) => { e.stopPropagation(); if (o.id !== cur) setLangPref(o.id as 'auto'); else list.classList.add('hidden'); } },
+      h('span', { class: 'lang-fl', html: o.icon }), h('span', {}, o.name))));
+    const langSel = h('div', { class: 'lang-pick', 'data-i18n-skip': '' },
+      h('button', { type: 'button', class: 'lang-cur', 'aria-haspopup': 'listbox', onclick: (e: MouseEvent) => { e.stopPropagation(); list.classList.toggle('hidden'); } },
+        h('span', { class: 'lang-fl', html: curO.icon }), h('span', {}, curO.name), h('span', { class: 'lang-car' }, '▾')),
+      list);
+    document.addEventListener('click', () => list.classList.add('hidden'));
     this.viewEl = h('div', { class: 'view-body' },
       h('div', { class: 'lp-h' }, 'Idioma'), langSel,
       h('div', { class: 'lp-h' }, 'Mapa'), this.projSeg.el,

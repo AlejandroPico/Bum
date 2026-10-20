@@ -405,8 +405,14 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 - [x] 1.21.2: la enciclopedia en alemán. Unas 20 etiquetas de esquemas que se habían quedado en castellano
       («punto cero», «alto», «casa de madera»…), traducidas en todos los idiomas.
 - [x] 1.21.3: la enciclopedia en portugués (europeo).
+- [x] 1.21.4: selector de idioma con la bandera de cada idioma (el automático muestra la del idioma del
+      sistema). Ubicación inicial: la ciudad de la conexión (por la IP, sin pedir nada) y, si el usuario da
+      permiso, su posición exacta; ya no abre siempre en Madrid.
 - [ ] Terminar de traducir la enciclopedia, un idioma por entrega: inglés, catalán, francés, alemán y portugués,
-      completos; italiano, pendiente (lo que falta se ve en castellano). Al terminar, versión 2.0.
+      completos; italiano, pendiente.
+- [ ] Tres idiomas más, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés e
+      hindi. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en `src/ui/flags.ts`).
+      La versión 2.0 se publica cuando estén los diez idiomas completos (lo que falta se ve en castellano).
       Para seguir: `npx tsx scripts/enc-i18n.ts todo` (los trozos de enc-todo/ ya sirven para los cuatro idiomas),
       traducir siguiendo `scripts/enc-i18n-rules.md` y `merge`; las cadenas de interfaz que faltan, con `npm run i18n`.
 

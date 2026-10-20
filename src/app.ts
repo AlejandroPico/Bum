@@ -1349,7 +1349,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.21.3';
+const APP_VERSION = '1.21.4';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1473,7 +1473,33 @@ map.on('load', async () => {
   if (state.view.weather) { void weatherLayer.load(state.target.lat, state.target.lon); if (state.view.radar) void weatherLayer.setRadar(true); }
   document.getElementById('loading')!.classList.add('done');
   if (location.hash.length > 3) setTimeout(() => detonate(), 1200);
+  else void startLocation();
 });
+
+/**
+ * Ubicación inicial: primero, sin pedir nada, la ciudad de la conexión (por la IP); después, si el
+ * usuario da permiso, la posición exacta del dispositivo. Si toca el mapa antes, no se le mueve.
+ */
+async function startLocation() {
+  const t0 = state.target;
+  const moved = () => state.target !== t0 && state.target.label !== autoLabel;
+  let autoLabel = '';
+  const put = (lat: number, lon: number, exact: boolean) => {
+    if (moved() || run) return;
+    const c = nearestCity(lat, lon);
+    autoLabel = exact ? (c.km < 15 ? `${tr('Tu ubicación')} · ${c.city.name}` : tr('Tu ubicación')) : (c.km < 300 ? c.city.name : tr('Tu zona'));
+    setTarget(exact ? lat : c.km < 300 ? c.city.lat : lat, exact ? lon : c.km < 300 ? c.city.lon : lon, autoLabel, true);
+  };
+  try {
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 5000);
+    const r = await fetch('https://get.geojs.io/v1/ip/geo.json', { signal: ctl.signal });
+    const g = await r.json();
+    if (isFinite(+g.latitude) && isFinite(+g.longitude)) put(+g.latitude, +g.longitude, false);
+  } catch { /* sin conexión o bloqueado: se queda Madrid */ }
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition((p) => put(p.coords.latitude, p.coords.longitude, true), () => { /* permiso denegado */ },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 300000 });
+}
 
 map.on('click', (e) => {
   if (histMode.handleClick(e)) return;
