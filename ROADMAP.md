@@ -404,8 +404,9 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
       los ordinales franceses (1^{er}).
 - [x] 1.21.2: la enciclopedia en alemán. Unas 20 etiquetas de esquemas que se habían quedado en castellano
       («punto cero», «alto», «casa de madera»…), traducidas en todos los idiomas.
-- [ ] Terminar de traducir la enciclopedia, un idioma por entrega: inglés, catalán, francés y alemán, completos;
-      portugués e italiano, pendientes (lo que falta se ve en castellano). Al terminar, versión 2.0.
+- [x] 1.21.3: la enciclopedia en portugués (europeo).
+- [ ] Terminar de traducir la enciclopedia, un idioma por entrega: inglés, catalán, francés, alemán y portugués,
+      completos; italiano, pendiente (lo que falta se ve en castellano). Al terminar, versión 2.0.
       Para seguir: `npx tsx scripts/enc-i18n.ts todo` (los trozos de enc-todo/ ya sirven para los cuatro idiomas),
       traducir siguiendo `scripts/enc-i18n-rules.md` y `merge`; las cadenas de interfaz que faltan, con `npm run i18n`.
 
