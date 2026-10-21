@@ -411,6 +411,10 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 - [x] 1.21.5: móvil y tableta (hasta 1180 px, vertical y horizontal): los dos paneles son cajones laterales que
       se retiran del todo a su lado; retirados, dejan una pestaña con flecha en el borde de la pantalla para
       volver a abrirlos. En pantallas estrechas, abrir uno retira el otro. El escritorio no cambia.
+- [x] 1.21.6: durante la animación, el mapa vuelve a responder al primer arrastre. La cámara automática (giro
+      lento, órbita del hongo, persecución del misil, recorrido) movía la cámara en cada fotograma y cada uno de
+      esos movimientos cancelaba el arrastre que el usuario empezaba; el clic acababa poniendo un objetivo nuevo.
+      Ahora, al pulsar el mapa con cualquier botón o con el dedo, la cámara pasa al usuario en el acto.
 - [ ] Terminar de traducir la enciclopedia, un idioma por entrega: inglés, catalán, francés, alemán y portugués,
       completos; italiano, pendiente.
 - [ ] Tres idiomas más, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés e

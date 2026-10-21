@@ -1361,7 +1361,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.21.5';
+const APP_VERSION = '1.21.6';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1571,6 +1571,13 @@ map.on('click', (e) => {
 for (const ev of ['dragstart', 'rotatestart', 'pitchstart', 'wheel'] as const) {
   map.on(ev, (e: any) => { if (run && e.originalEvent) { run.userCam = true; run.orbit = null; if (run.flight) run.flight.chase = false; tour.stop(); } });
 }
+// En cuanto el usuario pulsa sobre el mapa (cualquier botón o el dedo), la cámara automática se aparta.
+// Si esperásemos a «dragstart», el giro lento, la órbita o el recorrido seguirían moviendo la cámara
+// en cada fotograma, y cada movimiento de cámara cancela el arrastre que el usuario estaba empezando:
+// por eso a veces el mapa «no hacía caso» y el clic acababa poniendo un objetivo nuevo.
+const takeCamera = () => { if (!run || run.userCam) { if (tour.active) tour.stop(); return; } run.userCam = true; run.orbit = null; if (run.flight) run.flight.chase = false; tour.stop(); map.stop(); };
+map.getCanvasContainer().addEventListener('pointerdown', takeCamera, { capture: true, passive: true });
+map.getCanvasContainer().addEventListener('touchstart', takeCamera, { capture: true, passive: true });
 
 function applyView() {
   const V = state.view;
