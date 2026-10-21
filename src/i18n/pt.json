@@ -2878,5 +2878,16 @@
  "norte": "norte",
  "este": "este",
  "oeste": "oeste",
- "noroeste": "noroeste"
+ "noroeste": "noroeste",
+ "blanco": "alvo",
+ "lanzamiento": "lançamento",
+ "tritio": "trítio",
+ "proyectil": "projétil",
+ "bario-141": "bário-141",
+ "helio-4": "hélio-4",
+ "espacio": "espaço",
+ "uranio-235": "urânio-235",
+ "deuterio": "deutério",
+ "atacador": "refletor",
+ "chubasco": "aguaceiro"
 }

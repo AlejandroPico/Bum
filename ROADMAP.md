@@ -415,8 +415,9 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
       lento, órbita del hongo, persecución del misil, recorrido) movía la cámara en cada fotograma y cada uno de
       esos movimientos cancelaba el arrastre que el usuario empezaba; el clic acababa poniendo un objetivo nuevo.
       Ahora, al pulsar el mapa con cualquier botón o con el dedo, la cámara pasa al usuario en el acto.
-- [ ] Terminar de traducir la enciclopedia, un idioma por entrega: inglés, catalán, francés, alemán y portugués,
-      completos; italiano, pendiente.
+- [x] 1.21.7: la enciclopedia en italiano. Con ella, los siete idiomas de partida están completos (interfaz y
+      enciclopedia). Otras 14 etiquetas de esquemas que seguían en castellano («espacio», «lanzamiento»,
+      «deuterio»…), traducidas en todos.
 - [ ] Tres idiomas más, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés e
       hindi. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en `src/ui/flags.ts`).
       La versión 2.0 se publica cuando estén los diez idiomas completos (lo que falta se ve en castellano).
