@@ -68,6 +68,8 @@ export class ResultsPanel {
   }
 
   hide() { this.el.classList.add('hidden'); cancelAnimationFrame(this.anim); }
+  /** pliega o despliega el panel (en pantallas pequeñas se retira del todo hacia la derecha) */
+  setMin(on: boolean) { this.el.classList.toggle('min', on); const b = this.el.querySelector('.res-minbtn'); if (b) b.innerHTML = on ? ICONS.max : ICONS.min; }
 
   /** mapa de calor activo (para marcar el botón) */
   private heat: 'off' | 'pop' | 'deaths' | 'fallout' = 'off';
@@ -321,7 +323,7 @@ export class ResultsPanel {
       : fx.asteroid?.fate === 'airburst' ? 'Explosión aérea de asteroide' : 'Impacto de asteroide';
     const burst = sc.kind === 'war' ? `${fx.war?.sides.map((x) => tr(x)).join(' · ')}` : sc.kind === 'dam' ? `${Math.round(sc.heightM)} m · ${sc.volumeHm3.toLocaleString(LOCALE)} hm³` : sc.kind === 'solar' ? `Dst ${Math.round(sc.dstNt)} nT` : sc.kind === 'release' ? `${fx.release?.isoName ?? ''}` : sc.kind === 'volcano' ? `VEI ${sc.vei}` : fx.buried ? `${fx.buried.mode === 'underground' ? 'bajo tierra' : 'bajo el agua'} a ${fmtDist(fx.buried.depthM)}` : fx.burstHeightM > 0 ? `a ${fmtDist(fx.burstHeightM)} de altura` : sc.kind === 'asteroid' && sc.target === 'water' ? `en el océano (${fmtDist(sc.waterDepthM)} de prof.)` : 'en superficie';
     const burstTr = tr(burst);
-    const minBtn = h('button', { class: 'icon-btn', title: 'Minimizar', html: ICONS.min, onclick: () => { el.classList.toggle('min'); minBtn.innerHTML = el.classList.contains('min') ? ICONS.max : ICONS.min; } });
+    const minBtn = h('button', { class: 'icon-btn res-minbtn', title: 'Minimizar', html: ICONS.min, onclick: () => { el.classList.toggle('min'); minBtn.innerHTML = el.classList.contains('min') ? ICONS.max : ICONS.min; } });
     const hiroTxt = hiro >= 1 ? `×${fmtNum(hiro)} Hiroshima` : `${(hiro * 100).toFixed(hiro < 0.01 ? 2 : 1).replace('.', DEC)} % de Hiroshima`;
     const head = h('div', { class: 'res-head' },
       h('div', { class: 'ttl' },

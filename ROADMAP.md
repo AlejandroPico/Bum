@@ -408,6 +408,9 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 - [x] 1.21.4: selector de idioma con la bandera de cada idioma (el automático muestra la del idioma del
       sistema). Ubicación inicial: la ciudad de la conexión (por la IP, sin pedir nada) y, si el usuario da
       permiso, su posición exacta; ya no abre siempre en Madrid.
+- [x] 1.21.5: móvil y tableta (hasta 1180 px, vertical y horizontal): los dos paneles son cajones laterales que
+      se retiran del todo a su lado; retirados, dejan una pestaña con flecha en el borde de la pantalla para
+      volver a abrirlos. En pantallas estrechas, abrir uno retira el otro. El escritorio no cambia.
 - [ ] Terminar de traducir la enciclopedia, un idioma por entrega: inglés, catalán, francés, alemán y portugués,
       completos; italiano, pendiente.
 - [ ] Tres idiomas más, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés e

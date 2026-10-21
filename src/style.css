@@ -1117,3 +1117,40 @@ body.touring #present-bar { bottom: 130px; }
 .lang-opt { background: none; box-shadow: none; }
 .lang-opt:hover { background: rgba(var(--ink), .07); }
 .lang-opt.on { color: var(--hi); font-weight: 600; }
+
+/* ---------- 1.21.5 · móvil y tableta: paneles laterales que se retiran del todo, con pestaña en el borde ---------- */
+.edge-tab { display: none; }
+@media (max-width: 1180px) {
+  :root { --sidebar-w: min(360px, calc(100vw - 44px)); --results-w: min(392px, calc(100vw - 44px)); }
+  /* panel izquierdo: cajón lateral a toda altura */
+  #sidebar { top: 0; bottom: 0; height: auto; width: var(--sidebar-w); border-top: 0; border-right: 1px solid var(--line); }
+  #sidebar.collapsed { transform: translateX(-100%); }
+  /* panel derecho: cajón lateral bajo la barra de botones; «minimizar» lo retira del todo */
+  #results { top: 60px; bottom: 8px; left: auto; right: 0; width: var(--results-w); max-height: none; border-top: 0; border-left: 1px solid var(--line); }
+  #results.min { transform: translateX(100%); opacity: 0; pointer-events: none; }
+  #results.min .res-body, #results.min .res-tabs { display: flex; }
+  body.rp-open:not(.rp-min) #results { bottom: 8px; }
+  #toolbar, body.rp-open #toolbar { top: 10px; right: 10px; }
+  #timeline, body.rp-open:not(.rp-min) #timeline, body.ui-collapsed #timeline { left: 8px !important; right: 8px !important; bottom: 8px; }
+  body.rp-open:not(.rp-min) .maplibregl-ctrl-bottom-right { right: 0; }
+  #ui-show { display: none !important; }
+  /* pestañas del borde: aparecen cuando su panel está retirado */
+  .edge-tab { position: absolute; top: 50%; z-index: 13; width: 26px; height: 64px; margin-top: -32px; padding: 0; border: 0; color: var(--hi); cursor: pointer; place-items: center; box-shadow: 0 6px 20px rgba(0, 0, 0, .35); background: var(--bg-solid) !important; }
+  .edge-tab svg { width: 16px; height: 16px; }
+  #edge-l { left: 0; border-left: 3px solid var(--accent); }
+  #edge-r { right: 0; border-right: 3px solid var(--accent); }
+  body.ui-collapsed #edge-l { display: grid; }
+  body.rp-open.rp-min #edge-r { display: grid; }
+  body.enc-open .edge-tab, body.touring .edge-tab, body.presenting .edge-tab, body.hist-on .edge-tab { display: none !important; }
+}
+@media (max-width: 1180px) and (max-height: 500px) {
+  /* móvil en horizontal: pestañas más bajas y paneles un poco más estrechos */
+  :root { --sidebar-w: min(330px, 46vw); --results-w: min(360px, 50vw); }
+  .edge-tab { height: 52px; margin-top: -26px; }
+  #results { top: 56px; }
+}
+@media (max-width: 900px) {
+  /* la barra de botones ocupa casi todo el ancho: los dos cajones empiezan debajo */
+  #sidebar { top: 60px; bottom: 8px; }
+}
+@media (max-width: 1180px) and (max-height: 500px) { #sidebar { top: 56px; } }

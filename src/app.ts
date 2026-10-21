@@ -311,18 +311,30 @@ const timeline = new Timeline(document.getElementById('timeline')!, {
 
 const showBtn = h('button', { id: 'ui-show', class: 'icon-btn glass', title: 'Mostrar panel (H)', html: ICONS.show, onclick: () => toggleUI() });
 document.getElementById('app')!.append(showBtn);
+// pantallas pequeñas (móvil y tableta): los dos paneles se retiran del todo a su lado y dejan una pestaña
+// en el borde para volver a abrirlos; en el móvil, abrir uno pliega el otro
+const narrow = () => window.innerWidth <= 900;
+const edgeL = h('button', { id: 'edge-l', class: 'edge-tab glass', title: 'Mostrar el panel de la simulación', html: ICONS.show, onclick: () => {
+  if (narrow() && document.body.classList.contains('rp-open') && !document.body.classList.contains('rp-min')) results.setMin(true);
+  if (document.body.classList.contains('ui-collapsed')) toggleUI();
+} });
+const edgeR = h('button', { id: 'edge-r', class: 'edge-tab glass', title: 'Mostrar los resultados', html: ICONS.hide, onclick: () => {
+  if (narrow() && !document.body.classList.contains('ui-collapsed')) toggleUI();
+  results.setMin(false); updatePadding();
+} });
+document.getElementById('app')!.append(edgeL, edgeR);
 
 /** deja libre el espacio de los paneles para que la zona cero quede centrada en la parte visible */
 function updatePadding() {
   if (document.body.classList.contains('touring')) { map.setPadding({ left: 0, right: 0, top: 0, bottom: 0 }); return; }
-  const phone = window.innerWidth <= 760;
+  const phone = window.innerWidth <= 900;
   const collapsed = document.body.classList.contains('ui-collapsed');
   const left = collapsed || phone ? 0 : 340;
   const rp = document.getElementById('results')!;
   const rpOpen = !!run && !rp.classList.contains('hidden') && !rp.classList.contains('min');
   const right = rpOpen && !phone ? 392 : 0;
   // en el móvil los paneles son hojas inferiores: el centro del mapa sube por encima de ellas
-  const bottom = !phone ? 0 : rpOpen ? rp.offsetHeight + 64 : collapsed ? 0 : document.getElementById('sidebar')!.offsetHeight;
+  const bottom = 0;
   map.setPadding({ left, right, top: 0, bottom: Math.min(bottom, window.innerHeight * 0.7) });
 }
 window.addEventListener('resize', () => updatePadding());
@@ -1349,7 +1361,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.21.4';
+const APP_VERSION = '1.21.5';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
