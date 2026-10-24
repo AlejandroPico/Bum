@@ -418,7 +418,7 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 - [x] 1.21.7: la enciclopedia en italiano. Con ella, los siete idiomas de partida están completos (interfaz y
       enciclopedia). Otras 14 etiquetas de esquemas que seguían en castellano («espacio», «lanzamiento»,
       «deuterio»…), traducidas en todos.
-- [x] 1.21.8 · Expandir textos: la narración del recorrido tiene de 3 a 6 versiones de cada momento
+- [x] 1.21.8–1.21.9 · Expandir textos: la narración del recorrido tiene de 8 a 10 versiones de cada momento
       (`src/tour-lines.ts`), elegidas al azar sin repetir la última; en otros idiomas sólo las que tienen
       traducción. Texto pensado para oírse (`forSpeech` en `src/narrator.ts`): siglas con su nombre completo
       («EE. UU.» → «Estados Unidos»), unidades en palabras («km» → «kilómetros»), números sin separador de miles
