@@ -1154,3 +1154,12 @@ body.touring #present-bar { bottom: 130px; }
   #sidebar { top: 60px; bottom: 8px; }
 }
 @media (max-width: 1180px) and (max-height: 500px) { #sidebar { top: 56px; } }
+/* presentación + recorrido: la barra de la presentación sube a la franja de arriba y el rótulo del
+   recorrido se queda abajo, para que nunca se monten un texto encima del otro */
+body.presenting.touring #present-bar { top: calc(9vh + 12px); bottom: auto; align-items: center; }
+body.presenting.touring .pb-note { display: none; }
+body.presenting.touring .pb-title { font-size: 17px; }
+@media (max-width: 760px) {
+  body.presenting.touring #present-bar { top: calc(7vh + 8px); }
+  body.presenting.touring .pb-title { font-size: 15px; }
+}

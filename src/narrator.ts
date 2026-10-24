@@ -4,7 +4,44 @@
  * (las «neuronales» o «naturales» de Edge, las de Google en Chrome, las mejoradas de macOS…), lee
  * frase a frase (los navegadores cortan las locuciones largas) y avisa al terminar.
  */
-import { langInfo } from './i18n';
+import { langInfo, lang } from './i18n';
+
+/** palabras de las unidades para leerlas enteras (la voz deletrea «km» o lee «m» como «eme») */
+const UNITS: Record<string, Record<string, string>> = {
+  es: { 'km²': 'kilómetros cuadrados', 'km/h': 'kilómetros por hora', 'km/s': 'kilómetros por segundo', km: 'kilómetros', m: 'metros', s: 'segundos', min: 'minutos', h: 'horas', kt: 'kilotones', Mt: 'megatones' },
+  ca: { 'km²': 'quilòmetres quadrats', 'km/h': 'quilòmetres per hora', 'km/s': 'quilòmetres per segon', km: 'quilòmetres', m: 'metres', s: 'segons', min: 'minuts', h: 'hores', kt: 'quilotones', Mt: 'megatones' },
+  en: { 'km²': 'square kilometres', 'km/h': 'kilometres per hour', 'km/s': 'kilometres per second', km: 'kilometres', m: 'metres', s: 'seconds', min: 'minutes', h: 'hours', kt: 'kilotons', Mt: 'megatons' },
+  fr: { 'km²': 'kilomètres carrés', 'km/h': 'kilomètres par heure', 'km/s': 'kilomètres par seconde', km: 'kilomètres', m: 'mètres', s: 'secondes', min: 'minutes', h: 'heures', kt: 'kilotonnes', Mt: 'mégatonnes' },
+  de: { 'km²': 'Quadratkilometer', 'km/h': 'Kilometer pro Stunde', 'km/s': 'Kilometer pro Sekunde', km: 'Kilometer', m: 'Meter', s: 'Sekunden', min: 'Minuten', h: 'Stunden', kt: 'Kilotonnen', Mt: 'Megatonnen' },
+  pt: { 'km²': 'quilómetros quadrados', 'km/h': 'quilómetros por hora', 'km/s': 'quilómetros por segundo', km: 'quilómetros', m: 'metros', s: 'segundos', min: 'minutos', h: 'horas', kt: 'quilotoneladas', Mt: 'megatoneladas' },
+  it: { 'km²': 'chilometri quadrati', 'km/h': 'chilometri orari', 'km/s': 'chilometri al secondo', km: 'chilometri', m: 'metri', s: 'secondi', min: 'minuti', h: 'ore', kt: 'chilotoni', Mt: 'megatoni' },
+};
+/** siglas que la voz deletrearía: se leen como nombre completo */
+const ABBR: Record<string, [RegExp, string][]> = {
+  es: [[/\bEE\.\s?UU\.?/g, 'Estados Unidos'], [/\bEEUU\b/g, 'Estados Unidos'], [/\bURSS\b/g, 'Unión Soviética'], [/≈\s?/g, 'unos '], [/\bpsi\b/g, 'libras por pulgada cuadrada']],
+  ca: [[/\bEUA\b/g, 'Estats Units'], [/\bURSS\b/g, 'Unió Soviètica'], [/≈\s?/g, 'uns '], [/\bpsi\b/g, 'lliures per polzada quadrada']],
+  en: [[/\bthe US\b/g, 'the United States'], [/\bUS\b/g, 'United States'], [/\bUSSR\b/g, 'Soviet Union'], [/≈\s?/g, 'about '], [/\bpsi\b/g, 'pounds per square inch']],
+  fr: [[/\bURSS\b/g, 'Union soviétique'], [/≈\s?/g, 'environ '], [/\bpsi\b/g, 'livres par pouce carré']],
+  de: [[/\bUdSSR\b/g, 'Sowjetunion'], [/≈\s?/g, 'etwa '], [/\bpsi\b/g, 'Pfund pro Quadratzoll']],
+  pt: [[/\bEUA\b/g, 'Estados Unidos'], [/\bURSS\b/g, 'União Soviética'], [/≈\s?/g, 'cerca de '], [/\bpsi\b/g, 'libras por polegada quadrada']],
+  it: [[/\bURSS\b/g, 'Unione Sovietica'], [/≈\s?/g, 'circa '], [/\bpsi\b/g, 'libbre per pollice quadrato']],
+};
+
+/**
+ * Prepara un texto para la voz: siglas y unidades con su nombre completo, números sin separador de
+ * miles (la voz hacía una pausa en el punto de «12.500» y leía «12» y luego «500») y sin abreviaturas.
+ */
+export function forSpeech(text: string, L: string = lang): string {
+  let t = text;
+  for (const [re, w] of ABBR[L] ?? ABBR.es) t = t.replace(re, w);
+  // separador de miles: punto (o coma en inglés) y espacios finos o duros entre grupos de tres cifras
+  const grp = L === 'en' ? ',' : '.';
+  for (let k = 0; k < 3; k++) t = t.replace(new RegExp(`(\\d)[${grp === '.' ? '\\.' : ','}\u00a0\u202f\u2009 ](?=\\d{3}(?!\\d))`, 'g'), '$1');
+  const U = UNITS[L] ?? UNITS.es;
+  t = t.replace(/(\d)\s?(km²|km\/h|km\/s|km|min|Mt|kt|m|s|h)(?![\p{L}\d²\/])/gu, (_m, d: string, u: string) => `${d} ${U[u] ?? u}`);
+  t = t.replace(/×\s?(\d[\d.,]*)/g, (_m, n: string) => `${n} ${L === 'en' ? 'times' : L === 'de' ? 'mal' : L === 'fr' ? 'fois' : L === 'it' ? 'volte' : L === 'ca' ? 'vegades' : 'veces'}`);
+  return t.replace(/\s{2,}/g, ' ').trim();
+}
 
 const NICE = /natural|neural|online|premium|enhanced|mejorad|google|siri|wavenet/i;
 const BAD = /espeak|compact|eloquence/i;
@@ -54,7 +91,8 @@ export class Narrator {
     if (!this.voice) return;
     const tok = ++this.token;
     // frases cortas: más naturales (pausas en los puntos) y sin el corte de las locuciones largas
-    const parts = text.match(/[^.!?;]+[.!?;]+|[^.!?;]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [text];
+    // se corta sólo en los finales de frase (punto y espacio), nunca dentro de un número como «1,2» o «1.2»
+    const parts = forSpeech(text).split(/(?<=[.!?;:])\s+(?=\S)/).map((x) => x.trim()).filter(Boolean);
     for (const p of parts) {
       if (tok !== this.token) return;
       await new Promise<void>((res) => {

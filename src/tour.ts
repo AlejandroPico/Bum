@@ -10,15 +10,18 @@ import type { Effects } from './physics/types';
 import { fmtDist } from './physics/effects';
 import { h, fmtTime } from './ui/dom';
 import { LOCALE } from './i18n/locale';
-import { tr } from './i18n';
+import { tr, lang } from './i18n';
 import { Narrator } from './narrator';
 import { peakWind, PSI } from './physics/blast';
+import * as L from './tour-lines';
 
 export interface TourRun { fx: Effects; plan: FxPlan; lat: number; lon: number; t: number; tStart: number; playing: boolean; speed: number; userCam: boolean; orbit: unknown; lastReal: number; extras: unknown[] }
 export interface TourCtx {
   map: maplibregl.Map;
   run(): TourRun | null;
   place(): string;
+  /** el lugar dicho en voz alta (sin coordenadas: la ciudad más cercana o una descripción corta) */
+  placeSpoken(): string;
   restart(): void;
   /** salta el reloj de la simulación a `t` (s) */
   seek(t: number): void;
@@ -159,11 +162,20 @@ export class Tour {
     const R = this.ctx.run();
     if (R && R.t < t) { this.ctx.seek(t); R.playing = true; R.lastReal = performance.now(); }
   }
+  /** «1,2 millones muertos» → «1,2 millones de muertos» (y lo mismo en los demás idiomas latinos) */
+  private fixMillions(t: string) {
+    const R: Record<string, [RegExp, (w: string) => string]> = {
+      es: [/(\bmillones) (?!de\b)(?=\p{L})/gu, () => 'de '], pt: [/(\bmilhões) (?!de\b)(?=\p{L})/gu, () => 'de '], it: [/(\bmilioni) (?!di\b)(?=\p{L})/gu, () => 'di '],
+      ca: [/(\bmilions) (?!d[e'’])(?=\p{L})/gu, (w) => (/^[aeiouàèéíòóúh]/i.test(w) ? 'd’' : 'de ')], fr: [/(\bmillions) (?!d[e'’])(?=\p{L})/gu, (w) => (/^[aeiouàâéèêîôûh]/i.test(w) ? 'd’' : 'de ')],
+    };
+    const r = R[lang]; if (!r) return t;
+    return t.replace(r[0], (m, a, off: number, all: string) => `${a} ${r[1](all.slice(off + m.length))}`);
+  }
   private say(title: string, line: string) {
     this.cap.classList.remove('on');
     void this.cap.offsetWidth;
     this.title.textContent = title;
-    this.line.textContent = line;
+    this.line.textContent = this.fixMillions(line);
     this.cap.classList.add('on');
   }
   private ease(o: maplibregl.EaseToOptions) { this.ctx.map.easeTo({ essential: true, easing: (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2), ...o }); }
@@ -175,7 +187,7 @@ export class Tour {
    * Un momento del recorrido: rótulo (breve sin voz; completo con voz) y espera. Con narración, la
    * imagen se congela (`freeze`) mientras la voz explica lo que pasa y se sigue después.
    */
-  private async beat(tok: number, title: string, short: string, longIn: string | string[], ms: number, freeze = false) {
+  private async beat(tok: number, title: string, short: string, longIn: string | string[], ms: number, freeze = false, noTitle = false) {
     const n = this.narrated;
     // varias frases se traducen por separado (cada una es una plantilla del catálogo)
     const long = (Array.isArray(longIn) ? longIn : [longIn]).filter(Boolean).map((x) => tr(x)).join(' ');
@@ -184,7 +196,10 @@ export class Tour {
     const was = !!R?.playing;
     if (n && freeze && R) R.playing = false;
     const read = n ? Math.max(ms, long.split(/\s+/).length * 330) : ms;
-    await Promise.all([this.sleep(tok, n ? 900 : ms), n ? this.narrator.speak(tr(title) + '. ' + long).then(() => this.sleep(tok, 500)) : Promise.resolve(), n && !this.narrator.hasVoice ? this.sleep(tok, read) : Promise.resolve()]);
+    // el título se lee antes del texto sólo si el texto no lo dice ya (evita «Barcelona. Estamos en Barcelona…»)
+    const T = tr(title), norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const spoken = this.fixMillions(!T || norm(long).includes(norm(T)) || noTitle ? long : T + '. ' + long);
+    await Promise.all([this.sleep(tok, n ? 900 : ms), n ? this.narrator.speak(spoken).then(() => this.sleep(tok, 500)) : Promise.resolve(), n && !this.narrator.hasVoice ? this.sleep(tok, read) : Promise.resolve()]);
     this.guard(tok);
     if (n && freeze && R && was) { R.playing = true; R.lastReal = performance.now(); }
   }
@@ -254,27 +269,21 @@ export class Tour {
       const fAt = (f: number) => R.tStart + F.flightS * f;
       const dur = M.flightMin >= 90 ? `${Math.floor(M.flightMin / 60)} h ${Math.round(M.flightMin % 60)} min` : `${Math.round(M.flightMin)} minutos`;
       const vec = (M.profileName ?? 'Misil balístico').toLowerCase();
-      await this.beat(tok, 'Lanzamiento', `${M.profileName ?? 'Misil balístico'} desde ${M.site}`, `Desde ${M.site}, ${M.country}, despega un ${vec} rumbo a ${C.place()}. Tiene que recorrer ${n0(M.rangeKm)} kilómetros y tardará unos ${dur}.`, 3500, true);
+      await this.beat(tok, 'Lanzamiento', `${M.profileName ?? 'Misil balístico'} desde ${M.site}`, L.pick('launch', L.launchLines(M.site, M.country, vec, C.placeSpoken(), n0(M.rangeKm), dur)), 3500, true);
       R.playing = true; R.lastReal = performance.now();
       const boostF = Math.min(0.4, M.boostMin / Math.max(1, M.flightMin));
       await this.untilT(tok, fAt(Math.max(0.12, boostF)), 8000);
       const P2 = M.profile ?? 'ballistic';
-      const mid = P2 === 'hgv'
-        ? `El cohete lo sube hasta unos 100 kilómetros y allí suelta el planeador, que vuela por la alta atmósfera a unos ${n0(M.cruiseKm ?? 55)} kilómetros de altura y a más de quince veces la velocidad del sonido. Cambia de rumbo sobre la marcha, así que los radares no pueden calcular dónde caerá.`
-        : P2 === 'cruise'
-          ? 'El misil vuela a unos sesenta metros del suelo, siguiendo el relieve y esquivando las defensas, por debajo del horizonte de los radares. Es lento, más o menos como un avión de pasajeros, pero muy difícil de ver.'
-          : P2 === 'aircraft'
-            ? 'Un bombardero lleva la bomba a unos once kilómetros de altura. Tardará horas en llegar y los radares lo verán venir, pero puede ser difícil de interceptar.'
-            : `Tras ${n0(M.boostMin)} minutos de propulsión, el motor se apaga y la ojiva sigue un arco por el espacio. Llegará a ${n0(M.apogeeKm)} kilómetros de altura, mucho más alto que la Estación Espacial Internacional.`;
+      const mid = L.pick('mid-' + P2, P2 === 'hgv' ? L.hgvLines(n0(M.cruiseKm ?? 55)) : P2 === 'cruise' ? L.cruiseLines() : P2 === 'aircraft' ? L.aircraftLines() : L.ballisticLines(n0(M.boostMin), n0(M.apogeeKm)));
       await this.beat(tok, P2 === 'ballistic' ? 'Curso medio' : 'En vuelo', `${n0(M.rangeKm)} km · ${dur}`, mid, 3500, true);
       if (M.mirv) {
         await this.untilT(tok, fAt(0.56), 8000);
-        await this.beat(tok, 'Separación de las ojivas', `${M.mirv} ojivas`, `A mitad del camino, el vehículo de reentrada suelta las ${M.mirv} ojivas que lleva. Cada una sigue su propia trayectoria hacia un objetivo distinto.`, 3000, true);
+        await this.beat(tok, 'Separación de las ojivas', `${M.mirv} ojivas`, L.pick('mirv', L.mirvLines(M.mirv)), 3000, true);
       }
       await this.untilT(tok, fAt(0.86), 9000);
       const end = P2 === 'ballistic'
-        ? `La ojiva vuelve a entrar en la atmósfera a ${M.reentryKms.toLocaleString(LOCALE, { maximumFractionDigits: 1 })} kilómetros por segundo. Desde que los satélites vieron el lanzamiento, ha habido unos ${n0(M.warningMin)} minutos de aviso.`
-        : `Faltan pocos minutos para llegar. Con este tipo de arma, el aviso sería de unos ${n0(M.warningMin)} minutos.`;
+        ? L.pick('reentry', L.reentryLines(M.reentryKms.toLocaleString(LOCALE, { maximumFractionDigits: 1 }), n0(M.warningMin)))
+        : L.pick('arrival', L.arrivalLines(n0(M.warningMin)));
       await this.beat(tok, P2 === 'ballistic' ? 'Reentrada' : 'Llegada', `${n0(M.warningMin)} min de aviso`, end, 3000, false);
       await this.untilT(tok, -0.5, 12000);
       R.playing = false;
@@ -284,10 +293,9 @@ export class Tour {
     const rEst = Math.max(psi1 * 1.25, P.fireballR * 10, 2500);
     this.ease({ center: [lon, lat], zoom: C.zoomForRadius(rEst, lat), pitch: 55, bearing: bearing - 20, duration: 3200 });
     const pop = fx.casualties.exposed;
-    const intro = P.isAsteroid
-      ? `${C.place()}. Vamos a ver qué pasaría si cayera aquí ${name}: ${energy} de energía, unas ${n0(hiro)} veces la bomba de Hiroshima.`
-      : `${C.place()}. Vamos a ver qué pasaría si estallara aquí ${name}: ${energy}, unas ${n0(hiro)} veces la bomba de Hiroshima, ${P.h > 50 ? `a ${fmtDist(P.h)} de altura` : 'en la superficie'}.`;
-    await this.beat(tok, C.place(), `${name} · ${energy}${P.isAsteroid ? '' : P.h > 50 ? ` · explosión a ${fmtDist(P.h)} de altura` : ' · en la superficie'}`, [intro, pop > 1000 ? `En la zona que alcanzan sus efectos viven unos ${people(pop)} habitantes.` : ''], 3400);
+    const hiroP = hiro >= 1.5 ? `unas ${n0(hiro)} veces la bomba de Hiroshima` : hiro >= 0.7 ? 'más o menos como la bomba de Hiroshima' : 'menos que la bomba de Hiroshima';
+    const intro = L.pick(P.isAsteroid ? 'intro-a' : 'intro-n', L.introLines(P.isAsteroid, C.placeSpoken(), name, energy, hiroP, P.h > 50 ? `a ${fmtDist(P.h)} de altura` : 'en la superficie'));
+    await this.beat(tok, C.place(), `${name} · ${energy}${P.isAsteroid ? '' : P.h > 50 ? ` · explosión a ${fmtDist(P.h)} de altura` : ' · en la superficie'}`, [intro, pop > 1000 ? L.pick('pop', L.popLines(people(pop))) : ''], 3400, false, true);
     this.ease({ bearing: bearing + 4, duration: 2600, easing: (x) => x });
     await this.sleep(tok, this.narrated ? 600 : 2600);
     bearing += 4;
@@ -301,7 +309,7 @@ export class Tour {
       bearing = az + 90;
       R.playing = true; R.lastReal = performance.now();
       const sp = (P.entrySpeed / 1000).toLocaleString(LOCALE, { maximumFractionDigits: 0 });
-      await this.beat(tok, 'Entrada en la atmósfera', `El objeto llega a ${sp} km/s; el aire lo frena y lo calienta hasta hacerlo brillar más que el Sol.`, `El objeto entra en la atmósfera a ${sp} kilómetros por segundo. El aire que tiene delante se comprime y se calienta tanto que brilla más que el Sol, y la presión empieza a romperlo.`, 2500);
+      await this.beat(tok, 'Entrada en la atmósfera', `El objeto llega a ${sp} km/s; el aire lo frena y lo calienta hasta hacerlo brillar más que el Sol.`, L.pick('entry', L.entryLines(sp)), 2500);
       await this.untilT(tok, 0, 20000);
     }
 
@@ -319,9 +327,7 @@ export class Tour {
     if (!R.playing) { R.playing = true; R.lastReal = performance.now(); }
     if (this.narrated) await this.untilT(tok, Math.max(P.tMax * 2, 0.05), 4000);
     await this.beat(tok, P.isAsteroid ? 'Impacto' : 'Destello', `A ${fmtDist(dW)} de la zona cero: la bola de fuego alcanza ${fmtDist(fx.fireball.radiusM)} de radio y durante unos segundos brilla más que el Sol.`,
-      P.isAsteroid
-        ? `Toda su energía de movimiento se libera de golpe. Se forma una bola de fuego de ${fmtDist(fx.fireball.radiusM)} de radio y un destello de calor que viaja a la velocidad de la luz${burn3 > 0 ? `: quien esté al aire libre sufre quemaduras graves hasta ${fmtDist(burn3)}` : ''}.`
-        : `Estamos a ${fmtDist(dW)} de la zona cero. En una millonésima de segundo se forma una bola de fuego más caliente que el centro del Sol, que crece hasta ${fmtDist(fx.fireball.radiusM)} de radio. Su luz y su calor llegan a la vez, a la velocidad de la luz${burn3 > 0 ? `: quien esté al aire libre sufre quemaduras graves hasta ${fmtDist(burn3)}` : ''}.`,
+      L.pick(P.isAsteroid ? 'flash-a' : 'flash-n', L.flashLines(P.isAsteroid, fmtDist(dW), fmtDist(fx.fireball.radiusM), burn3 > 0 ? fmtDist(burn3) : null)),
       this.narrated ? 0 : 3500, true);
     await this.untilT(tok, Math.max(P.shockTime(Math.hypot(dW, P.h)) + 0.6, P.tMax * 4), 9000, this.narrated ? 0 : 1);
     const psiW = fx.pressurePsiAt(dW);
@@ -329,7 +335,7 @@ export class Tour {
     const effW = psiW >= 5 ? 'se derrumban los edificios' : psiW >= 2 ? 'se hunden tejados y tabiques' : psiW >= 0.8 ? 'revientan los cristales' : 'se oye un estruendo lejano';
     const windW = Math.round(peakWind(psiW * PSI) * 3.6);
     await this.beat(tok, 'Llega la onda', `El estruendo y el viento llegan ${sW} s después del destello: aquí, a ${fmtDist(dW)}, ${effW}.`,
-      `${sW} segundos después del destello llega la onda expansiva: un muro de aire comprimido que avanza más deprisa que el sonido. Aquí ${effW}, y el viento que la sigue sopla a unos ${n0(windW)} kilómetros por hora.`, 2600, true);
+      L.pick('shock', L.shockLines(String(sW), effW, n0(windW))), 2600, true);
 
     // 3 · vista aérea de la onda expansiva
     C.setWideFov(false);
@@ -338,13 +344,13 @@ export class Tour {
       this.ease({ center: [lon, lat], zoom: C.zoomForRadius(psi1 * 1.15, lat), pitch: 58, bearing: bearing + 30, duration: 4200 });
       bearing += 30;
       const sh = this.beat(tok, 'Onda expansiva', `${psi5 ? `Derriba la mayoría de los edificios hasta ${fmtDist(psi5)} (5 psi)` : 'Una sobrepresión enorme'} y rompe ventanas hasta ${fmtDist(psi1)} (1 psi).`,
-        `Desde el aire se ve cómo avanza la onda. ${psi20 ? `Hasta ${fmtDist(psi20)} no queda casi nada en pie. ` : ''}${psi5 ? `Hasta ${fmtDist(psi5)} se derrumba la mayoría de los edificios. ` : ''}Y hasta ${fmtDist(psi1)} revientan los cristales, que hieren a muchísima gente.`, 4400);
+        L.pick('aerial', L.aerialLines(psi20 ? fmtDist(psi20) : null, psi5 ? fmtDist(psi5) : null, fmtDist(psi1))), 4400);
       await Promise.all([sh, this.untilT(tok, P.shockTime(Math.hypot(psi1, P.h)) + 1, 9000, 4400)]);
     }
 
     // 3 b · radiación inicial
     if (this.narrated && rad500 > 0 && !P.isAsteroid && !fx.chemical) {
-      await this.beat(tok, 'Radiación inicial', '', `En el primer minuto, la explosión emite también rayos gamma y neutrones. Hasta ${fmtDist(rad500)}, la dosis que recibiría una persona sin protección sería mortal, aunque tan cerca la onda y el calor ya son más letales.`, 3000);
+      await this.beat(tok, 'Radiación inicial', '', L.pick('rad', L.radiationLines(fmtDist(rad500))), 3000);
     }
 
     // 4 · el hongo
@@ -355,9 +361,10 @@ export class Tour {
       await this.sleep(tok, 4000);
       R.speed = 1.6;
       const mins = Math.max(1, Math.round(fx.cloud.riseTimeS / 60));
-      const dirt = P.isAsteroid ? ' Lleva roca pulverizada y vapor del propio objeto.' : fx.groundContact > 0 ? ' Como la bola de fuego ha tocado el suelo, la nube va cargada de tierra que se ha vuelto radiactiva.' : ' Al estallar en el aire, la bola de fuego no ha tocado el suelo: la nube lleva poca tierra y habrá poca lluvia radiactiva local.';
+      const dk = P.isAsteroid ? 'asteroid' : fx.groundContact > 0 ? 'ground' : 'air';
+      const dirt = L.pick('dirt-' + dk, L.dirtLines(dk));
       const cl = this.beat(tok, 'La nube en forma de hongo', `Sube hasta ${fmtDist(P.capTop)} de altura en unos ${mins} min; el sombrero mide ${fmtDist(P.capR * 2)} de ancho.`,
-        `El aire caliente sube como un globo y arrastra humo y polvo: así se forma la nube en forma de hongo. En unos ${mins} minutos llega a ${fmtDist(P.capTop)} de altura, y su sombrero mide ${fmtDist(P.capR * 2)} de ancho.${dirt}`, 9000);
+        L.pick('cloud', L.cloudLines(String(mins), fmtDist(P.capTop), fmtDist(P.capR * 2), dirt)), 9000);
       await Promise.all([cl, this.orbit(tok, 9000, bearing, 3.2)]);
       bearing += 29;
       R.speed = 1;
@@ -369,9 +376,10 @@ export class Tour {
       this.ease({ center: [lon, lat], zoom: C.zoomForRadius(burn3 * 1.5, lat), pitch: 40, bearing: bearing + 15, duration: 3500 });
       bearing += 15;
       const fire = fx.fires?.kind === 'firestorm' ? ' Los incendios se funden en una tormenta de fuego.' : fx.fires?.kind === 'conflagration' ? ' Los incendios avanzan empujados por el viento.' : '';
-      const fireL = fx.fires?.kind === 'firestorm' ? ' En una ciudad densa y con poco viento, miles de incendios se juntan en una tormenta de fuego que aspira el aire de alrededor, como pasó en Hiroshima.' : fx.fires?.kind === 'conflagration' ? ' Empujados por el viento, los incendios siguen avanzando durante horas.' : '';
+      const fk = fx.fires?.kind === 'firestorm' ? 'firestorm' : fx.fires?.kind === 'conflagration' ? 'conflagration' : 'none';
+      const fireL = L.pick('fire-' + fk, L.fireLines(fk));
       await this.beat(tok, 'El calor', `Quemaduras de tercer grado a quien esté al aire libre hasta ${fmtDist(burn3)}.${fire}`,
-        `El destello de calor prende fuego a todo lo que arde con facilidad: cortinas, papel, madera seca. Quien estuviera al aire libre tendría quemaduras de tercer grado hasta ${fmtDist(burn3)}.${fireL}`, 5200);
+        L.pick('heat', L.heatLines(fmtDist(burn3), fireL)), 5200);
     }
 
     // 6 · lluvia radiactiva
@@ -385,7 +393,7 @@ export class Tour {
       R.speed = 3;
       const big = fx.fallout[0];
       const fo = this.beat(tok, 'Lluvia radiactiva', `El viento arrastra el polvo hacia ${dirName(fx.windFromDeg + 180)}; durante horas cae sobre ${big ? `${n0(big.areaKm2)} km²` : 'una franja alargada'}, hasta ${n0(big?.maxDownwindKm ?? P.falloutExtKm)} km a sotavento.`,
-        `Al cabo de una hora empieza a caer el polvo de la nube. El viento lo arrastra hacia ${dirName(fx.windFromDeg + 180)}: es la lluvia radiactiva. Cubre unos ${big ? n0(big.areaKm2) : n0(P.falloutExtKm * 10)} kilómetros cuadrados y llega hasta ${n0(big?.maxDownwindKm ?? P.falloutExtKm)} kilómetros. Meterse en un sótano o en el centro de un edificio sólido durante al menos un día reduce la dosis decenas de veces.`, 6000);
+        L.pick('fallout', L.falloutLines(dirName(fx.windFromDeg + 180), big ? n0(big.areaKm2) : n0(P.falloutExtKm * 10), n0(big?.maxDownwindKm ?? P.falloutExtKm))), 6000);
       await Promise.all([fo, this.untilT(tok, tTo, 16000, 6000)]);
       R.speed = 1;
     }
@@ -398,7 +406,7 @@ export class Tour {
     const c = fx.casualties;
     const fall = fx.longTerm?.falloutDeathsShelter ? `; la lluvia radiactiva podría causar ${people(fx.longTerm.falloutDeathsShelter)} muertes más, con refugio` : '';
     await this.beat(tok, 'Balance', c.deaths > 0 ? `≈ ${people(c.deaths)} muertos y ${people(c.injuries)} heridos en las primeras horas${fall}.` : 'Por suerte, la zona afectada está casi deshabitada.',
-      c.deaths > 0 ? `En las primeras horas habría unos ${people(c.deaths)} muertos y ${people(c.injuries)} heridos${fall}. En el mapa, cuanto más intenso es el color, más víctimas por kilómetro cuadrado. Son estimaciones con modelos científicos públicos: la realidad dependería de muchos más factores.` : 'Por suerte, la zona afectada está casi deshabitada.', 8000);
+      c.deaths > 0 ? L.pick('balance', L.balanceLines(people(c.deaths), people(c.injuries), fall)) : L.pick('empty', L.emptyLines()), 8000);
     this.cap.classList.remove('on');
     await this.sleep(tok, 600);
     // al terminar se queda el mapa de calor de víctimas

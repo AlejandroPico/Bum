@@ -418,9 +418,19 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 - [x] 1.21.7: la enciclopedia en italiano. Con ella, los siete idiomas de partida están completos (interfaz y
       enciclopedia). Otras 14 etiquetas de esquemas que seguían en castellano («espacio», «lanzamiento»,
       «deuterio»…), traducidas en todos.
-- [ ] Tres idiomas más, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés e
-      hindi. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en `src/ui/flags.ts`).
-      La versión 2.0 se publica cuando estén los diez idiomas completos (lo que falta se ve en castellano).
+- [x] 1.21.8 · Expandir textos: la narración del recorrido tiene de 3 a 6 versiones de cada momento
+      (`src/tour-lines.ts`), elegidas al azar sin repetir la última; en otros idiomas sólo las que tienen
+      traducción. Texto pensado para oírse (`forSpeech` en `src/narrator.ts`): siglas con su nombre completo
+      («EE. UU.» → «Estados Unidos»), unidades en palabras («km» → «kilómetros»), números sin separador de miles
+      (la voz se paraba en «1.250») y frases cortadas sólo al final, nunca dentro de un número. El lugar no se
+      repite (el título no se lee si el texto ya lo nombra) y nunca se leen coordenadas: la ciudad más cercana
+      o «un punto a unos 40 kilómetros al norte de…». En la presentación, la barra sube a la franja de arriba
+      durante el recorrido para no taparse con los subtítulos.
+- [ ] Más idiomas, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés, hindi,
+      ruso y, posiblemente, árabe. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en
+      `src/ui/flags.ts`). El árabe se escribe de derecha a izquierda: pide adaptar la maquetación (paneles,
+      línea de tiempo, enciclopedia) además de traducir.
+      La versión 2.0 se publica cuando estén todos completos (lo que falta se ve en castellano).
       Para seguir: `npx tsx scripts/enc-i18n.ts todo` (los trozos de enc-todo/ ya sirven para los cuatro idiomas),
       traducir siguiendo `scripts/enc-i18n-rules.md` y `merge`; las cadenas de interfaz que faltan, con `npm run i18n`.
 

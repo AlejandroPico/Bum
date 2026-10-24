@@ -10,6 +10,8 @@ export const FLAGS: Record<string, string> = {
   it: svg('<rect width="10" height="20" fill="#009246"/><rect x="10" width="10" height="20" fill="#fff"/><rect x="20" width="10" height="20" fill="#ce2b37"/>'),
   zh: svg('<rect width="30" height="20" fill="#de2910"/><polygon points="5,2 6.2,5.6 2.4,3.4 7.6,3.4 3.8,5.6" fill="#ffde00" transform="translate(0,1) scale(1.1)"/>' + [[10, 2], [12, 4], [12, 7], [10, 9]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r=".8" fill="#ffde00"/>`).join('')),
   ja: svg('<rect width="30" height="20" fill="#fff"/><circle cx="15" cy="10" r="6" fill="#bc002d"/>'),
+  ru: svg('<rect width="30" height="6.67" fill="#fff"/><rect y="6.67" width="30" height="6.67" fill="#0039a6"/><rect y="13.33" width="30" height="6.67" fill="#d52b1e"/>'),
+  ar: svg('<rect width="30" height="20" fill="#006c35"/><rect x="7" y="8" width="16" height="1.6" fill="#fff"/><rect x="9" y="12" width="12" height="1" fill="#fff"/>'),
   hi: svg('<rect width="30" height="6.67" fill="#ff9933"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#138808"/><circle cx="15" cy="10" r="2.6" fill="none" stroke="#000080" stroke-width=".7"/>'),
 };
 /** icono del modo automático (un globo) */

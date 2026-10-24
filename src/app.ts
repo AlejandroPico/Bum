@@ -1361,7 +1361,7 @@ setInterval(() => { if (state.view.theme === 'auto' && !(run && run.skyFlash)) a
 tbBtn('about-btn', 'Acerca de Bum', INFO_ICON, () => openAbout());
 
 // ---------------------------------------------------------------- acerca de
-const APP_VERSION = '1.21.7';
+const APP_VERSION = '1.21.8';
 const LINKS = {
   repo: 'https://github.com/AlejandroPico/Bum',
   portfolio: 'https://alejandropico.github.io/Portfolio/',
@@ -1717,6 +1717,18 @@ const tour = new Tour({
   map,
   run: () => run,
   place: () => { if (!run) return ''; const c = nearestCity(run.lat, run.lon); return state.target.label || (c.km < 25 ? c.city.name : `${run.lat.toFixed(3)}, ${run.lon.toFixed(3)}`); },
+  placeSpoken: () => {
+    if (!run) return '';
+    const lbl = state.target.label;
+    // una etiqueta que es sólo coordenadas no se lee: se dice la ciudad más cercana
+    if (lbl && !/^[\s\d.,°+\-NSEOW·]+$/.test(lbl)) return lbl.replace(/^Tu (ubicación|zona) · /, '');
+    const c = nearestCity(run.lat, run.lon);
+    if (c.km < 25) return c.city.name;
+    const brg = (Math.atan2(Math.sin((c.city.lon - run.lon) * Math.PI / 180) * Math.cos(c.city.lat * Math.PI / 180), Math.cos(run.lat * Math.PI / 180) * Math.sin(c.city.lat * Math.PI / 180) - Math.sin(run.lat * Math.PI / 180) * Math.cos(c.city.lat * Math.PI / 180) * Math.cos((c.city.lon - run.lon) * Math.PI / 180)) * 180 / Math.PI + 540) % 360;
+    const dir = ['norte', 'noreste', 'este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste'][Math.round(brg / 45) % 8];
+    if (c.km < 400) return `un punto a unos ${Math.round(c.km / 10) * 10} kilómetros al ${dir} de ${c.city.name}`;
+    return 'un lugar lejos de cualquier gran ciudad';
+  },
   restart: () => restartClock(),
   narration: () => state.view.narration,
   flight: () => (run?.flight ? { flightS: run.flight.flightS } : null),
