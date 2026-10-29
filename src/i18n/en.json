@@ -1817,7 +1817,6 @@
  "{0} meses": "{0} months",
  "{0} curios": "{0} curies",
  "En tu idioma.": "In your language.",
- "Castellano, català, English, français, Deutsch, português e italiano, según el idioma de tu equipo (o el que elijas en el menú del ojo), y un recorrido narrado por voz que explica la catástrofe paso a paso. La enciclopedia, de momento, está en castellano.": "Spanish, Catalan, English, French, German, Portuguese and Italian, following your device’s language (or the one you choose in the eye menu), plus a voice-narrated tour that explains the disaster step by step. For now, the encyclopedia is in Spanish.",
  "Suelo quemado y marcas del terreno": "Scorched ground and terrain marks",
  "Manchas concéntricas que quedan en el suelo tras la explosión.": "Concentric patches left on the ground after the explosion.",
  "Lluvia negra": "Black rain",
@@ -3284,5 +3283,6 @@
  "Por fortuna, aquí casi no vive nadie.": "As luck would have it, hardly anyone lives here.",
  "La zona apenas está habitada: los daños humanos serían pequeños.": "The area is barely inhabited: the human toll would be small.",
  "Es una zona casi deshabitada, y eso salva muchas vidas.": "This area is nearly deserted, and that saves a great many lives.",
- "Con tan poca gente alrededor, el número de víctimas sería muy bajo.": "With so few people around, the number of casualties would be very low."
+ "Con tan poca gente alrededor, el número de víctimas sería muy bajo.": "With so few people around, the number of casualties would be very low.",
+ "Castellano, català, English, français, Deutsch, português, italiano y русский, según el idioma de tu equipo (o el que elijas en el menú del ojo), con la enciclopedia completa en todos ellos, y un recorrido narrado por voz que explica la catástrofe paso a paso.": "Spanish, Catalan, English, French, German, Portuguese, Italian and Russian, following your device’s language (or the one you choose in the eye menu), with the full encyclopaedia in all of them, and a voice-narrated tour that explains the disaster step by step."
 }

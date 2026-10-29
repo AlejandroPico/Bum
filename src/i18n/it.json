@@ -1791,7 +1791,6 @@
  "{0} meses": "{0} mesi",
  "{0} curios": "{0} curie",
  "En tu idioma.": "Nella tua lingua.",
- "Castellano, català, English, français, Deutsch, português e italiano, según el idioma de tu equipo (o el que elijas en el menú del ojo), y un recorrido narrado por voz que explica la catástrofe paso a paso. La enciclopedia, de momento, está en castellano.": "Spagnolo, catalano, inglese, francese, tedesco, portoghese e italiano, secondo la lingua del tuo dispositivo (o quella che scegli nel menu dell’occhio), e un percorso narrato a voce che spiega la catastrofe passo dopo passo. Per ora l’enciclopedia è in spagnolo.",
  "Suelo quemado y marcas del terreno": "Suolo bruciato e segni sul terreno",
  "Manchas concéntricas que quedan en el suelo tras la explosión.": "Macchie concentriche che restano al suolo dopo l’esplosione.",
  "Lluvia negra": "Pioggia nera",
@@ -3227,5 +3226,6 @@
  "Por fortuna, aquí casi no vive nadie.": "Fortunatamente, qui non abita quasi nessuno.",
  "La zona apenas está habitada: los daños humanos serían pequeños.": "La zona è scarsamente abitata: le perdite umane sarebbero contenute.",
  "Es una zona casi deshabitada, y eso salva muchas vidas.": "È una zona quasi disabitata, e questo salva molte vite.",
- "Con tan poca gente alrededor, el número de víctimas sería muy bajo.": "Con così poca gente intorno, il numero di vittime sarebbe molto basso."
+ "Con tan poca gente alrededor, el número de víctimas sería muy bajo.": "Con così poca gente intorno, il numero di vittime sarebbe molto basso.",
+ "Castellano, català, English, français, Deutsch, português, italiano y русский, según el idioma de tu equipo (o el que elijas en el menú del ojo), con la enciclopedia completa en todos ellos, y un recorrido narrado por voz que explica la catástrofe paso a paso.": "Spagnolo, catalano, inglese, francese, tedesco, portoghese, italiano e russo, secondo la lingua del tuo dispositivo (o quella che scegli nel menu dell’occhio), con l’enciclopedia completa in tutte, e un percorso narrato a voce che spiega la catastrofe passo dopo passo."
 }

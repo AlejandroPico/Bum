@@ -98,6 +98,20 @@ Check after writing each chunk (run from /home/claude/ataque-nuclear):
   esplosione in quota, punto zero / ipocentro, tempo di dimezzamento, massa critica, testata,
   inverno nucleare, rifugio antiatomico.
 
+### ru (русский)
+- Numbers: decimal comma; thousands separated with a (non-breaking) space, as in the source.
+- Quotes: «…».
+- Names: EE. UU. → США; URSS → СССР; Chernóbil → Чернобыль; Proyecto Manhattan → Манхэттенский проект;
+  Hiroshima → Хиросима; Nagasaki → Нагасаки. Weapon/test names: the usual Russian form (Царь-бомба, «Малыш»
+  for Little Boy, «Толстяк» for Fat Man, Castle Bravo → «Касл Браво»), keeping Latin codes (W88, B61, RDS-1 → РДС-1).
+- Terms: радиоактивные осадки, ударная волна, огненный шар, избыточное давление, мощность (тротиловый
+  эквивалент), воздушный взрыв, эпицентр / нулевая точка, период полураспада, критическая масса, боеголовка,
+  ядерная зима, убежище, коэффициент защиты.
+- Units in the Russian form: км, м, км², кт, Мт, °C, Гр, Зв, бэр… (keep «psi» as psi).
+- Grammar with numbers: Russian nouns change after numbers. In templates where {0} is a number, prefer
+  constructions that stay correct for any number (e.g. «Статей: {0}», «{0} км», «около {0} человек» —
+  «человек» works for all numbers), or put the noun before the number.
+
 ## Interface strings (only if your task includes `enc-todo/ui/<lang>.json`)
 
 That file is a JSON array of Spanish interface strings from the app: buttons, labels, captions of

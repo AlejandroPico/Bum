@@ -426,8 +426,9 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
       repite (el título no se lee si el texto ya lo nombra) y nunca se leen coordenadas: la ciudad más cercana
       o «un punto a unos 40 kilómetros al norte de…». En la presentación, la barra sube a la franja de arriba
       durante el recorrido para no taparse con los subtítulos.
-- [ ] Más idiomas, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés, hindi,
-      ruso y, posiblemente, árabe. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en
+- [x] 1.22: ruso (interfaz completa, narración y enciclopedia). La voz lee las unidades en ruso.
+- [ ] Más idiomas, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés, hindi
+      y, posiblemente, árabe. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en
       `src/ui/flags.ts`). El árabe se escribe de derecha a izquierda: pide adaptar la maquetación (paneles,
       línea de tiempo, enciclopedia) además de traducir.
       La versión 2.0 se publica cuando estén todos completos (lo que falta se ve en castellano).

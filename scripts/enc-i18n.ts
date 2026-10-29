@@ -16,7 +16,7 @@ import path from 'node:path';
 import { ALL_ARTICLES, GLOSSARY, IMAGES, VIDEOS, MATH } from '../src/encyclopedia/content/index';
 import { hashStr, walkContent } from '../src/encyclopedia/i18n';
 
-const ALL_LANGS = ['ca', 'en', 'fr', 'de', 'pt', 'it'];
+const ALL_LANGS = ['ca', 'en', 'fr', 'de', 'pt', 'it', 'ru'];
 /** LANGS=en,ca limita a esos idiomas; ENC_TODO=enc-todo/en usa otra carpeta de trozos (para tandas por idioma) */
 const LANGS = process.env.LANGS ? process.env.LANGS.split(',') : ALL_LANGS;
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
