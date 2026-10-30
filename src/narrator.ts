@@ -15,6 +15,7 @@ const UNITS: Record<string, Record<string, string>> = {
   de: { 'km²': 'Quadratkilometer', 'km/h': 'Kilometer pro Stunde', 'km/s': 'Kilometer pro Sekunde', km: 'Kilometer', m: 'Meter', s: 'Sekunden', min: 'Minuten', h: 'Stunden', kt: 'Kilotonnen', Mt: 'Megatonnen' },
   pt: { 'km²': 'quilómetros quadrados', 'km/h': 'quilómetros por hora', 'km/s': 'quilómetros por segundo', km: 'quilómetros', m: 'metros', s: 'segundos', min: 'minutos', h: 'horas', kt: 'quilotoneladas', Mt: 'megatoneladas' },
   ru: { 'km²': 'квадратных километров', 'km/h': 'километров в час', 'km/s': 'километров в секунду', km: 'километров', m: 'метров', s: 'секунд', min: 'минут', h: 'часов', kt: 'килотонн', Mt: 'мегатонн', 'км²': 'квадратных километров', 'км/ч': 'километров в час', 'км/с': 'километров в секунду', км: 'километров', м: 'метров', с: 'секунд', мин: 'минут', ч: 'часов', кт: 'килотонн', Мт: 'мегатонн' },
+  zh: { 'km²': '平方公里', 'km/h': '公里每小时', 'km/s': '公里每秒', km: '公里', m: '米', s: '秒', min: '分钟', h: '小时', kt: '千吨', Mt: '百万吨' },
   it: { 'km²': 'chilometri quadrati', 'km/h': 'chilometri orari', 'km/s': 'chilometri al secondo', km: 'chilometri', m: 'metri', s: 'secondi', min: 'minuti', h: 'ore', kt: 'chilotoni', Mt: 'megatoni' },
 };
 /** siglas que la voz deletrearía: se leen como nombre completo */
@@ -25,7 +26,8 @@ const ABBR: Record<string, [RegExp, string][]> = {
   fr: [[/\bURSS\b/g, 'Union soviétique'], [/≈\s?/g, 'environ '], [/\bpsi\b/g, 'livres par pouce carré']],
   de: [[/\bUdSSR\b/g, 'Sowjetunion'], [/≈\s?/g, 'etwa '], [/\bpsi\b/g, 'Pfund pro Quadratzoll']],
   pt: [[/\bEUA\b/g, 'Estados Unidos'], [/\bURSS\b/g, 'União Soviética'], [/≈\s?/g, 'cerca de '], [/\bpsi\b/g, 'libras por polegada quadrada']],
-  ru: [[/≈\s?/g, 'около ']],
+  ru: [[/≈\s?/g, 'около '], [/\bpsi\b/g, 'фунтов на квадратный дюйм']],
+  zh: [[/≈\s?/g, '约'], [/\s?\bpsi\b/g, '磅每平方英寸']],
   it: [[/\bURSS\b/g, 'Unione Sovietica'], [/≈\s?/g, 'circa '], [/\bpsi\b/g, 'libbre per pollice quadrato']],
 };
 
@@ -37,11 +39,11 @@ export function forSpeech(text: string, L: string = lang): string {
   let t = text;
   for (const [re, w] of ABBR[L] ?? ABBR.es) t = t.replace(re, w);
   // separador de miles: punto (o coma en inglés) y espacios finos o duros entre grupos de tres cifras
-  const grp = L === 'en' ? ',' : '.';
+  const grp = L === 'en' || L === 'zh' || L === 'ja' ? ',' : '.';
   for (let k = 0; k < 3; k++) t = t.replace(new RegExp(`(\\d)[${grp === '.' ? '\\.' : ','}\u00a0\u202f\u2009 ](?=\\d{3}(?!\\d))`, 'g'), '$1');
   const U = UNITS[L] ?? UNITS.es;
   t = t.replace(/(\d)\s?(km²|km\/h|km\/s|km|min|Mt|kt|m|s|h|км²|км\/ч|км\/с|км|мин|Мт|кт|м|с|ч)(?![\p{L}\d²\/])/gu, (_m, d: string, u: string) => `${d} ${U[u] ?? u}`);
-  t = t.replace(/×\s?(\d[\d.,]*)/g, (_m, n: string) => `${n} ${L === 'en' ? 'times' : L === 'ru' ? 'раз' : L === 'de' ? 'mal' : L === 'fr' ? 'fois' : L === 'it' ? 'volte' : L === 'ca' ? 'vegades' : 'veces'}`);
+  t = t.replace(/×\s?(\d[\d.,]*)/g, (_m, n: string) => `${n} ${L === 'en' ? 'times' : L === 'ru' ? 'раз' : L === 'zh' ? '倍' : L === 'de' ? 'mal' : L === 'fr' ? 'fois' : L === 'it' ? 'volte' : L === 'ca' ? 'vegades' : 'veces'}`);
   return t.replace(/\s{2,}/g, ' ').trim();
 }
 
@@ -94,7 +96,7 @@ export class Narrator {
     const tok = ++this.token;
     // frases cortas: más naturales (pausas en los puntos) y sin el corte de las locuciones largas
     // se corta sólo en los finales de frase (punto y espacio), nunca dentro de un número como «1,2» o «1.2»
-    const parts = forSpeech(text).split(/(?<=[.!?;:])\s+(?=\S)/).map((x) => x.trim()).filter(Boolean);
+    const parts = forSpeech(text).split(/(?<=[.!?;:])\s+(?=\S)|(?<=[。！？；])/).map((x) => x.trim()).filter(Boolean);
     for (const p of parts) {
       if (tok !== this.token) return;
       await new Promise<void>((res) => {

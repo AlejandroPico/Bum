@@ -492,7 +492,7 @@ export class ResultsPanel {
     const ring = (id: string) => fx.rings.find((r) => r.id === id);
     const kv: [string, string][] = [];
     const affected = fx.casualties.profile;
-    kv.push(['Energía', `${fmtEnergy(fx.energyKt)} · ${hiroTxt}`]);
+    kv.push(['Energía', `${fmtEnergy(fx.energyKt)} · ${tr(hiroTxt)}`]);
     if (fx.buried?.columnM) kv.push(['Columna de agua', fmtDist(fx.buried.columnM)]);
     else if (fx.buried?.contained) kv.push([fx.buried.mode === 'underground' ? 'Cavidad' : 'Burbuja', `${fmtDist(fx.fireball.radiusM)} de radio`]);
     else kv.push(['Bola de fuego', `${fmtDist(fx.fireball.radiusM)} de radio`]);

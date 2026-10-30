@@ -112,6 +112,19 @@ Check after writing each chunk (run from /home/claude/ataque-nuclear):
   constructions that stay correct for any number (e.g. «Статей: {0}», «{0} км», «около {0} человек» —
   «человек» works for all numbers), or put the noun before the number.
 
+### zh (简体中文, mainland China)
+- Simplified characters, standard mainland usage; full-width punctuation （，。：；！？）; quotes “…”.
+- Numbers: Arabic numerals; decimal point; thousands with a comma as in English, or 万/亿 for very large
+  round figures when natural (e.g. 120 万人). Dates: 1945年8月6日.
+- Names: EE. UU. → 美国; URSS → 苏联; Chernóbil → 切尔诺贝利; Proyecto Manhattan → 曼哈顿计划; Hiroshima → 广岛;
+  Nagasaki → 长崎; Little Boy → “小男孩”; Fat Man → “胖子”; Tsar Bomba → 沙皇炸弹; keep Latin codes (W88, B61).
+  Foreign names of people: the usual Chinese transliteration (奥本海默), optionally with the original name in
+  parentheses the first time in an article.
+- Terms: 放射性沉降物, 冲击波, 火球, 超压, 当量, 空爆, 爆心 / 零点, 半衰期, 临界质量, 弹头, 核冬天, 避难所, 防护系数.
+- Units: 公里, 米, 平方公里, 千吨 (kt), 百万吨 (Mt); keep symbols like km, kt, psi, °C, Gy, Sv when they appear
+  inside tables or formulas.
+- No spaces between Chinese characters, and none needed around numbers or Latin words.
+
 ## Interface strings (only if your task includes `enc-todo/ui/<lang>.json`)
 
 That file is a JSON array of Spanish interface strings from the app: buttons, labels, captions of

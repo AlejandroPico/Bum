@@ -269,7 +269,7 @@ export class Encyclopedia {
   private glossaryPage() {
     let letter = '';
     const items = this.glossary.map((g) => {
-      const L = norm(g.term)[0].toUpperCase();
+      const L = ['zh', 'ja'].includes(lang) ? '' : norm(g.term)[0].toUpperCase();
       const head = L !== letter ? `<h2 id="gl-${L}">${(letter = L)}</h2>` : '';
       return `${head}<div class="enc-gl"><b>${esc(g.term)}</b><span>${this.md(g.def)}${g.see && this.byId.has(g.see) ? ` <a data-go="${g.see}">${tr('Ver artículo')} →</a>` : ''}</span></div>`;
     }).join('');

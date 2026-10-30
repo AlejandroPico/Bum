@@ -427,7 +427,9 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
       o «un punto a unos 40 kilómetros al norte de…». En la presentación, la barra sube a la franja de arriba
       durante el recorrido para no taparse con los subtítulos.
 - [x] 1.22: ruso (interfaz completa, narración y enciclopedia). La voz lee las unidades en ruso.
-- [ ] Más idiomas, para llegar a la mayor parte de la población mundial: chino (simplificado), japonés, hindi
+- [x] 1.23: chino simplificado (interfaz completa, narración y enciclopedia). La voz lee las unidades en chino
+      (公里, 平方公里, 百万吨…) y la presión en «磅每平方英寸».
+- [ ] Más idiomas, para llegar a la mayor parte de la población mundial: japonés, hindi
       y, posiblemente, árabe. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en
       `src/ui/flags.ts`). El árabe se escribe de derecha a izquierda: pide adaptar la maquetación (paneles,
       línea de tiempo, enciclopedia) además de traducir.

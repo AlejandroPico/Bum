@@ -16,7 +16,7 @@ import path from 'node:path';
 import { ALL_ARTICLES, GLOSSARY, IMAGES, VIDEOS, MATH } from '../src/encyclopedia/content/index';
 import { hashStr, walkContent } from '../src/encyclopedia/i18n';
 
-const ALL_LANGS = ['ca', 'en', 'fr', 'de', 'pt', 'it', 'ru'];
+const ALL_LANGS = ['ca', 'en', 'fr', 'de', 'pt', 'it', 'ru', 'zh'];
 /** LANGS=en,ca limita a esos idiomas; ENC_TODO=enc-todo/en usa otra carpeta de trozos (para tandas por idioma) */
 const LANGS = process.env.LANGS ? process.env.LANGS.split(',') : ALL_LANGS;
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -39,7 +39,7 @@ function marks(s: string) {
   const sup = (s.replace(/\^\{(er|re|e|ère|ème|nd|st|rd|th|o|a)\}/g, '').match(/[\^_]\{/g) ?? []).length;
   return { links, urls, bold, sup };
 }
-function validate(es: string, t: string): string | null {
+function validate(es: string, t: string, l = ''): string | null {
   if (typeof t !== 'string' || !t.trim()) return 'vacío';
   const a = marks(es), b = marks(t);
   if (a.links !== b.links) return `enlaces internos distintos (${a.links} ≠ ${b.links})`;
@@ -47,7 +47,8 @@ function validate(es: string, t: string): string | null {
   if (a.bold !== b.bold) return 'negritas descuadradas';
   if (a.sup !== b.sup) return 'superíndices o subíndices distintos';
   const r = t.length / es.length;
-  if (es.length > 60 && (r < 0.45 || r > 2.2)) return `longitud sospechosa (${r.toFixed(2)})`;
+  const [lo, hi] = l === 'zh' || l === 'ja' ? [0.08, 1.1] : [0.45, 2.2];
+  if (es.length > 60 && (r < lo || r > hi)) return `longitud sospechosa (${r.toFixed(2)})`;
   return null;
 }
 
@@ -88,7 +89,7 @@ if (mode === 'todo') {
         const es = texts.get(h);
         if (!es) return; // ya no existe
         if (t === undefined) { bad.push(`${l}/${id}#${i + 1}: falta`); return; }
-        const err = validate(es, t);
+        const err = validate(es, t, l);
         if (err) { bad.push(`${l}/${id}#${i + 1}: ${err} · ${es.slice(0, 70)}`); return; }
         if (pack[h] !== t) { pack[h] = t; added++; }
       });

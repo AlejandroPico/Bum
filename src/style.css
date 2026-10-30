@@ -11,7 +11,7 @@
   --danger: #ff3b30;
   --ok: #5cff3a;
   --radius: 0;
-  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans JP', 'Noto Sans Devanagari', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   --sidebar-w: 340px;
   --results-w: 392px;
