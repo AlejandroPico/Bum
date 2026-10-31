@@ -14,6 +14,7 @@ import { tr, lang } from './i18n';
 import { Narrator } from './narrator';
 import { peakWind, PSI } from './physics/blast';
 import * as L from './tour-lines';
+const CJK = () => lang === 'zh' || lang === 'ja';
 
 export interface TourRun { fx: Effects; plan: FxPlan; lat: number; lon: number; t: number; tStart: number; playing: boolean; speed: number; userCam: boolean; orbit: unknown; lastReal: number; extras: unknown[] }
 export interface TourCtx {
@@ -190,15 +191,16 @@ export class Tour {
   private async beat(tok: number, title: string, short: string, longIn: string | string[], ms: number, freeze = false, noTitle = false) {
     const n = this.narrated;
     // varias frases se traducen por separado (cada una es una plantilla del catálogo)
-    const long = (Array.isArray(longIn) ? longIn : [longIn]).filter(Boolean).map((x) => tr(x)).join(' ');
+    const long = (Array.isArray(longIn) ? longIn : [longIn]).filter(Boolean).map((x) => tr(x)).join(CJK() ? '' : ' ');
     this.say(title, n ? long : short);
     const R = this.ctx.run();
     const was = !!R?.playing;
     if (n && freeze && R) R.playing = false;
-    const read = n ? Math.max(ms, long.split(/\s+/).length * 330) : ms;
+    // en chino y japonés no hay espacios: unos 2,5 caracteres por «palabra»
+    const read = n ? Math.max(ms, (long.split(/\s+/).length + (long.match(/[\u3040-\u30ff\u3400-\u9fff]/g)?.length ?? 0) / 2.5) * 330) : ms;
     // el título se lee antes del texto sólo si el texto no lo dice ya (evita «Barcelona. Estamos en Barcelona…»)
     const T = tr(title), norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const spoken = this.fixMillions(!T || norm(long).includes(norm(T)) || noTitle ? long : T + '. ' + long);
+    const spoken = this.fixMillions(!T || norm(long).includes(norm(T)) || noTitle ? long : T + (CJK() ? '。' : '. ') + long);
     await Promise.all([this.sleep(tok, n ? 900 : ms), n ? this.narrator.speak(spoken).then(() => this.sleep(tok, 500)) : Promise.resolve(), n && !this.narrator.hasVoice ? this.sleep(tok, read) : Promise.resolve()]);
     this.guard(tok);
     if (n && freeze && R && was) { R.playing = true; R.lastReal = performance.now(); }

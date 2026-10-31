@@ -29,6 +29,9 @@
   --lead: #eef1f7;
   --body: #d5dae4;
 }
+/* el japonés y el chino comparten caracteres con formas distintas: cada uno con su tipografía */
+html:lang(ja) { --font: 'Inter', system-ui, -apple-system, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'Noto Sans JP', sans-serif; }
+html:lang(zh) { --font: 'Inter', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; }
 /* tema de tarde: oscuro y cálido */
 :root[data-theme="evening"] {
   --bg: rgba(31, 20, 27, 0.9);

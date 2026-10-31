@@ -88,7 +88,7 @@ for (const x of arr) {
   const segs = /<[a-z][^>]*>/i.test(x.k) ? x.k.split(/<[^>]+>/).filter((s) => /[A-Za-zÁÉÍÓÚáéíóúñ]{3,}/.test(s)).map((s) => s.trim()) : [x.k.trim()];
   for (const s of segs) if (s) want.add(s);
 }
-for (const L of ['ca', 'en', 'fr', 'de', 'pt', 'it', 'ru', 'zh']) {
+for (const L of ['ca', 'en', 'fr', 'de', 'pt', 'it', 'ru', 'zh', 'ja']) {
   const cat = JSON.parse(fs.readFileSync(path.join(root, 'i18n', L + '.json'), 'utf8'));
   const miss = [...want].filter((s) => !(s in cat));
   console.log(`${L}: ${miss.length} textos sin entrada en el catálogo (muchos son iguales en ese idioma o son código)`);

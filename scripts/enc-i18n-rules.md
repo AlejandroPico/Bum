@@ -125,6 +125,23 @@ Check after writing each chunk (run from /home/claude/ataque-nuclear):
   inside tables or formulas.
 - No spaces between Chinese characters, and none needed around numbers or Latin words.
 
+### ja (日本語)
+- Standard modern Japanese, polite neutral encyclopedic style (だ・である調 for articles; です・ます is fine for short
+  interface hints and instructions to the user). Kanji + kana as a quality Japanese encyclopedia would write; full-width
+  punctuation （、。：；！？）; quotes 「…」 (『…』 for titles of books and films).
+- Numbers: Arabic numerals; decimal point; thousands with a comma (10,000) or 万/億 for large round figures when
+  natural (e.g. 約120万人). Dates: 1945年8月6日.
+- Names: EE. UU. → アメリカ（米国）; URSS → ソ連; Chernóbil → チェルノブイリ; Proyecto Manhattan → マンハッタン計画;
+  Hiroshima → 広島; Nagasaki → 長崎; Little Boy → 「リトルボーイ」; Fat Man → 「ファットマン」; Tsar Bomba → ツァーリ・ボンバ;
+  Castle Bravo → キャッスル・ブラボー; Trinity → トリニティ実験; keep Latin codes (W88, B61). Foreign people: the usual katakana
+  form (オッペンハイマー), optionally with the original name in parentheses the first time in an article. Japanese people
+  and places: their real Japanese names in kanji (e.g. 島病院, 原爆ドーム, 第五福竜丸).
+- Terms: 放射性降下物（フォールアウト）, 衝撃波（爆風）, 火球, 過圧, 威力（TNT換算）, 空中爆発, 爆心地 / グラウンド・ゼロ, 半減期,
+  臨界質量, 弾頭, 核の冬, シェルター（核シェルター）, 防護係数, 被爆者.
+- Units: キロメートル / km, メートル / m, キロトン (kt), メガトン (Mt); keep symbols like km, kt, psi, °C, Gy, Sv inside tables
+  and formulas.
+- No spaces between Japanese characters; none needed around numbers or Latin words.
+
 ## Interface strings (only if your task includes `enc-todo/ui/<lang>.json`)
 
 That file is a JSON array of Spanish interface strings from the app: buttons, labels, captions of

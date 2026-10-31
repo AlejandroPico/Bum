@@ -429,7 +429,9 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
 - [x] 1.22: ruso (interfaz completa, narración y enciclopedia). La voz lee las unidades en ruso.
 - [x] 1.23: chino simplificado (interfaz completa, narración y enciclopedia). La voz lee las unidades en chino
       (公里, 平方公里, 百万吨…) y la presión en «磅每平方英寸».
-- [ ] Más idiomas, para llegar a la mayor parte de la población mundial: japonés, hindi
+- [x] 1.24: japonés (interfaz completa, narración y enciclopedia). La voz lee las unidades en japonés
+      (キロメートル, メガトン…); en chino y japonés los subtítulos sin voz calculan su duración por caracteres.
+- [ ] Más idiomas, para llegar a la mayor parte de la población mundial: hindi
       y, posiblemente, árabe. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en
       `src/ui/flags.ts`). El árabe se escribe de derecha a izquierda: pide adaptar la maquetación (paneles,
       línea de tiempo, enciclopedia) además de traducir.
