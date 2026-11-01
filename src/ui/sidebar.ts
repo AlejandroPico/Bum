@@ -10,6 +10,7 @@ import type { NuclearInput, AsteroidInput, Environment, BurstMode, TargetType, S
 import { ISOTOPES } from '../physics/other';
 import type { ThemeChoice } from './theme';
 import { LOCALE, DEC } from '../i18n/locale';
+import { compassName } from '../i18n/compass';
 import { LANGS, systemLang, langPref, setLangPref, tr, lang } from '../i18n';
 import { FLAGS, AUTO_ICON } from './flags';
 
@@ -170,8 +171,7 @@ function compassInput(value: number, onChange: (deg: number) => void, label = 'v
 }
 
 // abreviaturas de la rosa de los vientos en cada idioma
-const ROSE: Record<string, string[]> = { en: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], de: ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'] };
-const dirName = (deg: number) => (ROSE[lang] ?? ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'])[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+const dirName = compassName;
 
 export class Sidebar {
   el: HTMLElement;
@@ -358,7 +358,7 @@ export class Sidebar {
       const sd = nk.depthM / Math.cbrt(Math.max(1e-6, nk.yieldKt));
       depVal.textContent = '';
       dNote.style.display = buried ? '' : 'none';
-      dNote.textContent = `Profundidad escalada: ${Math.round(sd)} m/kt^⅓. ` + (nk.burst === 'underground'
+      dNote.textContent = tr(`Profundidad escalada: ${Math.round(sd)} m/kt^⅓.`) + ' ' + tr(nk.burst === 'underground'
         ? (sd >= 120 ? 'Contenida: sin bola de fuego ni lluvia radiactiva apreciable; terremoto y cráter de subsidencia.' : sd > 25 ? 'Poco profunda: gran cráter de excavación y lluvia radiactiva muy intensa (como Sedan, 1962).' : 'Casi en superficie: cráter y lluvia radiactiva intensa.')
         : (sd > 400 ? 'Profunda: sin columna; onda de choque en el agua y olas.' : 'Columna de agua, oleada de base radiactiva y olas (como Baker, 1946).'));
       nk.heightM = Math.min(2e6, Math.max(0, +hIn.value || 0));
@@ -480,7 +480,7 @@ export class Sidebar {
     const aNote = h('div', { class: 'note' });
     const dVal = h('b'), dR = logSlider(0, 6, as.diameterM);
     const comp = h('select') as HTMLSelectElement;
-    COMPOSITIONS.forEach((c) => comp.append(h('option', { value: String(c.density) }, `${c.name} · ${c.density} kg/m³`)));
+    COMPOSITIONS.forEach((c) => comp.append(h('option', { value: String(c.density) }, `${tr(c.name)} · ${c.density} kg/m³`)));
     const densIn = h('input', { type: 'number', min: 300, max: 23000, step: 50, value: as.densityKgM3 }) as HTMLInputElement;
     const vVal = h('b'), vR = linSlider(11, 72, as.velocityKms, 0.1);
     const angVal = h('b'), angR = linSlider(5, 90, as.angleDeg, 1);

@@ -3225,5 +3225,15 @@
  "Es una zona casi deshabitada, y eso salva muchas vidas.": "És una zona gairebé deshabitada, i això salva moltes vides.",
  "Con tan poca gente alrededor, el número de víctimas sería muy bajo.": "Amb tan poca gent al voltant, el nombre de víctimes seria molt baix.",
  "Castellano, català, English, français, Deutsch, português, italiano, русский, 中文, 日本語 y 한국어, según el idioma de tu equipo (o el que elijas en el menú del ojo), con la enciclopedia completa en todos ellos, y un recorrido narrado por voz que explica la catástrofe paso a paso.": "Castellà, català, anglès, francès, alemany, portuguès, italià, rus, xinès, japonès i coreà, segons l’idioma del teu equip (o el que triïs al menú de l’ull), amb l’enciclopèdia completa en tots, i un recorregut narrat per veu que explica la catàstrofe pas a pas.",
- "Tu zona": "La teva zona"
+ "Tu zona": "La teva zona",
+ "Mostrar el panel de la simulación": "Mostra el tauler de la simulació",
+ "Mostrar los resultados": "Mostra els resultats",
+ "Historia: pruebas, arsenales y reconstrucciones": "Història: proves, arsenals i reconstruccions",
+ "a los 8 min": "als 8 min",
+ "semana {0}": "setmana {0}",
+ "mes {0}": "mes {0}",
+ "llega a los {0} s": "arriba als {0} s",
+ "magnitud {0}": "magnitud {0}",
+ "Mostrar u ocultar los créditos del mapa": "Mostra o amaga els crèdits del mapa",
+ "Marcador del mapa": "Marcador del mapa"
 }

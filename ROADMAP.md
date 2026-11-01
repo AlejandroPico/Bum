@@ -433,6 +433,9 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
       (キロメートル, メガトン…); en chino y japonés los subtítulos sin voz calculan su duración por caracteres.
 - [x] 1.25: coreano (interfaz completa, narración y enciclopedia), con su bandera. La voz lee las unidades en
       coreano (킬로미터, 메가톤…) y el glosario se agrupa por la consonante inicial (ㄱ, ㄴ, ㄷ…).
+- [x] 1.25.1: repaso de chino, japonés y coreano. Nombres de ciudades, países, pruebas y armas en su escritura
+      (también en ruso); rumbos abreviados en cada idioma (北西, СЗ…); textos que quedaban en castellano (pestañas
+      de los paneles, botón de Historia, nota de profundidad, composiciones de asteroides, esquemas, controles del mapa).
 - [ ] Más idiomas, para llegar a la mayor parte de la población mundial: hindi
       y, posiblemente, árabe. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en
       `src/ui/flags.ts`). El árabe se escribe de derecha a izquierda: pide adaptar la maquetación (paneles,

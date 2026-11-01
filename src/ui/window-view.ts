@@ -11,6 +11,7 @@
 import { h, toast } from './dom';
 import { tr, lang } from '../i18n';
 import { DEC, LOCALE } from '../i18n/locale';
+import { compass } from '../i18n/compass';
 import type { FxPlan } from '../fx/plan';
 import type { Effects } from '../physics/types';
 import { localOffset, assessPoint } from '../physics/safety';
@@ -37,12 +38,6 @@ const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[
 const norm = (a: V3): V3 => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 const mix = (a: V3, b: V3, k: number): V3 => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 const DIRS = ['norte', 'noreste', 'este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste'];
-const COMPASS: Record<string, string[]> = {
-  es: ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'],
-  en: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
-  de: ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'],
-  pt: ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'],
-};
 /** alturas de la mirada: calle y varias plantas */
 const FLOORS: [number, string][] = [[1.6, 'Calle'], [10, '3.ª planta'], [31, '10.ª planta'], [91, '30.ª planta']];
 
@@ -529,7 +524,7 @@ export class WindowView {
       if (!p || p[0] < -20 || p[0] > W + 20) continue;
       const big = a % 45 === 0;
       g.fillRect(p[0] - 0.5 * dpr, p[1] - (big ? 8 : 4) * dpr, 1 * dpr, (big ? 8 : 4) * dpr);
-      if (big) g.fillText((COMPASS[lang] ?? COMPASS.es)[a / 45], p[0], p[1] - 12 * dpr);
+      if (big) g.fillText(compass()[a / 45], p[0], p[1] - 12 * dpr);
     }
     // el Sol (referencia para comprobar la brújula)
     if (this.sun.el > -1) {

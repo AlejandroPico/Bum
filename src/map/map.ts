@@ -1,6 +1,6 @@
 import maplibregl, { type StyleSpecification, type Map as MLMap } from 'maplibre-gl';
 import { dimBase } from './basemaps';
-import { lang } from '../i18n';
+import { lang, tr } from '../i18n';
 
 export const SOURCES = {
   satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -129,6 +129,8 @@ export function createMap(container: HTMLElement, center: [number, number], opts
     // en equipos poco potentes: sin suavizado de bordes, menos píxeles y sin fundidos de rótulos
     ...(opts.pixelRatio ? { pixelRatio: opts.pixelRatio } : {}),
     container,
+    // textos de accesibilidad de MapLibre (vienen en inglés)
+    locale: { 'AttributionControl.ToggleAttribution': tr('Mostrar u ocultar los créditos del mapa'), 'Marker.Title': tr('Marcador del mapa'), 'Popup.Close': tr('Cerrar') },
     style: style(),
     center,
     zoom: 12.6,

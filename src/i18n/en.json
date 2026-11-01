@@ -3285,5 +3285,15 @@
  "Es una zona casi deshabitada, y eso salva muchas vidas.": "This area is nearly deserted, and that saves a great many lives.",
  "Con tan poca gente alrededor, el número de víctimas sería muy bajo.": "With so few people around, the number of casualties would be very low.",
  "Castellano, català, English, français, Deutsch, português, italiano, русский, 中文, 日本語 y 한국어, según el idioma de tu equipo (o el que elijas en el menú del ojo), con la enciclopedia completa en todos ellos, y un recorrido narrado por voz que explica la catástrofe paso a paso.": "Spanish, Catalan, English, French, German, Portuguese, Italian, Russian, Chinese, Japanese and Korean, following your device’s language (or the one you choose in the eye menu), with the full encyclopaedia in all of them, and a voice-narrated tour that explains the disaster step by step.",
- "Tu zona": "Your area"
+ "Tu zona": "Your area",
+ "Mostrar el panel de la simulación": "Show the simulation panel",
+ "Mostrar los resultados": "Show the results",
+ "Historia: pruebas, arsenales y reconstrucciones": "History: tests, arsenals and reconstructions",
+ "a los 8 min": "after 8 min",
+ "semana {0}": "week {0}",
+ "mes {0}": "month {0}",
+ "llega a los {0} s": "arrives after {0} s",
+ "magnitud {0}": "magnitude {0}",
+ "Mostrar u ocultar los créditos del mapa": "Show or hide the map credits",
+ "Marcador del mapa": "Map marker"
 }
