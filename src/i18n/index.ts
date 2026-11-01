@@ -10,7 +10,7 @@
  */
 import { setLocale } from './locale';
 
-export type Lang = 'es' | 'ca' | 'en' | 'fr' | 'de' | 'pt' | 'it' | 'ru' | 'zh' | 'ja';
+export type Lang = 'es' | 'ca' | 'en' | 'fr' | 'de' | 'pt' | 'it' | 'ru' | 'zh' | 'ja' | 'ko';
 export const LANGS: { id: Lang; name: string; locale: string; speech: string[] }[] = [
   { id: 'es', name: 'Castellano', locale: 'es-ES', speech: ['es-ES', 'es'] },
   { id: 'ca', name: 'Català', locale: 'ca-ES', speech: ['ca-ES', 'ca'] },
@@ -22,6 +22,7 @@ export const LANGS: { id: Lang; name: string; locale: string; speech: string[] }
   { id: 'ru', name: 'Русский', locale: 'ru-RU', speech: ['ru-RU', 'ru'] },
   { id: 'zh', name: '中文（简体）', locale: 'zh-CN', speech: ['zh-CN', 'zh'] },
   { id: 'ja', name: '日本語', locale: 'ja-JP', speech: ['ja-JP', 'ja'] },
+  { id: 'ko', name: '한국어', locale: 'ko-KR', speech: ['ko-KR', 'ko'] },
 ];
 const PREF = 'bum:lang';
 

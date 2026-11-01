@@ -17,6 +17,7 @@ const UNITS: Record<string, Record<string, string>> = {
   ru: { 'km²': 'квадратных километров', 'km/h': 'километров в час', 'km/s': 'километров в секунду', km: 'километров', m: 'метров', s: 'секунд', min: 'минут', h: 'часов', kt: 'килотонн', Mt: 'мегатонн', 'км²': 'квадратных километров', 'км/ч': 'километров в час', 'км/с': 'километров в секунду', км: 'километров', м: 'метров', с: 'секунд', мин: 'минут', ч: 'часов', кт: 'килотонн', Мт: 'мегатонн' },
   zh: { 'km²': '平方公里', 'km/h': '公里每小时', 'km/s': '公里每秒', km: '公里', m: '米', s: '秒', min: '分钟', h: '小时', kt: '千吨', Mt: '百万吨' },
   ja: { 'km²': '平方キロメートル', 'km/h': 'キロメートル毎時', 'km/s': 'キロメートル毎秒', km: 'キロメートル', m: 'メートル', s: '秒', min: '分', h: '時間', kt: 'キロトン', Mt: 'メガトン' },
+  ko: { 'km²': '제곱킬로미터', 'km/h': '킬로미터 매시', 'km/s': '킬로미터 매초', km: '킬로미터', m: '미터', s: '초', min: '분', h: '시간', kt: '킬로톤', Mt: '메가톤' },
   it: { 'km²': 'chilometri quadrati', 'km/h': 'chilometri orari', 'km/s': 'chilometri al secondo', km: 'chilometri', m: 'metri', s: 'secondi', min: 'minuti', h: 'ore', kt: 'chilotoni', Mt: 'megatoni' },
 };
 /** siglas que la voz deletrearía: se leen como nombre completo */
@@ -30,6 +31,7 @@ const ABBR: Record<string, [RegExp, string][]> = {
   ru: [[/≈\s?/g, 'около '], [/\bpsi\b/g, 'фунтов на квадратный дюйм']],
   zh: [[/≈\s?/g, '约'], [/\s?\bpsi\b/g, '磅每平方英寸']],
   ja: [[/≈\s?/g, '約'], [/\s?\bpsi\b/g, 'ポンド毎平方インチ']],
+  ko: [[/≈\s?/g, '약 '], [/\bpsi\b/g, '제곱인치당 파운드']],
   it: [[/\bURSS\b/g, 'Unione Sovietica'], [/≈\s?/g, 'circa '], [/\bpsi\b/g, 'libbre per pollice quadrato']],
 };
 
@@ -41,11 +43,11 @@ export function forSpeech(text: string, L: string = lang): string {
   let t = text;
   for (const [re, w] of ABBR[L] ?? ABBR.es) t = t.replace(re, w);
   // separador de miles: punto (o coma en inglés) y espacios finos o duros entre grupos de tres cifras
-  const grp = L === 'en' || L === 'zh' || L === 'ja' ? ',' : '.';
+  const grp = L === 'en' || L === 'zh' || L === 'ja' || L === 'ko' ? ',' : '.';
   for (let k = 0; k < 3; k++) t = t.replace(new RegExp(`(\\d)[${grp === '.' ? '\\.' : ','}\u00a0\u202f\u2009 ](?=\\d{3}(?!\\d))`, 'g'), '$1');
   const U = UNITS[L] ?? UNITS.es;
   t = t.replace(/(\d)\s?(km²|km\/h|km\/s|km|min|Mt|kt|m|s|h|км²|км\/ч|км\/с|км|мин|Мт|кт|м|с|ч)(?![\p{Script=Latin}\p{Script=Cyrillic}\d²\/])/gu, (_m, d: string, u: string) => `${d} ${U[u] ?? u}`);
-  t = t.replace(/×\s?(\d[\d.,]*)/g, (_m, n: string) => `${n} ${L === 'en' ? 'times' : L === 'ru' ? 'раз' : L === 'zh' || L === 'ja' ? '倍' : L === 'de' ? 'mal' : L === 'fr' ? 'fois' : L === 'it' ? 'volte' : L === 'ca' ? 'vegades' : 'veces'}`);
+  t = t.replace(/×\s?(\d[\d.,]*)/g, (_m, n: string) => `${n} ${L === 'en' ? 'times' : L === 'ru' ? 'раз' : L === 'zh' || L === 'ja' ? '倍' : L === 'ko' ? '배' : L === 'de' ? 'mal' : L === 'fr' ? 'fois' : L === 'it' ? 'volte' : L === 'ca' ? 'vegades' : 'veces'}`);
   return t.replace(/\s{2,}/g, ' ').trim();
 }
 

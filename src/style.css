@@ -11,7 +11,7 @@
   --danger: #ff3b30;
   --ok: #5cff3a;
   --radius: 0;
-  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans JP', 'Noto Sans Devanagari', sans-serif;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans JP', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', 'Noto Sans Devanagari', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   --sidebar-w: 340px;
   --results-w: 392px;
@@ -31,6 +31,11 @@
 }
 /* el japonés y el chino comparten caracteres con formas distintas: cada uno con su tipografía */
 html:lang(ja) { --font: 'Inter', system-ui, -apple-system, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'Noto Sans JP', sans-serif; }
+html:lang(ko) { --font: 'Inter', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif; }
+/* el espaciado de letras de títulos y botones separa sílabas y caracteres en coreano, chino y japonés */
+html:lang(ko) *, html:lang(zh) *, html:lang(ja) * { letter-spacing: normal !important; }
+/* el coreano parte las líneas entre palabras, no dentro de ellas */
+html:lang(ko) body { word-break: keep-all; overflow-wrap: break-word; }
 html:lang(zh) { --font: 'Inter', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; }
 /* tema de tarde: oscuro y cálido */
 :root[data-theme="evening"] {

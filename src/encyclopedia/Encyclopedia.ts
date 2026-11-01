@@ -31,6 +31,14 @@ interface Mounted { destroy(): void }
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+/** inicial para el glosario: la letra sin acentos o, en coreano, la consonante inicial de la sílaba (ㄱ, ㄴ, ㄷ…) */
+function initial(t: string) {
+  const c = t.charCodeAt(0);
+  if (c >= 0xac00 && c <= 0xd7a3) return 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ'[Math.floor((c - 0xac00) / 588)];
+  const L = norm(t)[0].toUpperCase();
+  return /\d/.test(L) ? '#' : L;
+}
+
 export class Encyclopedia {
   el: HTMLElement;
   private nav!: HTMLElement;
@@ -269,7 +277,7 @@ export class Encyclopedia {
   private glossaryPage() {
     let letter = '';
     const items = this.glossary.map((g) => {
-      const L = ['zh', 'ja'].includes(lang) ? '' : norm(g.term)[0].toUpperCase();
+      const L = ['zh', 'ja'].includes(lang) ? '' : initial(g.term);
       const head = L !== letter ? `<h2 id="gl-${L}">${(letter = L)}</h2>` : '';
       return `${head}<div class="enc-gl"><b>${esc(g.term)}</b><span>${this.md(g.def)}${g.see && this.byId.has(g.see) ? ` <a data-go="${g.see}">${tr('Ver artículo')} →</a>` : ''}</span></div>`;
     }).join('');

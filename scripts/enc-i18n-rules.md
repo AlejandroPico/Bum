@@ -142,6 +142,22 @@ Check after writing each chunk (run from /home/claude/ataque-nuclear):
   and formulas.
 - No spaces between Japanese characters; none needed around numbers or Latin words.
 
+### ko (한국어, South Korea)
+- Standard South Korean, encyclopedic plain style (-다 체) for articles; polite -요/-세요 or noun-ending style for short
+  interface hints and instructions. Hangul throughout (no hanja). Normal Korean word spacing (띄어쓰기). Quotes “…”;
+  titles of books and films in 《…》 or 『…』.
+- Numbers: Arabic numerals; decimal point; thousands with a comma (10,000) or 만/억 for large round figures when
+  natural (e.g. 약 120만 명). Dates: 1945년 8월 6일.
+- Names: EE. UU. → 미국; URSS → 소련; Chernóbil → 체르노빌; Proyecto Manhattan → 맨해튼 프로젝트; Hiroshima → 히로시마;
+  Nagasaki → 나가사키; Little Boy → ‘리틀 보이’; Fat Man → ‘팻 맨’; Tsar Bomba → 차르 봄바; Castle Bravo → 캐슬 브라보;
+  Trinity → 트리니티 실험; Corea del Norte → 북한; Corea del Sur → 한국; Seúl → 서울. Keep Latin codes (W88, B61).
+  Foreign people: the usual Hangul transcription (오펜하이머), optionally with the original name in parentheses the first
+  time in an article.
+- Terms: 낙진(방사성 낙진), 충격파(폭풍), 화구, 과압, 위력(TNT 환산), 공중 폭발, 폭심지 / 그라운드 제로, 반감기, 임계 질량, 탄두,
+  핵겨울, 대피소(방공호), 방호 계수, 피폭자.
+- Units: km, m, kt, Mt, °C, Gy, Sv, psi as symbols (Korean texts normally write them in Latin); 킬로톤/메가톤 in running text
+  is also fine.
+
 ## Interface strings (only if your task includes `enc-todo/ui/<lang>.json`)
 
 That file is a JSON array of Spanish interface strings from the app: buttons, labels, captions of

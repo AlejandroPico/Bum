@@ -431,6 +431,8 @@ Cada una se puede hacer por separado; el orden es una sugerencia y el número de
       (公里, 平方公里, 百万吨…) y la presión en «磅每平方英寸».
 - [x] 1.24: japonés (interfaz completa, narración y enciclopedia). La voz lee las unidades en japonés
       (キロメートル, メガトン…); en chino y japonés los subtítulos sin voz calculan su duración por caracteres.
+- [x] 1.25: coreano (interfaz completa, narración y enciclopedia), con su bandera. La voz lee las unidades en
+      coreano (킬로미터, 메가톤…) y el glosario se agrupa por la consonante inicial (ㄱ, ㄴ, ㄷ…).
 - [ ] Más idiomas, para llegar a la mayor parte de la población mundial: hindi
       y, posiblemente, árabe. Interfaz completa y enciclopedia, uno por entrega (las banderas ya están en
       `src/ui/flags.ts`). El árabe se escribe de derecha a izquierda: pide adaptar la maquetación (paneles,

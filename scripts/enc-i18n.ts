@@ -16,7 +16,7 @@ import path from 'node:path';
 import { ALL_ARTICLES, GLOSSARY, IMAGES, VIDEOS, MATH } from '../src/encyclopedia/content/index';
 import { hashStr, walkContent } from '../src/encyclopedia/i18n';
 
-const ALL_LANGS = ['ca', 'en', 'fr', 'de', 'pt', 'it', 'ru', 'zh', 'ja'];
+const ALL_LANGS = ['ca', 'en', 'fr', 'de', 'pt', 'it', 'ru', 'zh', 'ja', 'ko'];
 /** LANGS=en,ca limita a esos idiomas; ENC_TODO=enc-todo/en usa otra carpeta de trozos (para tandas por idioma) */
 const LANGS = process.env.LANGS ? process.env.LANGS.split(',') : ALL_LANGS;
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -47,7 +47,7 @@ function validate(es: string, t: string, l = ''): string | null {
   if (a.bold !== b.bold) return 'negritas descuadradas';
   if (a.sup !== b.sup) return 'superíndices o subíndices distintos';
   const r = t.length / es.length;
-  const [lo, hi] = l === 'zh' || l === 'ja' ? [0.08, 1.1] : [0.45, 2.2];
+  const [lo, hi] = l === 'zh' || l === 'ja' ? [0.08, 1.1] : l === 'ko' ? [0.12, 1.4] : [0.45, 2.2];
   if (es.length > 60 && (r < lo || r > hi)) return `longitud sospechosa (${r.toFixed(2)})`;
   return null;
 }
